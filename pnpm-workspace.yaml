@@ -1,0 +1,7 @@
+packages:
+  - apps/desktop-v2
+storeDir: .pnpm-store
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - lucide-react@1.58.0

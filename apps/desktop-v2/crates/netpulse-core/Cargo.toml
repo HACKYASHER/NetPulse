@@ -1,0 +1,28 @@
+[package]
+name = "netpulse-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+reqwest.workspace = true
+rusqlite = { version = "0.40.2", features = ["bundled", "serialize"] }
+url = "2.5.8"
+base64 = "0.23.1"
+sha2 = "0.11.1"
+zeroize = { version = "1.9.1", features = ["derive"] }
+percent-encoding = "2.3"
+zip = { version = "9.0.4", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+serde_yaml_ng = "0.10.0"
+tokio = { version = "1.53.3", features = ["rt", "net", "time", "io-util", "sync", "macros"] }
+windows-service = "0.8.1"
+winreg = "0.56"
+windows-sys = { workspace = true, features = ["Win32_System_SystemInformation", "Win32_Security_Authorization", "Win32_System_Pipes", "Win32_System_IO", "Win32_Storage_FileSystem", "Win32_System_Services", "Win32_System_Com", "Win32_UI_Shell", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+native-tls = "0.2.18"

@@ -1,0 +1,29 @@
+# NetPulse 2.0 alpha.4 — архитектура
+
+React/TypeScript получает сводки профилей через Tauri commands. Rust NetworkCore последовательно управляет соединением; диагностика выполняется отдельно с отменой. SQLite хранит настройки/безопасные события; профили, subscription URLs, история измерений и backups зашифрованы Windows current-user DPAPI. Схема 2 создаётся транзакционно; перед миграцией 1→2 создаётся зашифрованный снимок. Более новая неизвестная схема отклоняется.
+
+Форма ведёт draft отдельно от saved и применённой конфигурации. Нормализованное сравнение учитывает пути/порядок/цвета. Изменения маршрутизации проверяются до остановки runtime; затем идут перезапуск, реальный HTTPS probe и запись SQLite. Отказ нового runtime или сохранения восстанавливает прежнее соединение. Выбор сервера сохраняется после успешного переключения.
+
+Один sing-box 1.14.3 обслуживает proxy/маршрутизацию/TUN. Для XHTTP и gRPC multi используется закреплённый Xray 26.10.17 через локальный SOCKS bridge с паролем, без второго TUN. В TUN мост получает direct-правило по точному EXE, чтобы его транспортные соединения не попали в собственный VPN. gRPC gun обслуживается sing-box; распознанный fm QUIC BBR отображается в стандартный BBR без Brutal bandwidth. Неизвестные fm не игнорируются.
+
+Отдельные authenticated diagnostic inbounds закрепляют proxy/direct outbound. HTTPS/public IP не зависят от включения GUI в whitelist. Это не доказывает прохождение обычного Windows-пакета через TUN. TUN-config содержит IPv4/IPv6, strict_route, DNS hijack, точные process_path и auto-detect interface для исходящих соединений.
+
+GUI без повышения; NetPulseCore2 устанавливается явным UAC-действием. Копии движков повторно проверяются в защищённом Program Files каталоге; владелец Administrators, пользователям чтение/исполнение. Служба принимает только typed Status/Start/Stop, без arbitrary executable paths, shell и raw configs. ACL pipe допускает SYSTEM и установленный SID; remote clients запрещены, FIRST_PIPE_INSTANCE защищает первое создание; свежий listener создаётся до закрытия принятого соединения, поэтому имя канала остаётся занятым. Ответ подтверждается ACK после полного чтения клиентом. SID/PID клиента определяется Windows; GUI сверяет PID сервера с SCM и фиксированным executable path. Start/Stop связаны с PID и случайной сессией.
+
+Config передаётся через stdin после присоединения процесса к kill-on-close Windows Job. GUI/служба следят за живыми process handles. Основной движок и Xray останавливаются вместе. Защищённый журнал содержит LUID/GUID/маршруты; cleanup удаляет только совпадающие неизменённые записи. Сторонние/изменённые маршруты сохраняются. Физическое удаление адаптера/DNS/WFP после аварии ещё требует проверки Windows.
+
+WinINET изменяется в процессе пользователя. До изменения отдельный recovery process подтверждает готовность и держит handle GUI. DPAPI-журнал before/applied позволяет восстановить прежнее состояние только при точном совпадении applied. Чужой proxy/PAC не заменяется. После общей аварии startup проверяет журналы только завершившихся владельцев. Watchdog не включён в Job движка. Глобального сброса сети нет.
+
+Latency: максимум два профиля одновременно, два замера. TCP handshake не означает UDP/TLS/auth; HTTPS использует изолированный proxy runtime. Speed Test принимает заданные HTTPS endpoints и разрешение POST, ограничивает payload/длительность и сохраняет ошибки/частичные данные. Compare использует закреплённые маршруты без fallback при отказе VPN. HEAD измеряет idle/loaded RTT; jitter — средняя разница последовательных RTT. Недостаточные данные остаются пустыми. Overhead/буферы ОС не входят в payload cap. Live counters отделены от Speed Test.
+
+Renderer CSP запрещает внешние сети/скрипты; shell/filesystem-разрешений нет. Иконки извлекаются без запуска EXE. Инвентарь читает Registry, Start Menu, Steam/Epic и процессы; пути дедуплицируются без учёта регистра. Подписки обновляются вручную; автоматический таймер пока отсутствует. Физические/визуальные ограничения перечислены в verification и windows-check.
+
+Первичные источники: [sing-box TUN](https://sing-box.sagernet.org/configuration/inbound/tun/), [Hysteria2](https://sing-box.sagernet.org/configuration/outbound/hysteria2/), [Xray](https://github.com/XTLS/Xray-core/releases/tag/v26.10.17), [Windows pipe security](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights).
+
+
+Alpha.3: immediate quick-network changes use only persisted preferences and merge the three network fields into UI drafts. Alpha.5 uses explicit manual TUN selection and one shared app list; legacy lists migrate once. Startup stages the pinned offline engine bundle; runtime activation/rollback verifies hashes and configuration. Tray/autostart are opt-in preferences except close/minimize-to-tray defaults. QR photos classify plain authenticated-TLS subscription URLs separately from proxy/profile keys.
+
+
+Alpha.5: collection views/favorites have a restricted native quick_ui command, separate from network apply and settings drafts. Automatic NSIS service hooks call a GUI entry point before ordinary startup/single-instance claim; it captures the original user SID, requests normal UAC, validates bundles and upgrades/removes only the managed service. Model normalization is also performed at engine configuration boundaries.
+
+DNS transports have explicit direct/proxy detours and a separate bootstrap resolver to avoid routing the proxy server's own resolution through itself. MTU is validated and only applied to the TUN inbound. TCP diagnostics bind the socket to a live default interface outside the NetPulse adapter; HTTPS overview latency reuses the current authenticated VPN inbound. Service cleanup and WinINET recovery do not discard ownership or stop the listening runtime before restoration is confirmed.

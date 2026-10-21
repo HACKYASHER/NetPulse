@@ -1,0 +1,298 @@
+{
+  "version": "3.0.4",
+  "release_channel": "release",
+  "native_tests": {
+    "passed": 99,
+    "failed": 0,
+    "ignored": 0
+  },
+  "tested_core_sha256": "00269adc90eefb1e73fd89e7d6a6740750ab458df5b59475d9f798fe2dc19748",
+  "packaged_source_sha256": "bbbd391a8f3d8bd65841ee1ee742f2ccda20e90edf9c17c9334ea6773e0196d8",
+  "clippy": "passed",
+  "frontend_build": "passed",
+  "frontend_state_tests": {
+    "passed": 33,
+    "failed": 0
+  },
+  "packaged_smoke": {
+    "browser_tests_run": false,
+    "checks": [
+      "native Rust entrypoint",
+      "VLESS empty fm",
+      "SQLite reopen",
+      "DPAPI current-user roundtrip",
+      "settings persistence",
+      "encrypted backup restore"
+    ],
+    "platform": "windows-x64",
+    "result": "passed",
+    "system_network_changed": false,
+    "version": "3.0.4"
+  },
+  "packaged_service_smoke": {
+    "protected_directory_lookup": true,
+    "result": "passed",
+    "security_descriptor": true,
+    "sid_validation": true,
+    "system_changes": false,
+    "version": "3.0.4"
+  },
+  "runtime_dependencies": {
+    "pe_import_audit": [
+      {
+        "file": "NetPulse.exe",
+        "machine": "0x8664",
+        "imports": [
+          "advapi32.dll",
+          "api-ms-win-core-synch-l1-2-0.dll",
+          "api-ms-win-core-winrt-error-l1-1-0.dll",
+          "api-ms-win-crt-convert-l1-1-0.dll",
+          "api-ms-win-crt-heap-l1-1-0.dll",
+          "api-ms-win-crt-locale-l1-1-0.dll",
+          "api-ms-win-crt-math-l1-1-0.dll",
+          "api-ms-win-crt-runtime-l1-1-0.dll",
+          "api-ms-win-crt-stdio-l1-1-0.dll",
+          "api-ms-win-crt-string-l1-1-0.dll",
+          "api-ms-win-crt-time-l1-1-0.dll",
+          "api-ms-win-crt-utility-l1-1-0.dll",
+          "bcryptprimitives.dll",
+          "combase.dll",
+          "comctl32.dll",
+          "crypt32.dll",
+          "dwmapi.dll",
+          "gdi32.dll",
+          "imm32.dll",
+          "iphlpapi.dll",
+          "kernel32.dll",
+          "ntdll.dll",
+          "ole32.dll",
+          "oleaut32.dll",
+          "secur32.dll",
+          "shell32.dll",
+          "shlwapi.dll",
+          "user32.dll",
+          "wininet.dll",
+          "ws2_32.dll"
+        ],
+        "external_vc_runtime": []
+      },
+      {
+        "file": "NetPulseService.exe",
+        "machine": "0x8664",
+        "imports": [
+          "advapi32.dll",
+          "api-ms-win-core-synch-l1-2-0.dll",
+          "bcryptprimitives.dll",
+          "combase.dll",
+          "crypt32.dll",
+          "iphlpapi.dll",
+          "kernel32.dll",
+          "ntdll.dll",
+          "secur32.dll",
+          "shell32.dll",
+          "ws2_32.dll"
+        ],
+        "external_vc_runtime": []
+      },
+      {
+        "file": "sing-box.exe",
+        "machine": "0x8664",
+        "imports": [
+          "kernel32.dll"
+        ],
+        "external_vc_runtime": []
+      },
+      {
+        "file": "xray.exe",
+        "machine": "0x8664",
+        "imports": [
+          "kernel32.dll"
+        ],
+        "external_vc_runtime": []
+      },
+      {
+        "file": "libcronet.dll",
+        "machine": "0x8664",
+        "imports": [
+          "advapi32.dll",
+          "api-ms-win-core-winrt-l1-1-0.dll",
+          "crypt32.dll",
+          "dbghelp.dll",
+          "iphlpapi.dll",
+          "kernel32.dll",
+          "ntdll.dll",
+          "ole32.dll",
+          "secur32.dll",
+          "shell32.dll",
+          "shlwapi.dll",
+          "user32.dll",
+          "winhttp.dll",
+          "winmm.dll",
+          "ws2_32.dll"
+        ],
+        "external_vc_runtime": []
+      }
+    ],
+    "visual_cpp_redistributable_required": false,
+    "webview2_runtime_required": true,
+    "webview2_install_mode": "downloadBootstrapper"
+  },
+  "background_client_updates": {
+    "startup_delay_seconds": 5,
+    "interval_hours": 6,
+    "network_request_holds_connection_mutex": false,
+    "downloads": "user_initiated",
+    "badge_survives_banner_dismissal": true
+  },
+  "application_routing": {
+    "case_insensitive_windows_paths": true,
+    "discord_version_and_updater_scoped_rules": true,
+    "owned_process_loopback_test": true,
+    "catalog_persists_after_deselection": true,
+    "roblox_version_scoped_rules": true,
+    "physical_tun": "not_run"
+  },
+  "network_3": {
+    "profile_sni_host_utls": "validated_and_persisted_across_refresh_backup",
+    "fragment_mux": "opt_in_xray_validated_and_owned_tls_transfer_passed",
+    "fake_ip": "opt_in_tun_owned_udp_dns_mapping_and_bypass_checked",
+    "destination_rules": "ordered_domains_cidr_geoip_geosite_process",
+    "playground": "on_demand_os_tcp_udp_plus_core_metadata_no_database",
+    "dated_logs": "local_date_categories_128_mib_archive",
+    "roblox": "games_preset_and_versioned_process_rules_actual_game_not_reproduced",
+    "ja4": "core_utls_presets_only_no_exact_ja4_ja4h_guarantee",
+    "unsupported": [
+      "multipath_bonding",
+      "behavioral_background_noise",
+      "arbitrary_tls_padding",
+      "per_destination_game_node_selection",
+      "seamless_game_session_failover",
+      "per_process_distinct_vpn_transport_profiles"
+    ]
+  },
+  "routing_stress": {
+    "core_sha256": "00269adc90eefb1e73fd89e7d6a6740750ab458df5b59475d9f798fe2dc19748",
+    "runs": 30,
+    "requests": 720,
+    "result": "passed"
+  },
+  "browser_tests": "not_run_user_restriction",
+  "physical_tun": "not_run_requires_uac_windows_validation",
+  "system_proxy_crash_recovery": "implemented_physical_crash_test_not_run",
+  "signing": "unsigned",
+  "installer_runtime_test": "not_run_to_preserve_existing_installation",
+  "tray_autostart": "compiled_not_manually_exercised",
+  "packaged_webview_startup": [
+    {
+      "case": "bundled",
+      "browser_server_used": false,
+      "form_help_coverage": true,
+      "layout_geometry": true,
+      "rendered_views": [
+        "dashboard",
+        "connections",
+        "routing",
+        "activity",
+        "networkSettings:general",
+        "networkSettings:tls",
+        "networkSettings:dns",
+        "networkSettings:rules",
+        "networkSettings:playground",
+        "settings:appearance",
+        "settings:ping",
+        "settings:cores",
+        "settings:about",
+        "settings:data",
+        "connections:import",
+        "dashboard:picker"
+      ],
+      "result": "passed",
+      "runtime_ready": true,
+      "system_network_changed": false,
+      "version": "3.0.4",
+      "webview_ready": true
+    },
+    {
+      "case": "missing_runtime",
+      "browser_server_used": false,
+      "form_help_coverage": true,
+      "layout_geometry": true,
+      "rendered_views": [
+        "dashboard",
+        "connections",
+        "routing",
+        "activity",
+        "networkSettings:general",
+        "networkSettings:tls",
+        "networkSettings:dns",
+        "networkSettings:rules",
+        "networkSettings:playground",
+        "settings:appearance",
+        "settings:ping",
+        "settings:cores",
+        "settings:about",
+        "settings:data",
+        "connections:import",
+        "dashboard:picker"
+      ],
+      "result": "passed",
+      "runtime_ready": false,
+      "system_network_changed": false,
+      "version": "3.0.4",
+      "webview_ready": true
+    }
+  ],
+  "installer_component_verification": {
+    "official_bundle": "passed",
+    "missing_bundle": "rejected"
+  },
+  "maintenance_3_0_1": {
+    "missing_runtime_ui": "available_with_actionable_error",
+    "runtime_preparation": "background_thread",
+    "installer": "explicit_update_remove_keep_legacy_registry_identity",
+    "file_logs": "auto_tail_default_on_coloured_copyable_clear_all_categories",
+    "subscriptions": "editable_name_interval_copy_policy_automatic_refresh"
+  },
+  "maintenance_3_0_2": {
+    "service_ipc": "independent_bounded_clients_cached_monitor",
+    "engine_stop": "bounded_reader_wait",
+    "service_recovery": "explicit_uac_verified_scm_pid_image_owner_only",
+    "tls": "global_capability_aware_defaults",
+    "playground": "manual_default_optional_1_5_10_seconds",
+    "subscription": "provider_usage_expiry_validated_json_one_way_lock",
+    "mtu": "repeated_boundary_confirmation_unused_adapters_hidden",
+    "help": "field_and_checkbox_hover_keyboard",
+    "physical_disconnection_reproduction": "not_reproduced"
+  },
+  "maintenance_3_0_3": {
+    "mtu": "measured_path_or_labelled_active_physical_adapter_estimate_1280_1420",
+    "catalog": "atomic_applications_json_normalized_paths_known_versions_grouped",
+    "ui": "full_width_import_search_picker_core_buttons_no_per_exe_help",
+    "logs": "interaction_audit_not_written_complete_bounded_lines_explicit_severity",
+    "direct_ipv6": "ipv4_only_domain_resolver_when_physical_ipv6_default_absent_literals_not_converted",
+    "installer": "staged_current_helper_stops_verified_owned_service_before_copy_or_old_uninstall_uac",
+    "geometry": "packaged_webview_search_picker_key_field_exe_rows_core_buttons_playground_interval",
+    "playground_search": "separate_process_name_path_pid_and_connection_metadata_filters",
+    "games_preset": "preserves_system_proxy_public_loopback_no_auth_in_tun_diagnostic_auth_retained",
+    "physical_installer_and_vpn": "not_run_preserve_existing_installation"
+  },
+  "maintenance_3_0_4": {
+    "metrics": "coalesced_read_only_worker_5s_cached_last_good_bounded_4mib_300_rows_no_controller_lock",
+    "service_routes": "cached_1s_confirmed_loss_only",
+    "service_status": "unconfirmed_warning_recovers_without_stale_banner",
+    "switching": "candidate_preflight_preserves_existing_pid_on_probe_failure",
+    "probe_error": "compact_banner_redacted_core_log_details",
+    "direct_dns": "prefer_ipv4_preserves_ipv6_only_answers_literals_need_route",
+    "hero": "compact_nowrap_core_buttons",
+    "physical_failure": "not_reproduced_installed_network_unchanged"
+  },
+  "ipc_endurance": {
+    "result": "passed",
+    "duration_seconds": 360,
+    "test": "service::tests::persistent_ipc_recovers_from_abandoned_clients",
+    "service_source_sha256": "3b8501664ec9b3411f0d07ac26d243d28641c86f635b751e482228938044fd3b",
+    "system_network_changed": false,
+    "installed_service_used": false,
+    "source_unchanged_after_test": true
+  }
+}

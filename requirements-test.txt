@@ -1,0 +1,3 @@
+# Python support for extracting the owned loopback TLS test fixture.
+# Not installed in or used by the Windows client runtime.
+cryptography==46.0.5
