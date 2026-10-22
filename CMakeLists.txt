@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.21)
+project(NetPulse VERSION 1.0.0 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Widgets Network Qml Quick QuickControls2 Svg)
+qt_standard_project_setup(REQUIRES 6.8)
+qt_add_executable(NetPulse WIN32 src/main.cpp src/Backend.cpp src/Backend.h resources/app.rc)
+qt_add_qml_module(NetPulse URI NetPulse VERSION 1.0
+    QML_FILES qml/Main.qml qml/ActionButton.qml qml/Card.qml qml/Input.qml qml/Metric.qml qml/SettingRow.qml
+    RESOURCES resources/pulse.svg)
+target_link_libraries(NetPulse PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Svg)
+target_include_directories(NetPulse PRIVATE resources)
+target_compile_definitions(NetPulse PRIVATE QT_NO_CAST_FROM_ASCII QT_NO_CAST_TO_ASCII)
+if(MSVC)
+    target_compile_options(NetPulse PRIVATE /utf-8 /W4)
+endif()
+install(TARGETS NetPulse RUNTIME DESTINATION .)

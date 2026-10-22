@@ -1,0 +1,8 @@
+.build/
+.tools/
+release/
+backend/target/
+__pycache__/
+*.user
+resources/cores/*.exe
+resources/cores/*.dll

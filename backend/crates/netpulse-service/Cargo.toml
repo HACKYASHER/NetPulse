@@ -1,0 +1,17 @@
+[package]
+name="netpulse-service"
+version.workspace=true
+edition.workspace=true
+license.workspace=true
+[[bin]]
+name="NetPulseService"
+path="src/main.rs"
+[dependencies]
+netpulse-core={path="../netpulse-core"}
+windows-service="0.8.1"
+tokio={version="1.53.3",features=["rt","time","sync","macros"]}
+serde_json.workspace=true
+windows-sys.workspace=true
+winreg="0.56"
+zeroize="1.9.1"
+uuid.workspace=true

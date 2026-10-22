@@ -1,0 +1,8 @@
+Qt 6.8.3 source archives:
+https://download.qt.io/archive/qt/6.8/6.8.3/submodules/
+
+qtbase-everywhere-src-6.8.3.tar.xz
+qtdeclarative-everywhere-src-6.8.3.tar.xz
+qtsvg-everywhere-src-6.8.3.tar.xz
+
+Compatible Qt DLL replacements may be installed next to NetPulse.exe. Full NetPulse sources are in NetPulse-Source.zip.

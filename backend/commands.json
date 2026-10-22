@@ -1,0 +1,527 @@
+[
+  {
+    "method": "bootstrap",
+    "parameters": []
+  },
+  {
+    "method": "connect",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "disconnect",
+    "parameters": []
+  },
+  {
+    "method": "log_days",
+    "parameters": []
+  },
+  {
+    "method": "log_read",
+    "parameters": [
+      {
+        "name": "day",
+        "type": "String"
+      },
+      {
+        "name": "category",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "profile_transport",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "save_profile_transport",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      },
+      {
+        "name": "value",
+        "type": "Option<netpulse_core::transport_options::ProfileTransport>"
+      }
+    ]
+  },
+  {
+    "method": "profile_json",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "save_profile_json",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      },
+      {
+        "name": "json",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "playground_processes",
+    "parameters": []
+  },
+  {
+    "method": "connection_analysis",
+    "parameters": [
+      {
+        "name": "pid",
+        "type": "Option<u32>"
+      },
+      {
+        "name": "path",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "snapshot",
+    "parameters": []
+  },
+  {
+    "method": "import_text",
+    "parameters": [
+      {
+        "name": "text",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "import_clipboard",
+    "parameters": []
+  },
+  {
+    "method": "copy_proxy_endpoint",
+    "parameters": []
+  },
+  {
+    "method": "copy_log_text",
+    "parameters": [
+      {
+        "name": "text",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "copy_event",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "copy_ip",
+    "parameters": [
+      {
+        "name": "ip",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "import_file",
+    "parameters": [
+      {
+        "name": "qr",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "method": "delete_profile",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "add_subscription",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "String"
+      },
+      {
+        "name": "url",
+        "type": "String"
+      },
+      {
+        "name": "protected",
+        "type": "Option<bool>"
+      }
+    ]
+  },
+  {
+    "method": "copy_subscription_url",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "save_subscription",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      },
+      {
+        "name": "name",
+        "type": "String"
+      },
+      {
+        "name": "interval_hours",
+        "type": "u32"
+      },
+      {
+        "name": "protected",
+        "type": "bool"
+      },
+      {
+        "name": "lock_configuration",
+        "type": "Option<bool>"
+      }
+    ]
+  },
+  {
+    "method": "import_routing",
+    "parameters": []
+  },
+  {
+    "method": "export_routing",
+    "parameters": [
+      {
+        "name": "routing",
+        "type": "netpulse_core::routing::RoutingSettings"
+      }
+    ]
+  },
+  {
+    "method": "update_subscription",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "delete_subscription",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "save_preferences",
+    "parameters": [
+      {
+        "name": "preferences",
+        "type": "Preferences"
+      }
+    ]
+  },
+  {
+    "method": "quick_network",
+    "parameters": [
+      {
+        "name": "tun",
+        "type": "Option<bool>"
+      },
+      {
+        "name": "system_proxy",
+        "type": "Option<bool>"
+      },
+      {
+        "name": "route_mode",
+        "type": "Option<netpulse_core::model::RouteMode>"
+      },
+      {
+        "name": "transport_engine",
+        "type": "Option<String>"
+      }
+    ]
+  },
+  {
+    "method": "quick_ui",
+    "parameters": [
+      {
+        "name": "patch",
+        "type": "UiPatch"
+      }
+    ]
+  },
+  {
+    "method": "active_latency",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "check_core_updates",
+    "parameters": []
+  },
+  {
+    "method": "list_core_releases",
+    "parameters": [
+      {
+        "name": "engine",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "update_core",
+    "parameters": [
+      {
+        "name": "release",
+        "type": "netpulse_core::core_releases::Release"
+      }
+    ]
+  },
+  {
+    "method": "open_core_page",
+    "parameters": [
+      {
+        "name": "url",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "activate_core_bundle",
+    "parameters": [
+      {
+        "name": "rollback",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "method": "quit_application",
+    "parameters": []
+  },
+  {
+    "method": "start_latency",
+    "parameters": [
+      {
+        "name": "ids",
+        "type": "Vec<String>"
+      },
+      {
+        "name": "method",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "start_speed",
+    "parameters": [
+      {
+        "name": "request",
+        "type": "netpulse_core::diagnostics::SpeedRequest"
+      }
+    ]
+  },
+  {
+    "method": "current_diagnostic",
+    "parameters": []
+  },
+  {
+    "method": "diagnostic_status",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "cancel_diagnostic",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "diagnostic_history",
+    "parameters": [
+      {
+        "name": "kind",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "select_profile",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "install_compatibility_runtime",
+    "parameters": []
+  },
+  {
+    "method": "manage_service",
+    "parameters": [
+      {
+        "name": "install",
+        "type": "bool"
+      },
+      {
+        "name": "upgrade",
+        "type": "Option<bool>"
+      }
+    ]
+  },
+  {
+    "method": "read_application_catalog",
+    "parameters": []
+  },
+  {
+    "method": "save_application_catalog",
+    "parameters": [
+      {
+        "name": "applications",
+        "type": "Vec<inventory::Application>"
+      }
+    ]
+  },
+  {
+    "method": "scan_applications",
+    "parameters": []
+  },
+  {
+    "method": "application_icon",
+    "parameters": [
+      {
+        "name": "path",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "choose_exe",
+    "parameters": []
+  },
+  {
+    "method": "public_ip",
+    "parameters": []
+  },
+  {
+    "method": "public_ips",
+    "parameters": []
+  },
+  {
+    "method": "install_engine",
+    "parameters": []
+  },
+  {
+    "method": "clear_logs",
+    "parameters": []
+  },
+  {
+    "method": "clear_file_logs",
+    "parameters": []
+  },
+  {
+    "method": "logs",
+    "parameters": []
+  },
+  {
+    "method": "export_data",
+    "parameters": [
+      {
+        "name": "kind",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "restore_data",
+    "parameters": [
+      {
+        "name": "backup",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "method": "delete_local_data",
+    "parameters": []
+  },
+  {
+    "method": "ui_event",
+    "parameters": [
+      {
+        "name": "action",
+        "type": "String"
+      },
+      {
+        "name": "target",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "open_log_folder",
+    "parameters": []
+  },
+  {
+    "method": "start_mtu",
+    "parameters": [
+      {
+        "name": "target",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "start_best_server",
+    "parameters": [
+      {
+        "name": "samples",
+        "type": "u8"
+      }
+    ]
+  }
+]

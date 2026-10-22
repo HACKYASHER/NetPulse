@@ -1,0 +1,83 @@
+{
+  "version": "1.0.0-beta",
+  "validation_date": "2026-10-22",
+  "platform": "Windows x64",
+  "result": "passed",
+  "network_tests": {
+    "unit_passed": 79,
+    "engine_backed_passed": 18,
+    "failed": 0,
+    "fixtures": "Owned loopback endpoints and pinned official executables"
+  },
+  "ui": {
+    "result": "passed",
+    "variants": [
+      {
+        "language": "ru",
+        "theme": "dark",
+        "pages": 10,
+        "qml_issues": 0
+      },
+      {
+        "language": "en",
+        "theme": "light",
+        "pages": 10,
+        "qml_issues": 0
+      },
+      {
+        "language": "en",
+        "theme": "dark",
+        "pages": 10,
+        "qml_issues": 0
+      }
+    ],
+    "external_qt_paths_removed": true,
+    "webview_required": false
+  },
+  "controller_protocol": {
+    "result": "passed",
+    "checks": [
+      "offline engines verified; no connection on startup",
+      "unknown and malformed requests rejected; channel remains usable",
+      "profile import, selection, encrypted persistence, settings validation",
+      "connection cannot start with both modes disabled",
+      "10 concurrent responses correctly correlated",
+      "real diagnostic job completes over owned loopback target",
+      "audit reads work and path traversal is rejected",
+      "settings and profile persist after controller restart"
+    ]
+  },
+  "service_self_test": {
+    "protected_directory_lookup": true,
+    "result": "passed",
+    "security_descriptor": true,
+    "sid_validation": true,
+    "system_changes": false,
+    "version": "1.0.0-beta"
+  },
+  "installer": {
+    "result": "passed",
+    "version": "1.0.0-beta",
+    "install": true,
+    "packaged_hashes": true,
+    "installed_ui": {
+      "network_changed": false,
+      "pages": 10,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.0-beta",
+      "webview_used": false
+    },
+    "uninstall": true,
+    "registry_removed": true,
+    "tun_service_installed": false,
+    "global_network_changed": false
+  },
+  "limits": [
+    "Elevated physical TUN session with a remote VPN server has not been verified.",
+    "Application and installer are unsigned.",
+    "Some advanced options are available through a JSON editor rather than specialized forms."
+  ]
+}

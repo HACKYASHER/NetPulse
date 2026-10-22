@@ -1,0 +1,12 @@
+{
+  "source_release": "NetPulse 3.0.4",
+  "archive_sha256": "ba05eabedc5c7507b7fad0ebc986ec1692186d9f26cde055cd44b2fa3c6b0797",
+  "ui": "C++20 / Qt 6.8.3 / QML",
+  "controller": "retained Rust NetworkCore",
+  "version": "1.0.0-beta",
+  "commands": 64,
+  "service_name": "NetPulseCoreQt",
+  "service_pipe_prefix": "NetPulse.CoreQt.",
+  "service_directory": "NetPulse Core Qt",
+  "data_directory": "%LOCALAPPDATA%/NetPulseQt"
+}
