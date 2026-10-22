@@ -1,5 +1,5 @@
 """Verify installer update/repair/uninstall using a separate test namespace.
-The exact generated installer script is used, except scoped registry/shortcut
+The generated installer script is used with faster test compression, scoped registry/shortcut
 names, isolated lock checks and disabled service hooks. No live service changes.
 """
 from pathlib import Path
@@ -27,12 +27,13 @@ def main():
     # second barrier so a test cannot launch Windows elevation accidentally.
     source=source.replace('  nsExec::ExecToStack \'"$INSTDIR\\netpulsed.exe" --installer-service-install\'','  Push ""\n  Push 0')
     assert '--installer-service-' not in source
+    source=source.replace('SetCompressor /SOLID lzma\nSetCompressorDictSize 32','SetCompressor zlib')
     script=output/'installer.nsi'
     if options.prepared_test:
         assert script.read_text(encoding='utf-8-sig')==source and (output/'Setup.exe').is_file()
     else:
         script.write_text(source,encoding='utf-8-sig')
-        subprocess.run([str(ROOT.parent/'ONE/.local/tools/nsis-3.13/makensis.exe'),'/V2',str(script)],check=True,timeout=600)
+        subprocess.run([os.environ.get('NSIS_EXE',str(ROOT.parent/'ONE/.local/tools/nsis-3.13/makensis.exe')),'/V2',str(script)],check=True,timeout=600)
     key='Software\\'+token;uninstall='Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\'+token
     assert not exists(key) and not exists(uninstall)
     command=[str(output/'Setup.exe'),'/S','/NOSERVICE','/D='+str(install)]

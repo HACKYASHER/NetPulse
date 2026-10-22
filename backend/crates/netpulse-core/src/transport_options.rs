@@ -115,6 +115,9 @@ pub fn use_xray(profile: &Profile, prefs: &Preferences) -> Result<bool> {
     let advanced = prefs.fragmentation.enabled || prefs.multiplex.enabled;
     let supported = ["vless", "trojan", "shadowsocks", "socks", "http"]
         .contains(&profile.outbound["type"].as_str().unwrap_or(""));
+    if prefs.transport_engine == "xray" && !supported {
+        return Err(invalid("Xray не поддерживает этот протокол. Для Hysteria2 выберите sing-box или Автоматически."));
+    }
     let required = profile.requires_xray() || advanced;
     if (required && prefs.transport_engine == "sing-box") || (advanced && !supported) {
         return Err(invalid(
@@ -378,6 +381,16 @@ mod tests {
     }
 
     use super::*;
+    #[test]
+    fn explicit_incompatible_engine_is_rejected_instead_of_silent_fallback() {
+        let profile=crate::imports::parse_uri("hysteria2://fixture@example.org:443").unwrap();
+        for transport_engine in ["auto","sing-box"] {
+            let prefs=Preferences{transport_engine:transport_engine.into(),..Preferences::default()};
+            assert!(!use_xray(&profile,&prefs).unwrap());
+        }
+        let prefs=Preferences{transport_engine:"xray".into(),..Preferences::default()};
+        assert!(use_xray(&profile,&prefs).is_err());
+    }
     #[test]
     fn overrides_preserve_credentials_and_original_and_reject_injection() {
         let mut p = crate::imports::parse_uri(

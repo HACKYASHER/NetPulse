@@ -148,6 +148,7 @@ impl Store {
         tx.execute_batch("CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, subscription_id TEXT, sealed BLOB NOT NULL);
           CREATE UNIQUE INDEX IF NOT EXISTS profile_source ON profiles(fingerprint,COALESCE(subscription_id,''));
           CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
+          CREATE TABLE IF NOT EXISTS profile_latency(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE, method TEXT NOT NULL, sealed BLOB NOT NULL, PRIMARY KEY(profile_id,method));
           CREATE TABLE IF NOT EXISTS subscriptions(id TEXT PRIMARY KEY,name TEXT NOT NULL,sealed_url BLOB NOT NULL,updated_at INTEGER NOT NULL DEFAULT 0,interval_hours INTEGER NOT NULL DEFAULT 24);
           CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,timestamp INTEGER NOT NULL,level TEXT NOT NULL,subsystem TEXT NOT NULL,stage TEXT NOT NULL,code TEXT NOT NULL,message TEXT NOT NULL);
           CREATE TABLE IF NOT EXISTS measurements(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,timestamp INTEGER NOT NULL,sealed BLOB NOT NULL);
@@ -251,22 +252,28 @@ impl Store {
             .map_err(db)?
             .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(db)?;
-        let measurements = self.measurements("latency")?;
+        let method = self.preferences()?.ping_method;
+        let mut cached = std::collections::HashMap::new();
+        let mut latency = self.db.prepare("SELECT profile_id,sealed FROM profile_latency WHERE method=?1").map_err(db)?;
+        for row in latency.query_map([&method], |row| Ok((row.get::<_,String>(0)?,row.get::<_,Vec<u8>>(1)?))).map_err(db)? {
+            let (id,sealed)=row.map_err(db)?;
+            let raw=vault::open(&sealed)?;
+            let value:serde_json::Value=serde_json::from_slice(&raw).map_err(|_|Error::new("MeasurementInvalid","latency-cache","Invalid saved latency"))?;
+            cached.insert(id,value);
+        }
+        // Older installations have only the bounded history. New results are
+        // cached independently so other measurements cannot evict server pings.
+        for value in self.measurements("latency")? {
+            if value["method"]==method && let Some(id)=value["profile_id"].as_str() { cached.entry(id.to_owned()).or_insert(value); }
+        }
         ids.iter()
             .map(|id| {
                 self.profile(id).map(|p| {
                     let mut summary = p.summary();
-                    if let Some(v) = measurements.iter().find(|v| {
-                        v["profile_id"].as_str() == Some(id.as_str())
-                            && v["method"]
-                                == self
-                                    .preferences()
-                                    .map(|p| p.ping_method)
-                                    .unwrap_or_else(|_| "proxy_https_rtt".into())
-                    }) {
-                        summary.latency_ms = v["min_ms"]
+                    if let Some(v) = cached.get(id) {
+                        summary.latency_ms = v["avg_ms"]
                             .as_f64()
-                            .or_else(|| v["avg_ms"].as_f64())
+                            .or_else(|| v["min_ms"].as_f64())
                             .map(|v| v.round() as u64);
                         summary.latency_method = v["method"].as_str().map(str::to_owned);
                         summary.latency_at = v["timestamp"].as_u64();
@@ -744,6 +751,14 @@ impl Store {
                 params![kind, now() as i64, vault::seal(&raw)?],
             )
             .map_err(db)?;
+        if kind=="latency" {
+            if let (Some(id),Some(method))=(value["profile_id"].as_str(),value["method"].as_str()) {
+                let verified_tcp=method!="tcp_connect_rtt" || value["note"].as_str().is_some_and(|s|s.contains("outside NetPulse TUN"));
+                if verified_tcp && ["tcp_connect_rtt","proxy_https_rtt","proxy_https_head_rtt","icmp_rtt"].contains(&method) {
+                    self.db.execute("INSERT INTO profile_latency(profile_id,method,sealed) SELECT ?1,?2,?3 WHERE EXISTS(SELECT 1 FROM profiles WHERE id=?1) ON CONFLICT(profile_id,method) DO UPDATE SET sealed=excluded.sealed",params![id,method,vault::seal(&raw)?]).map_err(db)?;
+                }
+            }
+        }
         self.db.execute("DELETE FROM measurements WHERE kind=?1 AND id NOT IN (SELECT id FROM measurements WHERE kind=?1 ORDER BY id DESC LIMIT 100)",[kind]).map_err(db)?;
         Ok(())
     }
@@ -1229,6 +1244,19 @@ mod tests {
             !raw.windows(b"COPY-FIXTURE".len())
                 .any(|w| w == b"COPY-FIXTURE")
         );
+    }
+    #[test]
+    fn server_latency_survives_history_eviction_restart_and_method_changes() {
+        let dir=tempfile::tempdir().unwrap();let path=dir.path().join("state.db");
+        let mut store=Store::open(&path).unwrap();
+        store.import(crate::imports::parse("socks5://127.0.0.1:1080#First\nsocks5://127.0.0.1:1081#Other").unwrap(),None).unwrap();
+        let profiles=store.profiles().unwrap();let first=profiles[0].id.clone();let other=profiles[1].id.clone();
+        store.add_measurement("latency",&serde_json::json!({"profile_id":first,"method":"tcp_connect_rtt","min_ms":12.,"avg_ms":15.,"timestamp":1,"note":"measured outside NetPulse TUN"})).unwrap();
+        for i in 0..110 {store.add_measurement("latency",&serde_json::json!({"profile_id":other,"method":"tcp_connect_rtt","avg_ms":20.,"timestamp":i,"note":"measured outside NetPulse TUN"})).unwrap();}
+        drop(store);let store=Store::open(&path).unwrap();assert_eq!(store.profiles().unwrap()[0].latency_ms,Some(15));
+        let mut prefs=store.preferences().unwrap();prefs.ping_method="icmp_rtt".into();store.save_preferences(&prefs).unwrap();assert!(store.profiles().unwrap()[0].latency_ms.is_none());
+        prefs.ping_method="tcp_connect_rtt".into();store.save_preferences(&prefs).unwrap();assert_eq!(store.profiles().unwrap()[0].latency_ms,Some(15));
+        store.add_measurement("latency",&serde_json::json!({"profile_id":first,"method":"tcp_connect_rtt","avg_ms":null,"timestamp":999,"note":"measured outside NetPulse TUN"})).unwrap();assert!(store.profiles().unwrap()[0].latency_ms.is_none());
     }
     #[test]
     fn server_summary_uses_https_measurements_only() {

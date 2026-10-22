@@ -496,59 +496,101 @@ pub fn selection_monitor(
 
 
 
-pub async fn start_mtu_tuning(state:host::State<'_,AppState>,url:String,goal:String)->Result<String> {
- use netpulse_core::{diagnostics::{SpeedRequest,speed},mtu_tuning::{Trial,compare,candidates}};
- if !["balanced","latency"].contains(&goal.as_str()){return Err(Error::new("MtuGoal","mtu-tuning","Unknown goal"))}
- let request=SpeedRequest{mode:"vpn".into(),download_url:url,upload_url:None,upload_endpoint_confirmed:false,duration_seconds:3,max_payload_mib:4};request.validate()?;
- let (original,mut expected_session,profile)=with_core(&state,"mtu-tuning",|c|{
-  let snapshot=c.snapshot();if !snapshot.tun_active||snapshot.engine_pid.is_none(){return Err(Error::new("TunRequired","mtu-tuning","Для сравнения MTU подключитесь в режиме TUN"))}
-  Ok((c.store.preferences()?,session(&snapshot),c.store.profile(&snapshot.active.unwrap().id)?))
- }).await?;
- let ceiling=netpulse_core::mtu::adapters()?.iter().find(|a|a.selected&&a.up&&a.kind!="TUN").map(|a|a.mtu.min(1500) as u16).unwrap_or(1420);
- let values=candidates(original.mtu,ceiling);let jobs=state.diagnostics.clone();let core=state.core.clone();
- let (id,cancel)=jobs.begin("mtu_tuning",values.len()+3)?;let returned=id.clone();
- std::thread::spawn(move || {
-  let mut expected=original.clone();let mut trials=Vec::new();
-  let work=std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
-   {let c=core.lock().map_err(|_|Error::new("CoreUnavailable","mtu-tuning","Core unavailable"))?;netpulse_core::mtu_tuning::save_recovery(c.store.data_directory(),&original,&expected)?;}
-   let mut measure=|mtu:u16,phase:&str|->Result<Trial>{
-    let (route,path,mut prefs)={
-     let mut c=core.lock().map_err(|_|Error::new("CoreUnavailable","mtu-tuning","Core unavailable"))?;
-     if cancel.load(Ordering::SeqCst){return Err(Error::new("Cancelled","mtu-tuning","Тест отменён"))}
-     if session(&c.snapshot())!=expected_session||c.store.preferences()?!=expected {return Err(Error::new("ConnectionChanged","mtu-tuning","Подключение или настройки изменились; тест остановлен"))}
-     if expected.mtu!=mtu {let mut next=expected.clone();next.mtu=mtu;c.guarded(|c|c.apply_preferences(next))?;expected=c.store.preferences()?;expected_session=session(&c.snapshot());netpulse_core::mtu_tuning::save_recovery(c.store.data_directory(),&original,&expected)?;}
-     (c.diagnostic_route(),c.engine_path.clone(),expected.clone())
-    };
-    prefs.ping_proxy_mode="keepalive".into();
-    let latency=diagnostics::latency_samples_on_route(profile.clone(),prefs,path,"proxy_https_rtt",&cancel,Some(&route),3);
-    let measured=speed(&request,&route,"vpn",4*1024*1024,&cancel);
-    let trial=Trial{mtu,phase:phase.into(),download_mbps:measured.download_mbps,latency_ms:latency.avg_ms,jitter_ms:measured.jitter_ms,loaded_ms:measured.loaded_latency_ms,bytes:measured.download_bytes,error:measured.error.map(|e|e.message).or_else(||latency.error.map(|e|e.message))};
-    jobs.append(&id,serde_json::to_value(&trial).unwrap_or_default());Ok(trial)
-   };
-   for mtu in values {trials.push(measure(mtu,"candidate")?)}
-   let baseline=trials[0].clone();
-   // Provisional ranking duplicates trials only to select which candidate to recheck.
-   let duplicated:Vec<_>=trials.iter().chain(trials.iter()).cloned().collect();
-   let leader=compare(&duplicated,&baseline,&baseline,&goal).suggested_mtu.unwrap_or(original.mtu);
-   trials.push(measure(leader,"verify")?);
-   let control=measure(original.mtu,"control")?;
-   let report=compare(&trials,&baseline,&control,&goal);
-   let value=serde_json::json!({"kind":"comparison","timestamp":netpulse_core::store::now(),"comparison":report,"trials":trials,"control":control});
-   jobs.append(&id,value.clone());if let Ok(c)=core.lock(){let _=c.store.add_measurement("mtu_tuning",&value);}
-   Ok(())
-  }));
-  let mut error=match work{Ok(r)=>r.err(),Err(_)=>Some(Error::new("MtuTuningFailed","mtu-tuning","Тест прерван"))};
-  // Restore only the session and settings still owned by this worker. Never
-  // overwrite a user's new connection or preference changes after cancellation.
-  if let Ok(mut c)=core.lock() {
-   if (session(&c.snapshot())==expected_session||c.snapshot().engine_pid.is_none())&&c.store.preferences().ok().as_ref()==Some(&expected)&&expected!=original {
-    if let Err(e)=c.guarded(|c|c.apply_preferences(original.clone())){error=Some(e)}
-   }
-  }
-  if let Ok(c)=core.lock(){
-   if c.store.preferences().ok().is_some_and(|p|p.mtu==original.mtu&&p.network_preset==original.network_preset){let _=std::fs::remove_file(c.store.data_directory().join("mtu-tuning-recovery.json"));}
-  }
-  let _=host::AppHandle.emit("mtu-tuning-finished",());jobs.finish(&id,error);
- });
- Ok(returned)
+pub async fn start_mtu_tuning(state:host::State<'_,AppState>,request:netpulse_core::mtu_tuning::Request)->Result<String> {
+    use netpulse_core::mtu_tuning::{Trial, Probe, compare, confirm};
+    request.validate()?;
+    let (original,mut expected_session)=with_core(&state,"mtu-tuning",|c|{
+        let snapshot=c.snapshot();
+        if !snapshot.tun_active||snapshot.engine_pid.is_none(){return Err(Error::new("TunRequired","mtu-tuning","Для сравнения MTU подключитесь в режиме TUN"))}
+        Ok((c.store.preferences()?,session(&snapshot)))
+    }).await?;
+    let values=request.candidates();
+    let jobs=state.diagnostics.clone();let core=state.core.clone();
+    let (id,cancel)=jobs.begin("mtu_tuning",values.len()+4)?;let returned=id.clone();
+    std::thread::spawn(move || {
+        let mut runtime_mtu=original.mtu;
+        let mut report=None;
+        let work=std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
+            let probe=Probe::new(&request)?;
+            // Runtime candidates are never persisted. This record also handles
+            // migration from the older implementation that saved each candidate.
+            {let c=core.lock().map_err(|_|Error::new("CoreUnavailable","mtu-tuning","Core unavailable"))?;
+                netpulse_core::mtu_tuning::save_recovery(c.store.data_directory(),&original,&original)?;}
+            let mut measure=|mtu:u16,phase:&str|->Result<Trial>{
+                {
+                    let mut c=core.lock().map_err(|_|Error::new("CoreUnavailable","mtu-tuning","Core unavailable"))?;
+                    if cancel.load(Ordering::SeqCst){return Err(Error::new("Cancelled","mtu-tuning","Тест отменён"))}
+                    if session(&c.snapshot())!=expected_session||c.store.preferences()?!=original {
+                        return Err(Error::new("ConnectionChanged","mtu-tuning","Подключение или настройки изменились; тест остановлен"))
+                    }
+                    if runtime_mtu!=mtu {
+                        // connect_with can replace the process even when a later
+                        // preflight fails, so capture the resulting owned session.
+                        let changed=c.guarded(|c|c.set_session_mtu(mtu));
+                        let snapshot=c.snapshot();expected_session=session(&snapshot);
+                        runtime_mtu=snapshot.applied_preferences.as_ref().map_or(original.mtu,|p|p.mtu);
+                        changed?;
+                    }
+                }
+                let mut samples=Vec::new();let mut last_error=None;
+                for _ in 0..request.samples {
+                    if cancel.load(Ordering::SeqCst){return Err(Error::new("Cancelled","mtu-tuning","Тест отменён"))}
+                    let measured=probe.sample(&cancel);
+                    {
+                        let mut c=core.lock().map_err(|_|Error::new("CoreUnavailable","mtu-tuning","Core unavailable"))?;
+                        if session(&c.snapshot())!=expected_session||c.store.preferences()?!=original {
+                            return Err(Error::new("ConnectionChanged","mtu-tuning","Подключение или настройки изменились; тест остановлен"))
+                        }
+                    }
+                    match measured {
+                        Ok(ms)=>samples.push(ms),
+                        Err(e) if ["Cancelled","MtuRouteChanged","PlatformUnsupported"].contains(&e.code.as_str())=>return Err(e),
+                        Err(e)=>last_error=Some(e.message),
+                    }
+                }
+                let trial=Trial::from_samples(mtu,phase,samples,request.samples as usize,last_error);
+                jobs.append(&id,serde_json::to_value(&trial).unwrap_or_default());Ok(trial)
+            };
+            // Fail before changing the MTU if this route/protocol cannot carry
+            // the requested probe (notably ICMP over VLESS/Hysteria2/SOCKS).
+            let baseline=measure(original.mtu,"baseline")?;
+            if baseline.successes==0 {
+                return Err(Error::new("MtuProbeUnavailable","mtu-tuning",baseline.error.clone().unwrap_or_else(||"Тестовая цель не ответила. Проверьте URL; для VPN выберите HTTPS.".into())));
+            }
+            let mut trials=Vec::new();
+            for mtu in values {trials.push(measure(mtu,"candidate")?)}
+            let provisional=compare(&request,&trials,&baseline,&baseline);
+            let verify=measure(provisional.suggested_mtu.unwrap_or(original.mtu),"verify")?;
+            let control=measure(original.mtu,"control")?;
+            let comparison=confirm(compare(&request,&trials,&baseline,&control),&request,&trials,&baseline,&control,&verify);
+            report=Some(serde_json::json!({"kind":"comparison","timestamp":netpulse_core::store::now(),"comparison":comparison,"baseline":baseline,"trials":trials,"control":control,"verification":verify,"resolved_target":probe.address().to_string(),"route":"current_tun","restored":false}));
+            Ok(())
+        }));
+        let mut error=match work {Ok(result)=>result.err(),Err(_)=>Some(Error::new("MtuTuningFailed","mtu-tuning","Тест прерван"))};
+        let mut restored=false;
+        if let Ok(mut c)=core.lock() {
+            let snapshot=c.snapshot();
+            if let Ok(saved)=c.store.preferences() {
+                // Keep user's new profile, routing settings, and manual MTU. Only
+                // restore a runtime that still belongs to this diagnostic.
+                let owned=session(&snapshot)==expected_session;
+                if owned && snapshot.applied_preferences.as_ref().is_some_and(|p|p.mtu!=saved.mtu) {
+                    if let Err(e)=c.guarded(|c|c.apply_preferences(saved.clone())) {error=Some(e)} else {restored=true;}
+                } else {
+                    restored=snapshot.engine_pid.is_none() || snapshot.applied_preferences.as_ref().is_some_and(|p|p.mtu==saved.mtu);
+                }
+                if restored {
+                    let _=std::fs::remove_file(c.store.data_directory().join("mtu-tuning-recovery.json"));
+                }
+            }
+            if let Some(mut value)=report {
+                value["restored"]=serde_json::json!(restored);
+                // A failed restoration cannot expose an actionable suggestion.
+                if !restored {value["comparison"]["suggested_mtu"]=serde_json::Value::Null;}
+                jobs.append(&id,value.clone());let _=c.store.add_measurement("mtu_tuning",&value);
+            }
+        }
+        let _=host::AppHandle.emit("mtu-tuning-finished",());jobs.finish(&id,error);
+    });
+    Ok(returned)
 }

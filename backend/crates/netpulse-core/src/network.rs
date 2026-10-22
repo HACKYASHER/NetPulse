@@ -321,6 +321,12 @@ impl NetworkCore {
     }
     pub fn select_profile(&mut self, id: &str) -> Result<()> {
         self.store.profile(id)?;
+        // Selection is an immediate switch while connected. connect() verifies
+        // the new route before committing the selection and rolls back failures.
+        if self.engine.is_some() && self.active.as_ref().is_some_and(|p| p.id != id) {
+            self.connect(id)?;
+            return Ok(());
+        }
         let mut p = self.store.preferences()?;
         p.selected_profile = Some(id.into());
         self.store.save_preferences(&p)
@@ -341,6 +347,18 @@ impl NetworkCore {
         }
         Ok(self.snapshot())
     }
+    /// Change only the owned runtime for a diagnostic. Candidate MTUs must never
+    /// become saved preferences; a crash therefore keeps the user's real MTU.
+    pub fn set_session_mtu(&mut self, mtu: u16) -> Result<()> {
+        if !(1280..=9000).contains(&mtu) {
+            return Err(Error::new("InvalidMtu", "mtu-tuning", "MTU must be 1280–9000"));
+        }
+        let profile = self.active.clone().filter(|_| self.engine.is_some() && self.prefs.effective_tun())
+            .ok_or_else(|| Error::new("TunRequired", "mtu-tuning", "Подключитесь в режиме TUN"))?;
+        let mut trial = self.prefs.clone();
+        trial.mtu = mtu;
+        self.connect_with(profile, &trial)
+    }
     pub fn apply_preferences(&mut self, prefs: Preferences) -> Result<()> {
         let mut prefs = prefs.normalized();
         // Window geometry is saved by the native window, not by stale form drafts.
@@ -360,6 +378,7 @@ impl NetworkCore {
             || prefs.fake_ip != self.prefs.fake_ip
             || prefs.routing_rules != self.prefs.routing_rules
             || prefs.sniff_excluded_apps != self.prefs.sniff_excluded_apps
+            || prefs.sniffing != self.prefs.sniffing
             || prefs.fragmentation != self.prefs.fragmentation
             || prefs.multiplex != self.prefs.multiplex
             || prefs.tls_defaults != self.prefs.tls_defaults
@@ -982,6 +1001,7 @@ fn prefs_network_equal(a: &Preferences, b: &Preferences) -> bool {
         && a.fake_ip == b.fake_ip
         && a.routing_rules == b.routing_rules
         && a.sniff_excluded_apps == b.sniff_excluded_apps
+        && a.sniffing == b.sniffing
         && a.fragmentation == b.fragmentation
         && a.multiplex == b.multiplex
         && a.transport_engine == b.transport_engine
@@ -1359,10 +1379,11 @@ mod tests {
                 .unwrap(),
             "NETPULSE"
         );
-        let b = core.connect(&profiles[1].id).unwrap();
+        core.select_profile(&profiles[1].id).unwrap();
+        let b = core.snapshot();
         assert_eq!(b.active.unwrap().id, profiles[1].id);
         assert_ne!(b.engine_pid.unwrap(), first_pid);
-        assert!(core.connect(&profiles[2].id).is_err());
+        assert!(core.select_profile(&profiles[2].id).is_err());
         let rolled = core.snapshot();
         assert_eq!(
             rolled.engine_pid, b.engine_pid,
@@ -1370,6 +1391,7 @@ mod tests {
         );
         assert_eq!(rolled.state, ConnectionState::Connected);
         assert_eq!(rolled.active.unwrap().id, profiles[1].id);
+        assert_eq!(core.store.preferences().unwrap().selected_profile.as_deref(),Some(profiles[1].id.as_str()));
         let until = Instant::now() + Duration::from_secs(3);
         let metrics = loop {
             if let Some(metrics) = core.refresh_metrics().unwrap().metrics {
@@ -1380,6 +1402,24 @@ mod tests {
         };
         assert!(metrics.download_total > 0);
         assert!(metrics.upload_total > 0);
+        // Switch both official transports repeatedly on the owned SOCKS/TLS
+        // fixture. Every successful selection must still carry a real request.
+        for transport in ["xray","sing-box","auto","xray","sing-box"] {
+            let mut choice=core.store.preferences().unwrap();choice.transport_engine=transport.into();
+            core.apply_preferences(choice).unwrap();
+            assert_eq!(core.snapshot().state,ConnectionState::Connected);
+            assert_eq!(core.store.preferences().unwrap().transport_engine,transport);
+            let endpoint=core.local_proxy_uri().unwrap();
+            let client=reqwest::blocking::Client::builder().no_proxy()
+                .proxy(reqwest::Proxy::all(endpoint.as_str()).unwrap())
+                .add_root_certificate(reqwest::Certificate::from_pem(include_bytes!("../tests/fixtures/owned-ca.pem")).unwrap())
+                .timeout(Duration::from_secs(5)).build().unwrap();
+            assert_eq!(client.get(&prefs.probe_url).send().unwrap().text().unwrap(),"NETPULSE");
+        }
+        let before=core.store.preferences().unwrap();
+        let mut rejected=before.clone();rejected.transport_engine="xray".into();
+        core.store.test_read_only(true);assert!(core.apply_preferences(rejected).is_err());core.store.test_read_only(false);
+        assert_eq!(core.store.preferences().unwrap(),before);assert_eq!(core.snapshot().state,ConnectionState::Connected);
         let saved = core.store.backup().unwrap();
         core.disconnect().unwrap();
         assert!(std::net::TcpStream::connect(("127.0.0.1", prefs.proxy_port)).is_err());
@@ -1542,6 +1582,33 @@ mod tests {
             core.disconnect().unwrap().state,
             ConnectionState::Disconnected
         );
+    }
+    #[test]
+    fn engine_and_profile_selection_failures_keep_current_runtime_and_preferences() {
+        let dir=tempfile::tempdir().unwrap();
+        let mut store=Store::open(&dir.path().join("state.db")).unwrap();
+        store.import(crate::imports::parse("socks5://127.0.0.1:1080#First\nsocks5://127.0.0.1:1081#Second").unwrap(),None).unwrap();
+        let profiles=store.profiles().unwrap();
+        let mut core=NetworkCore::new(store,dir.path().join("missing-sing-box.exe")).unwrap();
+        core.select_profile(&profiles[0].id).unwrap();
+        let mut offline=core.store.preferences().unwrap();offline.transport_engine="xray".into();
+        core.apply_preferences(offline).unwrap();
+        assert_eq!(core.store.preferences().unwrap().transport_engine,"xray");
+        core.active=Some(core.store.profile(&profiles[0].id).unwrap());
+        core.engine=Some(ManagedEngine::FaultFixture{monitor_error:false,stop_error:false});
+        core.state=ConnectionState::Connected;
+        let before=core.store.preferences().unwrap();
+        let mut change=before.clone();change.transport_engine="sing-box".into();
+        assert!(core.apply_preferences(change).is_err());
+        assert_eq!(core.store.preferences().unwrap(),before);
+        assert_eq!(core.snapshot().engine_pid,Some(12345));
+        assert_eq!(core.snapshot().state,ConnectionState::Connected);
+        assert!(core.select_profile(&profiles[1].id).is_err());
+        assert_eq!(core.store.preferences().unwrap().selected_profile,before.selected_profile);
+        assert_eq!(core.snapshot().active.unwrap().id,profiles[0].id);
+        let mut invalid=before.clone();invalid.transport_engine="broken".into();assert!(core.apply_preferences(invalid).is_err());
+        assert_eq!(core.store.preferences().unwrap(),before);
+        core.select_profile(&profiles[0].id).unwrap();assert_eq!(core.snapshot().engine_pid,Some(12345));
     }
     #[test]
     #[ignore = "Requires bundled sing-box; owned HTTPS keepalive fixtures only"]

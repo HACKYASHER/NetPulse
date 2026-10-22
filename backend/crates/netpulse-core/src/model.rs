@@ -196,6 +196,7 @@ pub struct Preferences {
     pub fake_ip: bool,
     pub routing_rules: Vec<crate::advanced_routing::Rule>,
     pub sniff_excluded_apps: Vec<String>,
+    pub sniffing: crate::advanced_routing::Sniffing,
     pub fragmentation: crate::transport_options::Fragmentation,
     pub multiplex: crate::transport_options::Multiplex,
     pub ping_method: String,
@@ -265,9 +266,10 @@ impl Default for Preferences {
             fake_ip: false,
             routing_rules: vec![],
             sniff_excluded_apps: vec![],
+            sniffing: Default::default(),
             fragmentation: Default::default(),
             multiplex: Default::default(),
-            ping_method: "proxy_https_rtt".into(),
+            ping_method: "tcp_connect_rtt".into(),
             ping_proxy_mode: "keepalive".into(),
             selected_profile: None,
             favorites: vec![],
@@ -584,7 +586,7 @@ mod launch_tests {
     use super::*;
     #[test]
     fn fresh_install_uses_tcp_but_saved_ping_choice_is_preserved() {
-        assert_eq!(Preferences::default().ping_method, "proxy_https_rtt");
+        assert_eq!(Preferences::default().ping_method, "tcp_connect_rtt");
         let saved = Preferences {
             ping_method: "proxy_https_head_rtt".into(),
             ..Preferences::default()

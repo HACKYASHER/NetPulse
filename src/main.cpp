@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("NetPulse"));
     QCoreApplication::setOrganizationName(QStringLiteral("NetPulse"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.0-beta"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.1-beta"));
     QApplication::setFont(QFont(QStringLiteral("Segoe UI"), 10));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QCommandLineParser parser;
@@ -118,7 +118,7 @@ int main(int argc, char** argv) {
         const bool connected=!snapshot.value(QStringLiteral("engine_pid")).isNull();
         const bool working=backend.pending().contains(QStringLiteral("connect"))||backend.pending().contains(QStringLiteral("disconnect"))||backend.pending().contains(QStringLiteral("quick_network"));
         connectAction->setEnabled(backend.ready()&&!connected&&!working);disconnectAction->setEnabled(connected&&!working);reconnectAction->setEnabled(connected&&!working);modes->setEnabled(backend.ready()&&!working);
-        tunAction->setChecked(connected&&snapshot.value(QStringLiteral("tun_active")).toBool());proxyAction->setChecked(connected&&snapshot.value(QStringLiteral("system_proxy_active")).toBool());
+        tunAction->setChecked(prefs.value(QStringLiteral("tun")).toBool());proxyAction->setChecked(prefs.value(QStringLiteral("system_proxy")).toBool());
         tray.setToolTip(QStringLiteral("NetPulse · ")+(connected?(en?QStringLiteral("Connected"):QStringLiteral("Подключено")):(en?QStringLiteral("Disconnected"):QStringLiteral("Отключено"))));
     };
     QObject::connect(&backend,&Backend::dataChanged,&app,updateTray);
@@ -146,12 +146,12 @@ int main(int argc, char** argv) {
         auto* check = new QTimer(&app); check->setInterval(100);
         QObject::connect(check, &QTimer::timeout, &app, [&, check, output] {
             const int page = window->property("page").toInt();
-            if (!capturedPages.contains(page) && backend.ready()) {
+            if (!capturedPages.contains(page) && backend.ready() && !backend.data().value(QStringLiteral("runtime_preparing")).toBool()) {
                 capturedPages.insert(page);
                 window->grabWindow().save(output + QStringLiteral("/page-%1.png").arg(page));
             }
             const auto frame=window->property("smokeFrame").toString();
-            if(backend.ready()&&!capturedFrames.contains(frame)){capturedFrames.insert(frame);window->grabWindow().save(output+QStringLiteral("/frame-%1.png").arg(frame));window->setProperty("smokeCaptured",frame);}
+            if(backend.ready()&&!backend.data().value(QStringLiteral("runtime_preparing")).toBool()&&!capturedFrames.contains(frame)){capturedFrames.insert(frame);window->grabWindow().save(output+QStringLiteral("/frame-%1.png").arg(frame));window->setProperty("smokeCaptured",frame);}
             if (!window->property("smokeFinished").toBool()) return;
             check->stop();
             window->grabWindow().save(output + QStringLiteral("/window.png"));

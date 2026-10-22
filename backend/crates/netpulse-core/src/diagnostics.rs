@@ -460,13 +460,13 @@ pub struct SpeedRequest {
 impl SpeedRequest {
     pub fn validate(&self) -> Result<()> {
         if !["direct", "vpn", "compare"].contains(&self.mode.as_str())
-            || !(2..=30).contains(&self.duration_seconds)
-            || !(1..=100).contains(&self.max_payload_mib)
+            || !(2..=120).contains(&self.duration_seconds)
+            || !(1..=1024).contains(&self.max_payload_mib)
         {
             return Err(Error::new(
                 "InvalidSpeedTest",
                 "speed-validate",
-                "Choose Direct/VPN/Compare, 2–30 seconds and 1–100 MiB total payload",
+                "Choose Direct/VPN/Compare, 2–120 seconds per route and 1–1024 MiB total payload",
             ));
         }
         endpoint(&self.download_url)?;
@@ -507,12 +507,61 @@ pub struct SpeedResult {
     pub idle_https_ms: Option<f64>,
     pub loaded_latency_ms: Option<f64>,
     pub jitter_ms: Option<f64>,
+    pub requested_duration_seconds: u64,
+    pub payload_limit_bytes: u64,
+    pub download_duration_ms: u64,
+    pub upload_duration_ms: u64,
+    pub download_requests: u32,
+    pub upload_requests: u32,
+    pub payload_limit_reached: bool,
 }
 #[derive(Serialize, Clone, Debug)]
 pub struct SpeedSample {
     pub elapsed_ms: u64,
     pub bytes: u64,
     pub direction: String,
+    pub mode: String,
+    pub download_bytes: u64,
+    pub upload_bytes: u64,
+    pub payload_limit_bytes: u64,
+    pub phase_elapsed_ms: u64,
+    pub phase_duration_ms: u64,
+}
+fn speed_sample(
+    result: &mut SpeedResult,
+    started: Instant,
+    phase_started: Instant,
+    phase_duration: Duration,
+    direction: &str,
+    progress: &dyn Fn(&SpeedSample),
+) {
+    let sample = SpeedSample {
+        elapsed_ms: started.elapsed().as_millis() as u64,
+        bytes: if direction == "upload" { result.upload_bytes } else { result.download_bytes },
+        direction: direction.into(),
+        mode: result.mode.clone(),
+        download_bytes: result.download_bytes,
+        upload_bytes: result.upload_bytes,
+        payload_limit_bytes: result.payload_limit_bytes,
+        phase_elapsed_ms: phase_started.elapsed().as_millis() as u64,
+        phase_duration_ms: phase_duration.as_millis() as u64,
+    };
+    progress(&sample);
+    result.samples.push(sample);
+}
+fn download_endpoint(url: &str, bytes: u64) -> Result<url::Url> {
+    let mut endpoint = endpoint(url)?;
+    // Cloudflare accepts an explicit size; cap each response as well as the
+    // local reader so a short test does not request an oversized body.
+    if endpoint.host_str() == Some("speed.cloudflare.com") && endpoint.path() == "/__down" {
+        let params: Vec<(String, String)> = endpoint.query_pairs()
+            .filter(|(key, _)| key != "bytes")
+            .map(|(key, value)| (key.into_owned(), value.into_owned()))
+            .collect();
+        endpoint.query_pairs_mut().clear().extend_pairs(params)
+            .append_pair("bytes", &bytes.to_string());
+    }
+    Ok(endpoint)
 }
 pub fn speed(
     request: &SpeedRequest,
@@ -557,6 +606,13 @@ pub fn speed_observed(
         idle_https_ms: None,
         loaded_latency_ms: None,
         jitter_ms: None,
+        requested_duration_seconds: request.duration_seconds,
+        payload_limit_bytes: budget.min(request.max_payload_mib.saturating_mul(1024 * 1024)),
+        download_duration_ms: 0,
+        upload_duration_ms: 0,
+        download_requests: 0,
+        upload_requests: 0,
+        payload_limit_reached: false,
     };
     let run = (|| {
         request.validate()?;
@@ -568,8 +624,16 @@ pub fn speed_observed(
                 "VPN speed test requires an active verified connection",
             ));
         }
+        let budget = result.payload_limit_bytes;
+        if budget == 0 {
+            return Err(Error::new("InvalidSpeedTest", "speed-validate", "The speed-test payload limit must be positive"));
+        }
         let timeout = Duration::from_secs(request.duration_seconds);
-        let c = http(port, &route.password, timeout)?;
+        // Individual transfers are bounded so cancellation does not have to
+        // wait for an entire 120-second test when an endpoint stops replying.
+        let transfer_timeout = Duration::from_secs(5);
+        let c = http(port, &route.password, transfer_timeout)?;
+        speed_sample(&mut result, started, started, Duration::ZERO, "idle", progress);
         let mut idle = vec![];
         for _ in 0..3 {
             cancelled(cancel)?;
@@ -590,64 +654,65 @@ pub fn speed_observed(
         } else {
             budget
         };
+        // Download and optional upload share the requested time on each route.
+        // Repeat finite responses until that phase expires or its byte budget
+        // is exhausted; one small response is not a sustained speed test.
+        let phase_duration = if request.upload_url.is_some() { timeout / 2 } else { timeout };
         let down_start = Instant::now();
-        let mut response = c
-            .get(endpoint(&request.download_url)?)
-            .header("Cache-Control", "no-cache")
-            .header(
-                "Range",
-                format!("bytes=0-{}", download_budget.saturating_sub(1)),
-            )
-            .send()
-            .map_err(|e| {
-                Error::new(
-                    if e.is_timeout() {
-                        "SpeedTimeout"
-                    } else {
-                        "SpeedDownloadFailed"
-                    },
-                    "speed-download",
-                    "Download request failed; partial data is retained",
-                )
-            })?;
-        if !response.status().is_success() {
-            return Err(Error::new(
-                "SpeedHttpError",
-                "speed-download",
-                format!("HTTP {}", response.status().as_u16()),
-            ));
-        }
         let mut buf = [0u8; 32768];
         let mut load = LoadProbe::start(c.clone(), request.download_url.clone());
         let mut last_sample = Instant::now();
-        while result.download_bytes < download_budget && down_start.elapsed() < timeout {
+        speed_sample(&mut result, started, down_start, phase_duration, "download", progress);
+        while result.download_bytes < download_budget && down_start.elapsed() < phase_duration {
             cancelled(cancel)?;
-            let limit = (download_budget - result.download_bytes).min(buf.len() as u64) as usize;
-            let n = response.read(&mut buf[..limit]).map_err(|_| {
-                Error::new(
-                    "SpeedReadFailed",
-                    "speed-download",
-                    "Download stream failed or reached its timeout; partial data is retained",
-                )
-            })?;
-            if n == 0 {
-                break;
+            let remaining = phase_duration.saturating_sub(down_start.elapsed());
+            if remaining.is_zero() { break; }
+            let chunk_budget = (download_budget - result.download_bytes).min(8 * 1024 * 1024);
+            let transfer_start = Instant::now();
+            let transfer_time = remaining.min(transfer_timeout);
+            let response = c
+                .get(download_endpoint(&request.download_url, chunk_budget)?)
+                .timeout(transfer_time)
+                .header("Cache-Control", "no-cache, no-store")
+                .header("Range", format!("bytes=0-{}", chunk_budget.saturating_sub(1)))
+                .send();
+            let mut response = match response {
+                Ok(response) => response,
+                Err(error) if error.is_timeout() && down_start.elapsed() >= phase_duration && result.download_bytes > 0 => break,
+                Err(error) => return Err(Error::new(
+                    if error.is_timeout() { "SpeedTimeout" } else { "SpeedDownloadFailed" },
+                    "speed-download", "Download request failed; partial data is retained",
+                )),
+            };
+            if !response.status().is_success() {
+                return Err(Error::new("SpeedHttpError", "speed-download", format!("HTTP {}", response.status().as_u16())));
             }
-            result.download_bytes += n as u64;
-            if last_sample.elapsed() >= Duration::from_millis(200) {
-                result.samples.push(SpeedSample {
-                    elapsed_ms: started.elapsed().as_millis() as u64,
-                    bytes: result.download_bytes,
-                    direction: "download".into(),
-                });
-                progress(result.samples.last().unwrap());
-                last_sample = Instant::now();
+            result.download_requests += 1;
+            let before = result.download_bytes;
+            while result.download_bytes - before < chunk_budget && down_start.elapsed() < phase_duration {
+                cancelled(cancel)?;
+                let limit = (chunk_budget - (result.download_bytes - before)).min(buf.len() as u64) as usize;
+                let n = match response.read(&mut buf[..limit]) {
+                    Ok(n) => n,
+                    Err(_) if transfer_start.elapsed() >= transfer_time && result.download_bytes > before => break,
+                    Err(_) => return Err(Error::new("SpeedReadFailed", "speed-download", "Download stream failed; partial data is retained")),
+                };
+                if n == 0 { break; }
+                result.download_bytes += n as u64;
+                if last_sample.elapsed() >= Duration::from_millis(200) {
+                    speed_sample(&mut result, started, down_start, phase_duration, "download", progress);
+                    last_sample = Instant::now();
+                }
+            }
+            if result.download_bytes == before {
+                return Err(Error::new("SpeedEmptyResponse", "speed-download", "The download endpoint returned no test data"));
             }
         }
+        result.download_duration_ms = down_start.elapsed().as_millis() as u64;
         if result.download_bytes > 0 {
             result.download_mbps = Some(
                 result.download_bytes as f64 * 8.0
-                    / down_start.elapsed().as_secs_f64()
+                    / down_start.elapsed().as_secs_f64().max(f64::EPSILON)
                     / 1_000_000.0,
             );
         }
@@ -661,47 +726,42 @@ pub fn speed_observed(
                     / (loaded.len() - 1) as f64,
             );
         }
-        result.samples.push(SpeedSample {
-            elapsed_ms: started.elapsed().as_millis() as u64,
-            bytes: result.download_bytes,
-            direction: "download".into(),
-        });
-        progress(result.samples.last().unwrap());
-        drop(response);
+        speed_sample(&mut result, started, down_start, phase_duration, "download", progress);
         cancelled(cancel)?;
         if let Some(upload) = &request.upload_url {
-            let n = (budget - result.download_bytes).min(4 * 1024 * 1024);
-            let body = vec![0u8; n as usize];
+            let upload_budget = budget - result.download_bytes;
+            let upload_endpoint = endpoint(upload)?;
             let up_start = Instant::now();
-            let response = c
-                .post(endpoint(upload)?)
-                .header("Content-Type", "application/octet-stream")
-                .body(body)
-                .send()
-                .map_err(|_| {
-                    Error::new(
-                        "SpeedUploadFailed",
-                        "speed-upload",
-                        "Upload failed; uploaded amount is unknown and throughput was not recorded",
-                    )
-                })?;
-            if !response.status().is_success() {
-                return Err(Error::new(
-                    "SpeedHttpError",
-                    "speed-upload",
-                    format!("HTTP {}", response.status().as_u16()),
-                ));
+            speed_sample(&mut result, started, up_start, phase_duration, "upload", progress);
+            while result.upload_bytes < upload_budget && up_start.elapsed() < phase_duration {
+                cancelled(cancel)?;
+                let remaining = phase_duration.saturating_sub(up_start.elapsed());
+                if remaining.is_zero() { break; }
+                let n = (upload_budget - result.upload_bytes).min(1024 * 1024);
+                let response = c
+                    .post(upload_endpoint.clone())
+                    .timeout(remaining.min(transfer_timeout))
+                    .header("Content-Type", "application/octet-stream")
+                    .body(vec![0u8; n as usize])
+                    .send()
+                    .map_err(|_| Error::new("SpeedUploadFailed", "speed-upload", "Upload failed; the last unconfirmed payload is not included in throughput"))?;
+                if !response.status().is_success() {
+                    return Err(Error::new("SpeedHttpError", "speed-upload", format!("HTTP {}", response.status().as_u16())));
+                }
+                result.upload_requests += 1;
+                result.upload_bytes += n;
+                if last_sample.elapsed() >= Duration::from_millis(200) {
+                    speed_sample(&mut result, started, up_start, phase_duration, "upload", progress);
+                    last_sample = Instant::now();
+                }
             }
-            result.upload_bytes = n;
-            result.upload_mbps =
-                Some(n as f64 * 8.0 / up_start.elapsed().as_secs_f64() / 1_000_000.0);
-            result.samples.push(SpeedSample {
-                elapsed_ms: started.elapsed().as_millis() as u64,
-                bytes: n,
-                direction: "upload".into(),
-            });
-            progress(result.samples.last().unwrap());
+            result.upload_duration_ms = up_start.elapsed().as_millis() as u64;
+            if result.upload_bytes > 0 {
+                result.upload_mbps = Some(result.upload_bytes as f64 * 8.0 / up_start.elapsed().as_secs_f64().max(f64::EPSILON) / 1_000_000.0);
+            }
+            speed_sample(&mut result, started, up_start, phase_duration, "upload", progress);
         }
+        result.payload_limit_reached = result.download_bytes + result.upload_bytes >= budget;
         Ok(())
     })();
     if let Err(e) = run {
@@ -721,7 +781,7 @@ impl LoadProbe {
         let flag = stop.clone();
         let join = std::thread::spawn(move || {
             let mut samples = vec![];
-            for _ in 0..60 {
+            while !flag.load(Ordering::SeqCst) {
                 for _ in 0..6 {
                     if flag.load(Ordering::SeqCst) {
                         return samples;
@@ -802,5 +862,113 @@ mod tests {
         let result = speed(&r, &route, "direct", 1024, &AtomicBool::new(true));
         assert!(result.cancelled);
         assert_eq!(result.download_bytes, 0);
+        r.duration_seconds = 120;
+        r.max_payload_mib = 1024;
+        assert!(r.validate().is_ok());
+        r.duration_seconds = 121;
+        assert!(r.validate().is_err());
+        r.duration_seconds = 30;
+        r.max_payload_mib = 1025;
+        assert!(r.validate().is_err());
+    }
+    #[test]
+    fn cloudflare_response_size_is_bounded_without_changing_custom_endpoints() {
+        let url = download_endpoint("https://speed.cloudflare.com/__down?bytes=100000000&test=one", 4096).unwrap();
+        let pairs: Vec<_> = url.query_pairs().collect();
+        assert_eq!(pairs.iter().filter(|(key,_)| key == "bytes").count(), 1);
+        assert!(pairs.iter().any(|(key,value)| key == "bytes" && value == "4096"));
+        assert!(pairs.iter().any(|(key,value)| key == "test" && value == "one"));
+        let custom = "https://example.org/download?bytes=10";
+        assert_eq!(download_endpoint(custom, 4096).unwrap().as_str(), custom);
+    }
+    /// Owned TLS fixture only. A short finite response exercises the repeated
+    /// transfer loop without relying on an external speed-test service.
+    struct SpeedOrigin {
+        port: u16,
+        stop: Arc<AtomicBool>,
+        thread: Option<std::thread::JoinHandle<()>>,
+    }
+    impl SpeedOrigin {
+        fn new() -> Self {
+            use std::{io::Write, net::TcpListener};
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            listener.set_nonblocking(true).unwrap();
+            let identity = native_tls::Identity::from_pkcs12(
+                include_bytes!("../tests/fixtures/owned-localhost.pfx"), "fixture-only",
+            ).unwrap();
+            let acceptor = native_tls::TlsAcceptor::new(identity).unwrap();
+            let stop = Arc::new(AtomicBool::new(false));
+            let flag = stop.clone();
+            let thread = std::thread::spawn(move || {
+                while !flag.load(Ordering::SeqCst) {
+                    if let Ok((socket, _)) = listener.accept() {
+                        socket.set_nonblocking(false).unwrap();
+                        socket.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                        socket.set_write_timeout(Some(Duration::from_secs(2))).unwrap();
+                        if let Ok(mut stream) = acceptor.accept(socket) {
+                            let mut request = [0u8; 4096];
+                            if let Ok(n) = stream.read(&mut request) {
+                                if request[..n].starts_with(b"HEAD ") {
+                                    let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                                } else {
+                                    std::thread::sleep(Duration::from_millis(20));
+                                    let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4096\r\nConnection: close\r\n\r\n");
+                                    let _ = stream.write_all(&[7u8; 4096]);
+                                }
+                                let _ = stream.flush();
+                            }
+                        }
+                    } else {
+                        std::thread::sleep(Duration::from_millis(2));
+                    }
+                }
+            });
+            Self { port, stop, thread:Some(thread) }
+        }
+        fn request(&self) -> SpeedRequest {
+            SpeedRequest { mode:"direct".into(),download_url:format!("https://127.0.0.1:{}/download",self.port),upload_url:None,upload_endpoint_confirmed:false,duration_seconds:2,max_payload_mib:1 }
+        }
+    }
+    impl Drop for SpeedOrigin {
+        fn drop(&mut self) {
+            self.stop.store(true, Ordering::SeqCst);
+            if let Some(thread) = self.thread.take() { thread.join().unwrap(); }
+        }
+    }
+    fn direct_route() -> DiagnosticRoute {
+        DiagnosticRoute { direct_port:None,vpn_port:None,password:zeroize::Zeroizing::new(String::new()),engine_pid:None }
+    }
+    #[test]
+    fn speed_repeats_finite_responses_and_reports_the_payload_limit() {
+        let origin = SpeedOrigin::new();
+        let result = speed(&origin.request(), &direct_route(), "direct", 32*1024, &AtomicBool::new(false));
+        assert!(result.error.is_none(), "{:?}",result.error);
+        assert_eq!(result.download_requests, 8);
+        assert_eq!(result.download_bytes, 32*1024);
+        assert!(result.payload_limit_reached);
+        assert!(result.download_mbps.is_some_and(|value|value>0.0));
+        let progress = result.samples.last().unwrap();
+        assert_eq!(progress.mode, "direct");
+        assert_eq!(progress.download_bytes, 32*1024);
+        assert_eq!(progress.payload_limit_bytes, 32*1024);
+    }
+    #[test]
+    fn speed_runs_until_the_time_window_and_can_cancel_partial_transfers() {
+        let origin = SpeedOrigin::new();
+        let result = speed(&origin.request(), &direct_route(), "direct", 1024*1024, &AtomicBool::new(false));
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert!(result.download_requests>1);
+        assert!(result.download_bytes>4096 && result.download_bytes<1024*1024);
+        assert!(result.download_duration_ms>=1900 && result.download_duration_ms<5000);
+        assert!(!result.payload_limit_reached);
+        let cancel = AtomicBool::new(false);
+        let result = speed_observed(&origin.request(), &direct_route(), "direct", 1024*1024, &cancel, &|sample| {
+            if sample.download_bytes >= 4096 { cancel.store(true, Ordering::SeqCst); }
+        });
+        assert!(result.cancelled);
+        assert_eq!(result.error.as_ref().unwrap().code,"Cancelled");
+        assert!(result.download_bytes>0 && result.download_bytes<1024*1024);
+        assert!(result.duration_ms<2000);
     }
 }

@@ -5,7 +5,8 @@ Label {
  textFormat: Text.PlainText
  Layout.fillWidth: true
  wrapMode: Text.WordWrap
- color: ApplicationWindow.window.mutedColor
+ property var appWindow: ApplicationWindow.window
+ color: appWindow ? appWindow.mutedColor : "#a7b1c8"
  font.pixelSize: 12
  lineHeight: 1.18
 }

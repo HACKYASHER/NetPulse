@@ -67,7 +67,7 @@ def run(directory):
         assert secret.encode() not in (directory/'netpulse.db').read_bytes()
         checks.append('profile import, selection, encrypted persistence, settings validation')
         preferences=checked['preferences']
-        assert preferences['ping_method']=='proxy_https_rtt' and preferences['ping_proxy_mode']=='keepalive'
+        assert preferences['ping_method']=='tcp_connect_rtt' and preferences['ping_proxy_mode']=='keepalive'
         preferences.update(dns={'mode':'udp','server':'1.1.1.1'},applications=[r'C:\Apps\Steam.EXE',r'D:\Other\steam.exe'],bypass_domains=['.ru','*.su'])
         host.call('save_preferences',preferences=preferences)
         checked=host.call('bootstrap')['preferences']
@@ -153,7 +153,24 @@ def run(directory):
         assert all('cpu_percent' not in p and 'memory_bytes' not in p for p in processes)
         checks.append('Playground exposes owned TCP connections by PID and EXE group, with network-focused process data')
 
-        assert host.wait(host.send('start_mtu_tuning',url='https://speed.cloudflare.com/__down?bytes=4194304',goal='balanced'))['error']['code']=='TunRequired'
+        for engine in ['sing-box','xray','auto']:
+            host.call('quick_network',transport_engine=engine)
+            state=host.call('bootstrap')
+            assert state['preferences']['transport_engine']==engine and not state['snapshot']['engine_pid']
+        assert host.wait(host.send('quick_network',transport_engine='unknown'))['error']
+        assert host.call('bootstrap')['preferences']['transport_engine']=='auto'
+        current=host.call('bootstrap')['preferences']
+        current['sniffing']={'enabled':True,'http':True,'tls':True,'quic':False,'timeout_ms':125}
+        current['tun']=True;current['system_proxy']=True
+        host.call('save_preferences',preferences=current)
+        state=host.call('bootstrap');assert state['preferences']['tun'] and state['preferences']['system_proxy']
+        assert state['preferences']['sniffing']==current['sniffing'] and not state['snapshot']['engine_pid']
+        invalid=copy.deepcopy(current);invalid['sniffing']['timeout_ms']=0
+        assert host.wait(host.send('save_preferences',preferences=invalid))['error']['code']=='InvalidSniffing'
+        assert host.call('bootstrap')['preferences']['sniffing']==current['sniffing']
+        host.call('quick_network',tun=False,system_proxy=False)
+        checks.append('engine choices persist; invalid choice rolls back; independent modes and Sniffing validate without starting VPN')
+        assert host.wait(host.send('start_mtu_tuning',target='https://www.gstatic.com/generate_204',method='https',minimum=1440,maximum=1472,samples=5))['error']['code']=='TunRequired'
         assert host.wait(host.send('connect',id=profile['id']))['error']['code']=='ConnectionModeRequired'
         checks.append('connection cannot start with both modes disabled')
         ids=[host.send('snapshot') for _ in range(10)]
@@ -168,6 +185,9 @@ def run(directory):
             time.sleep(.1)
         assert len(status['results'])==1
         assert host.call('diagnostic_history',kind='latency')
+        ping_summary=next(p for p in host.call('bootstrap')['profiles'] if p['id']==profile['id'])
+        assert ping_summary['latency_method']=='tcp_connect_rtt' and ping_summary['latency_at']
+
         for category in ['main','core','tunnel','subscriptions','service']:
             assert isinstance(host.call('log_read',day=host.call('log_days')[0],category=category),str)
         checks.append('real diagnostic job completes over owned loopback target')
@@ -181,6 +201,9 @@ def run(directory):
         boot=host.call('bootstrap');assert boot['preferences']['theme']=='light'
         assert boot['preferences']['selected_profile']==profile['id']
         assert any(p['id']==profile['id'] for p in boot['profiles'])
+        retained=next(p for p in boot['profiles'] if p['id']==profile['id'])
+        assert (retained['latency_ms'],retained['latency_method'],retained['latency_at'])==(ping_summary['latency_ms'],ping_summary['latency_method'],ping_summary['latency_at'])
+        checks.append('last per-server ping survives controller restart')
         checks.append('settings and profile persist after controller restart')
         return {'result':'passed','checks':checks,'system_network_changed':False,'data_directory':str(directory)}
     finally:

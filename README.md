@@ -7,11 +7,11 @@ C++ / Qt Quick desktop interface with a separate Rust network controller,
 sing-box and Xray. Use System Proxy for proxy-aware applications or TUN for
 traffic capture through a virtual network adapter.
 
-**Current release: 1.0.0 beta · Windows x64**
+**Current release: 1.0.1 beta · Windows x64**
 
-[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.0-beta/NetPulse-Setup.exe)
-· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.0-beta/NetPulse-Portable.zip)
-· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.0-beta)
+[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.1-beta/NetPulse-Setup.exe)
+· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.1-beta/NetPulse-Portable.zip)
+· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.1-beta)
 · [Русская инструкция](README.ru.md)
 
 ![NetPulse desktop interface](docs/images/overview.png)
@@ -26,12 +26,12 @@ traffic capture through a virtual network adapter.
   application icons, complete saved lists, JSON import/export, domain suffix
   exceptions and custom direct/proxy/block routes. New rule lists start empty.
 - **Network:** separate Connection, DNS, MTU, SNI/TLS, Transport, TUN Service
-  and Engines tabs, with explanations for settings.
+  Engines and Sniffing tabs, with explanations for settings.
 - **Diagnostics:** Proxy GET/HEAD, TCP and ICMP latency; keepalive by default;
   bounded HTTPS speed tests and persistent measurement history.
-- **MTU:** automatic target selection, IPv4 DF path analysis with explicit
-  measured/estimated labels, presets and an optional measured comparison of
-  candidates using throughput, latency, loaded latency and jitter.
+- **MTU:** presets and a sequential comparison of every value in a chosen
+  range, with repeated latency/loss probes, baseline controls, restoration of
+  the original setting and an explicit Apply recommendation action.
 - **Playground:** grouped processes, observed sockets and engine traffic,
   per-application connection events, automatic refresh and routing controls.
 - **Activity:** selectable journal/date, severity colours, copying and optional
@@ -50,7 +50,7 @@ NetPulse is a client: supply your own server or subscription.
    `NetPulse/NetPulse.exe`. Keep the complete runtime folder together.
 2. Open **Servers → Add connection** and import your subscription or profile.
 3. Select a server. Press the power button in **Overview** and choose
-   **System Proxy** or **TUN**. Service installation uses the normal Windows
+   **System Proxy**, **TUN**, or both, then confirm. Service installation uses the normal Windows
    UAC dialog; the installer attempts to install it by default.
 4. Configure application and domain rules in **Routing** and network settings
    in the tabs under **Network**.
@@ -60,10 +60,11 @@ IP checks and navigation. The installer supports update, repair and uninstall.
 Settings and subscriptions are preserved by repair and uninstall.
 
 MTU comparison is an explicit, disruptive test: it reconnects the current TUN
-session multiple times, downloads up to 36 MiB of test payload plus overhead,
+session multiple times, checks each MTU with up to five HTTPS or ICMP probes,
 then restores the original MTU. It recommends a change only after repeatable
-improvement and stable control measurements. HTTPS results do not measure game
-UDP performance. Apply the suggested candidate manually.
+improvement and stable baseline controls. It compares latency, loss and jitter,
+not download throughput or game UDP performance. Apply the candidate manually
+and compare throughput separately with Speed Test.
 
 Executables are unsigned. Tests use controlled network fixtures; elevated TUN
 and the MTU benchmark on a physical remote VPN have not been verified here.

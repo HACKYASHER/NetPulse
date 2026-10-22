@@ -73,7 +73,7 @@ async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> 
         "delete_local_data" => encode(delete_local_data(host::State(state)).await?),
         "ui_event" => encode(actions::ui_event(host::State(state), argument::<String>(&params, "action")?, argument::<String>(&params, "target")?).await?),
         "open_log_folder" => encode(actions::open_log_folder(host::State(state)).await?),
-        "start_mtu_tuning" => encode(actions::start_mtu_tuning(host::State(state),argument(&params,"url")?,argument(&params,"goal")?).await?),
+        "start_mtu_tuning" => encode(actions::start_mtu_tuning(host::State(state),serde_json::from_value(params).map_err(|_| Error::new("InvalidArgument","mtu-tuning","Invalid MTU request"))?).await?),
         "start_mtu" => encode(actions::start_mtu(host::State(state), argument::<String>(&params, "target")?).await?),
         "start_best_server" => encode(actions::start_best_server(host::State(state), argument::<u8>(&params, "samples")?).await?),
         _ => Err(Error::new("UnknownCommand", "ipc", "Unsupported command")),

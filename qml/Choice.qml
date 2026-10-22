@@ -1,7 +1,10 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 ComboBox {
  id: c
+ property var appWindow: ApplicationWindow.window
+ readonly property bool lightTheme: !!appWindow && appWindow.light
  property var values: []
  readonly property string selectedValue: values.length && currentIndex>=0 ? String(values[currentIndex]) : currentText
  implicitHeight: 42; implicitWidth: 210
@@ -9,13 +12,15 @@ ComboBox {
  opacity: enabled ? 1 : 0.5
  contentItem: Text { text: c.displayText; font: c.font; color: c.palette.text; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; leftPadding: 12; rightPadding: 32 }
  indicator: Text { text: "⌄"; color: c.palette.text; x: c.width-26; y: (c.height-height)/2; font.pixelSize: 19 }
- background: Rectangle { color: c.palette.base; border.color: c.activeFocus ? "#8775ff" : c.palette.mid; radius: 8 }
+ hoverEnabled: true
+ background: Rectangle { color: c.hovered ? (c.lightTheme ? "#eeebfa" : "#1e2231") : c.palette.base; border.color: c.activeFocus || c.hovered ? (c.lightTheme ? "#8069cf" : "#9a86eb") : c.palette.mid; radius: 8 }
  delegate: ItemDelegate {
   required property int index
   required property var modelData
-  width: c.width; height: 40
-  contentItem: Text { text: String(modelData); color: c.highlightedIndex===index ? "#ffffff" : c.palette.text; font: c.font; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
-  background: Rectangle { color: c.highlightedIndex===index ? "#6753d5" : c.palette.base; radius: 5 }
+  id: option
+  width: c.popup.availableWidth; height: 40; hoverEnabled: true
+  contentItem: Text { text: String(option.modelData); color: option.highlighted || option.hovered ? (c.lightTheme ? "#38266c" : "#f0ebff") : c.palette.text; font: c.font; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+  background: Rectangle { color: option.highlighted || option.hovered ? (c.lightTheme ? "#e5ddfb" : "#3c315d") : c.palette.base; border.color: option.activeFocus ? (c.lightTheme ? "#8069cf" : "#9a86eb") : "transparent"; radius: 5 }
   highlighted: c.highlightedIndex===index
  }
  popup: Popup {

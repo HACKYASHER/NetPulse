@@ -31,7 +31,7 @@ fn main() {
     for field in ["autostart","close_to_tray","minimize_to_tray","auto_reconnect","auto_failover","fake_ip","tun","system_proxy"] {
         for value in [false,true] { cases.push((format!("{field}={value}"),json!({field:value}))); }
     }
-    for (preset, mtu) in [("balanced",1400),("compatibility",1280),("games",1420),("custom",1460)] {
+    for (preset, mtu) in [("balanced",1500),("compatibility",1400),("games",1500),("custom",1460)] {
         cases.push((format!("MTU preset {preset}"),json!({"network_preset":preset,"mtu":mtu,"tun":true})));
     }
     for dns in [json!({"mode":"system"}),json!({"mode":"udp","server":"1.1.1.1"}),json!({"mode":"udp","server":"2606:4700:4700::1111"}),json!({"mode":"tls","server":"one.one.one.one"}),json!({"mode":"https","server":"cloudflare-dns.com","path":"/dns-query"})] {
@@ -46,6 +46,13 @@ fn main() {
     for fingerprint in ["disabled","chrome","firefox","edge","safari","ios","android","randomized"] {
         cases.push((format!("TLS {fingerprint}"),json!({"tls_defaults":{"sni_mode":"inherit","server_name":"","http_host":null,"fingerprint":fingerprint}})));
     }
+    for (name, sniffing) in [
+        ("Sniffing disabled",json!({"enabled":false,"timeout_ms":300,"http":true,"tls":true,"quic":true})),
+        ("Sniff HTTP",json!({"enabled":true,"timeout_ms":10,"http":true,"tls":false,"quic":false})),
+        ("Sniff TLS",json!({"enabled":true,"timeout_ms":1000,"http":false,"tls":true,"quic":false})),
+        ("Sniff QUIC",json!({"enabled":true,"timeout_ms":125,"http":false,"tls":false,"quic":true})),
+    ] {cases.push((name.into(),json!({"sniffing":sniffing,"tun":true})));}
+    cases.push(("Gaming DNS and independent modes".into(),json!({"network_preset":"games","mtu":1467,"tun":true,"system_proxy":true,"dns":{"mode":"https","server":"1.1.1.1","path":"/dns-query"},"dns_route":"vpn"})));
     cases.extend([
         ("HTTP Host".into(), json!({"tls_defaults":{"sni_mode":"inherit","server_name":"","http_host":"example.invalid","fingerprint":null}})),
         ("EXE routes and domain exceptions".into(),json!({"applications":["Steam.EXE","C:\\Another\\steam.exe","browser.exe"],"bypass_domains":[".ru","*.su","example.com"],"route_mode":"blacklist","tun":true})),

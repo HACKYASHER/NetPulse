@@ -12,7 +12,7 @@ def main():
     clean=os.environ.copy()
     clean['PATH']=os.pathsep.join([str(Path(clean['WINDIR'])/'System32'),clean['WINDIR']])
     for name in ['QTDIR','QT_PLUGIN_PATH','QML2_IMPORT_PATH','QML_IMPORT_PATH']:clean.pop(name,None)
-    for language,theme in [('ru','dark'),('en','light'),('en','dark')]:
+    for language,theme in [('ru','dark'),('ru','light'),('en','light'),('en','dark')]:
         output=suite/(language+'-'+theme);directory=output/'data'
         output.mkdir(parents=True)
         fixture=Path(os.environ.get('NETPULSE_UI_FIXTURE',ROOT.parent/'ONE/apps/desktop-v2/target/debug/examples/ui_fixture.exe'))
@@ -28,15 +28,15 @@ def main():
                            capture_output=True,env=clean,timeout=85,creationflags=0x08000000)
         assert run.returncode==0,(run.returncode,run.stderr.decode(errors='replace'))
         result=json.loads((output/'result.json').read_text())
-        assert result['result']=='passed' and result['version']=='1.0.0-beta'
-        assert result['pages']==8 and result['qml_issues']==0 and result['frames']==17
+        assert result['result']=='passed' and result['version']=='1.0.1-beta'
+        assert result['pages']==8 and result['qml_issues']==0 and result['frames']==18
         assert all((output/f'page-{i}.png').is_file() for i in range(8))
         results.append(dict(language=language,theme=theme,**result))
         if language=='en' and theme=='dark':
             target=ROOT/'docs/images';target.mkdir(exist_ok=True,parents=True)
             shutil.copy2(output/'frame-overview.png',target/'overview.png')
         print(language+'/'+theme+': eight pages rendered, no QML issues',flush=True)
-    report={'result':'passed','version':'1.0.0-beta','ui':results,'system_network_changed':False,'output_directory':str(suite)}
+    report={'result':'passed','version':'1.0.1-beta','ui':results,'system_network_changed':False,'output_directory':str(suite)}
     (ROOT/'.build/ui-result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     print('Packaged UI verification passed.',flush=True)
 

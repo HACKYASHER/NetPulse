@@ -132,8 +132,11 @@ pub fn configuration(
         json!({"port":53,"action":"sniff"}),
         json!({"protocol":"dns","action":"hijack-dns"}),
     ];
-    if crate::advanced_routing::needs_names(prefs) {
-        let mut sniff = json!({"action":"sniff","sniffer":["http","tls","quic"],"timeout":"300ms"});
+    if prefs.sniffing.enabled {
+        // TUN needs host discovery. Mixed/SOCKS/CONNECT already supplies
+        // its target; sniffing it before CONNECT acknowledgement can stall
+        // clients that wait for the acknowledgement before sending data.
+        let mut sniff = json!({"inbound":["tun-in"],"action":"sniff","sniffer":prefs.sniffing.protocols(),"timeout":format!("{}ms",prefs.sniffing.timeout_ms)});
         if !prefs.sniff_excluded_apps.is_empty() {
             sniff["process_path_regex"] = json!(crate::app_rules::process_patterns(
                 &prefs.sniff_excluded_apps
@@ -710,7 +713,7 @@ mod tests {
         let c = configuration(&p, &prefs, 9999, "API-SECRET", "PROXY-SECRET").unwrap();
         assert_eq!(c["route"]["final"], "direct");
         assert_eq!(
-            c["route"]["rules"][2]["process_path_regex"][0],
+            c["route"]["rules"].as_array().unwrap().iter().find(|rule|rule["outbound"]=="proxy").unwrap()["process_path_regex"][0],
             r"(?i)(?:^|[\\/])telegram\.exe$"
         );
         assert_eq!(c["inbounds"][1]["type"], "tun");

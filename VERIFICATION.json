@@ -1,13 +1,14 @@
 {
-  "version": "1.0.0-beta",
-  "validation_date": "2026-10-22",
+  "version": "1.0.1-beta",
+  "validation_date": "2026-10-23",
   "platform": "Windows x64",
   "result": "passed",
   "network_tests": {
-    "unit_passed": 86,
-    "engine_backed_passed": 18,
-    "failed": 0,
-    "fixtures": "Owned loopback endpoints and pinned official executables"
+    "distinct_passed": 112,
+    "regular": 94,
+    "engine_backed": 18,
+    "failed_after_corrections": 0,
+    "fixture_correction": "The combined run passed 111 cases; the remaining Windows nonblocking-socket fixture was corrected and its test passed on rerun. Production logic was not relaxed."
   },
   "settings_matrix": {
     "autostart_registry_changed": false,
@@ -86,6 +87,11 @@
       "TLS ios",
       "TLS android",
       "TLS randomized",
+      "Sniffing disabled",
+      "Sniff HTTP",
+      "Sniff TLS",
+      "Sniff QUIC",
+      "Gaming DNS and independent modes",
       "HTTP Host",
       "EXE routes and domain exceptions",
       "Custom domain routes",
@@ -101,53 +107,7 @@
     "result": "passed",
     "windows_network_changed": false
   },
-  "ui": {
-    "result": "passed",
-    "variants": [
-      {
-        "language": "ru",
-        "theme": "dark",
-        "frames": 17,
-        "network_changed": false,
-        "pages": 8,
-        "qml_issues": 0,
-        "qml_messages": [],
-        "qt": "6.8.3",
-        "result": "passed",
-        "version": "1.0.0-beta",
-        "webview_used": false
-      },
-      {
-        "language": "en",
-        "theme": "light",
-        "frames": 17,
-        "network_changed": false,
-        "pages": 8,
-        "qml_issues": 0,
-        "qml_messages": [],
-        "qt": "6.8.3",
-        "result": "passed",
-        "version": "1.0.0-beta",
-        "webview_used": false
-      },
-      {
-        "language": "en",
-        "theme": "dark",
-        "frames": 17,
-        "network_changed": false,
-        "pages": 8,
-        "qml_issues": 0,
-        "qml_messages": [],
-        "qt": "6.8.3",
-        "result": "passed",
-        "version": "1.0.0-beta",
-        "webview_used": false
-      }
-    ],
-    "external_qt_paths_removed": true,
-    "webview_required": false
-  },
-  "controller_protocol": {
+  "controller": {
     "result": "passed",
     "checks": [
       "offline engines verified; no connection on startup",
@@ -157,22 +117,83 @@
       "59 settings form variants persist; invalid saves are atomic; isolated tests preserve Windows autorun",
       "pin and unpin actions persist",
       "Playground exposes owned TCP connections by PID and EXE group, with network-focused process data",
+      "engine choices persist; invalid choice rolls back; independent modes and Sniffing validate without starting VPN",
       "connection cannot start with both modes disabled",
       "10 concurrent responses correctly correlated",
       "real diagnostic job completes over owned loopback target",
       "audit reads work and path traversal is rejected",
+      "last per-server ping survives controller restart",
       "settings and profile persist after controller restart"
     ],
     "system_network_changed": false
   },
-  "service_self_test": {
-    "protected_directory_lookup": true,
+  "ui_interactions": {
     "result": "passed",
-    "security_descriptor": true,
-    "sid_validation": true,
-    "system_changes": false,
-    "version": "1.0.0-beta"
+    "scenarios": 6,
+    "setup_cleanup_cases": 2,
+    "scope": [
+      "engine picker mouse selection",
+      "independent TUN and proxy toggles",
+      "incremental console, selection and both scrollbars",
+      "nested Routing wheel ownership",
+      "light menu hover and hidden actions",
+      "light engine choices"
+    ]
   },
+  "ui": [
+    {
+      "language": "ru",
+      "theme": "dark",
+      "frames": 18,
+      "network_changed": false,
+      "pages": 8,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.1-beta",
+      "webview_used": false
+    },
+    {
+      "language": "ru",
+      "theme": "light",
+      "frames": 18,
+      "network_changed": false,
+      "pages": 8,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.1-beta",
+      "webview_used": false
+    },
+    {
+      "language": "en",
+      "theme": "light",
+      "frames": 18,
+      "network_changed": false,
+      "pages": 8,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.1-beta",
+      "webview_used": false
+    },
+    {
+      "language": "en",
+      "theme": "dark",
+      "frames": 18,
+      "network_changed": false,
+      "pages": 8,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.1-beta",
+      "webview_used": false
+    }
+  ],
   "installer": {
     "result": "passed",
     "install": true,
@@ -181,24 +202,28 @@
     "data_preserved": true,
     "registry_removed": true,
     "installed_ui": {
-      "frames": 17,
+      "frames": 18,
       "network_changed": false,
       "pages": 8,
       "qml_issues": 0,
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.0-beta",
+      "version": "1.0.1-beta",
       "webview_used": false
     },
     "tun_service_installed": false,
     "global_network_changed": false
   },
+  "binary_sha256": {
+    "NetPulse.exe": "a5025676448b04c5b8ac16809d7a873b3d23a5537f0663e948180e36225e30b4",
+    "netpulsed.exe": "850b8ef8acf076b5773c138f6ce85e4182de2d6ed60f8e04d478debc0592a8b4",
+    "NetPulseService.exe": "d799e24b6867e644723e9386d6d5dd4a73e495ce8c3e77480529585d42fffb5a"
+  },
   "limits": [
-    "Elevated physical TUN and measured MTU comparison through a real remote VPN have not been verified.",
-    "Installer lifecycle tests use separate registry/shortcut names and disabled service hooks; no UAC installation was exercised.",
-    "Autostart persistence was tested in isolation without editing the Windows Run entry.",
-    "Manual interactive coverage is partial; automated page and dialog rendering completed.",
-    "Application and installer are unsigned."
+    "Live privileged TUN and the MTU scan on a remote VPN were not run.",
+    "Public WAN speed tests and production update installation were not run.",
+    "MTU probes compare latency, loss and jitter; download throughput is not measured.",
+    "Self-steal awaits clarification."
   ]
 }

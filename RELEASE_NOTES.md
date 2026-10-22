@@ -1,34 +1,16 @@
-# NetPulse 1.0.0 beta
+# NetPulse 1.0.1 beta
 
-Native Windows VPN client with a Qt Quick desktop, Rust controller, sing-box
-and Xray. Supply your own server or subscription.
+NetPulse 1.0.1 beta fixes connection controls, engine switching, persistent latency results, and scrolling across the native Windows client.
 
-- Unified servers and subscriptions, pinned profiles, context-menu actions and
-  subscription refresh on every startup and by interval.
-- Fixed country flags, connection-mode selection, copyable direct/VPN IPs,
-  engine selection and automatic active-connection latency.
-- EXE-name application routing, icons, dedicated routing JSON, import/export
-  and custom domain exceptions.
-- Network tabs with DNS, MTU, SNI/TLS, fragmentation, multiplexing, TUN service
-  and verified engine update/rollback controls, with inline explanations.
-- MTU path analysis and optional bounded comparison of candidate values using
-  real throughput and latency measurements, repetition and baseline control.
-- Fixed measurement history, added speed-test endpoints, grouped process network
-  activity and application connection events.
-- Copyable coloured journals, working translated category selection and follow
-  controls; improved light/dark controls and a themed tray with connection actions.
-- Native client update checks on startup/every six hours; automatic cleanup of
-  temporary downloads while keeping the previous engine bundle for rollback.
-- Installer update, repair and uninstall; default TUN service installation uses
-  standard Windows elevation. Settings and subscriptions are preserved.
+- TUN and System Proxy can be selected independently or together, with an explicit confirmation before connecting. Overview adds a labelled connection button, manual ping refresh, transfer totals and active connections.
+- Explicit engine choices are applied and retained. Unsupported combinations produce an error instead of silently selecting another core. Failed switches preserve or restore the previous verified connection.
+- The last latency result is stored separately for each server and method, so measurement-history cleanup cannot remove it. Subscription headers include a latency test for their servers; protected copy/configuration actions are hidden.
+- Sniffing controls are grouped in Network and apply to TUN metadata. System Proxy continues to use the target provided by the application without waiting for its first data.
+- MTU comparison tests each value in a chosen range (1440–1472 by default), with up to five probes per value, a repeated candidate and baseline controls. Results describe latency, loss and jitter, restore the original MTU, and require a manual Apply action. These probes do not measure download throughput. The old physical-path automatic MTU selector has been removed from the UI.
+- Gaming enables TUN and Cloudflare secure DNS through VPN while preserving MTU, System Proxy and routing rules. TCP is the default latency method on new installations. Speed Test repeats transfers for the selected duration or until its explicit traffic limit is reached.
+- The activity console appends updates without replacing the whole document, preserves selection, and has separate working horizontal and vertical scrollbars. Application-list scrolling no longer scrolls the containing Routing page.
+- Sidebar alignment, light/dark hover contrast and Russian log labels are corrected. The installer supports installation, update, repair and removal under the NetPulse name.
 
-Downloads: **NetPulse-Setup.exe** or the complete **NetPulse-Portable.zip**
-(Windows x64). Sources, notices and SHA-256 checksums are included.
+Download **NetPulse-Setup.exe** for installation or **NetPulse-Portable.zip** for a portable copy. Source and dependency archives, SHA-256 checksums and verification results are included.
 
-This is a beta. Executables are unsigned. Physical elevated TUN operation and
-the MTU comparison on a real remote VPN remain unverified in this environment;
-see the included verification report. MTU comparison reconnects VPN repeatedly
-and consumes up to 36 MiB of payload plus protocol overhead. It does not claim
-a universal best MTU or improved game UDP latency.
-
-**NetPulse 3.0.4** remains an archived fallback pre-release.
+This is a beta release. Automated checks use owned local endpoints and synthetic profiles. Live TUN operation and the MTU scan on a real VPN were not exercised on the user's active connection. Self-steal is awaiting clarification of the intended feature and is not represented by an unrelated setting.

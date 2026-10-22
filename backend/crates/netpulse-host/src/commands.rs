@@ -731,7 +731,9 @@ async fn quick_network(
         if let Some(v) = transport_engine {
             p.transport_engine = v;
         }
-        if !p.tun && !p.system_proxy && c.snapshot().engine_pid.is_some() {
+        p.validate()?;
+        if (tun.is_some() || system_proxy.is_some())
+            && !p.tun && !p.system_proxy && c.snapshot().engine_pid.is_some() {
             c.disconnect()?;
         }
         c.apply_preferences(p)?;

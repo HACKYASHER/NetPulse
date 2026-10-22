@@ -3,6 +3,28 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
+/// Only inspect protocol names; never decrypt TLS or disable certificate checks.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Sniffing {
+    pub enabled: bool,
+    pub timeout_ms: u16,
+    pub http: bool,
+    pub tls: bool,
+    pub quic: bool,
+}
+impl Default for Sniffing {
+    fn default() -> Self {
+        Self { enabled: true, timeout_ms: 300, http: true, tls: true, quic: true }
+    }
+}
+impl Sniffing {
+    pub fn protocols(&self) -> Vec<&'static str> {
+        [("http", self.http), ("tls", self.tls), ("quic", self.quic)]
+            .into_iter().filter_map(|(name, enabled)| enabled.then_some(name)).collect()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Rule {
@@ -12,6 +34,11 @@ pub struct Rule {
     pub action: String,
 }
 pub fn validate(p: &Preferences) -> Result<()> {
+    if !(10..=1000).contains(&p.sniffing.timeout_ms)
+        || (p.sniffing.enabled && p.sniffing.protocols().is_empty()) {
+        return Err(Error::new("InvalidSniffing", "routing-rules",
+            "Sniffing: выберите HTTP, TLS или QUIC и время ожидания 10–1000 мс"));
+    }
     let fail = || {
         Error::new(
             "InvalidRoutingRule",
@@ -141,6 +168,22 @@ pub fn apply(config: &mut Value, p: &Preferences) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn sniffing_protocols_timeout_and_disable_reach_the_engine() {
+        let profile=crate::imports::parse_uri("socks5://127.0.0.1:1080").unwrap();
+        let mut prefs=Preferences::default();
+        prefs.sniffing.http=false;prefs.sniffing.quic=false;prefs.sniffing.timeout_ms=125;
+        prefs.validate().unwrap();
+        let config=crate::engine::configuration(&profile,&prefs,20001,"api","proxy").unwrap();
+        let sniff=&config["route"]["rules"][2];
+        assert_eq!(sniff["inbound"],json!(["tun-in"]));assert_eq!(sniff["sniffer"],json!(["tls"]));assert_eq!(sniff["timeout"],"125ms");
+        prefs.sniffing.enabled=false;
+        let config=crate::engine::configuration(&profile,&prefs,20001,"api","proxy").unwrap();
+        assert!(!config["route"]["rules"].as_array().unwrap().iter().any(|r|r["sniffer"].is_array()));
+        prefs.sniffing.enabled=true;prefs.sniffing.tls=false;assert!(prefs.validate().is_err());
+        prefs.sniffing.tls=true;prefs.sniffing.timeout_ms=0;assert!(prefs.validate().is_err());
+        let old:Preferences=serde_json::from_value(json!({})).unwrap();assert_eq!(old.sniffing,Sniffing::default());
+    }
     #[test]
     fn validates_networks_and_prevents_rule_set_url_injection() {
         for (kind, value, valid) in [

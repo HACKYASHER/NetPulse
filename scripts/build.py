@@ -36,7 +36,7 @@ def main():
     if not args.skip_backend:run(['cargo','build','--release','-p','netpulse-host','-p','netpulse-service'],env,ROOT/'backend')
     for exe in ['netpulsed.exe','NetPulseService.exe']:
         shutil.copy2(target/'release'/exe,out/exe)
-    run(['cmake','-S',ROOT,'-B',ROOT/'.build/qt','-G','Ninja','-DCMAKE_BUILD_TYPE=Release',f'-DCMAKE_PREFIX_PATH={qt}'],env)
+    run(['cmake','-S',ROOT,'-B',ROOT/'.build/qt','-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_CXX_FLAGS_DEBUG=/Z7 /Od /Ob0 /RTC1',f'-DCMAKE_PREFIX_PATH={qt}'],env)
     run(['cmake','--build',ROOT/'.build/qt','--parallel','4'],env)
     shutil.copy2(ROOT/'.build/qt/NetPulse.exe',out/'NetPulse.exe')
     run([qt/'bin/windeployqt.exe','--release','--verbose','0','--no-translations','--no-compiler-runtime','--qmldir',ROOT/'qml',out/'NetPulse.exe'],env)

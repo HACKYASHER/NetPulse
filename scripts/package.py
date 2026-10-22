@@ -11,6 +11,12 @@ def main():
     parser.add_argument('--archives-only',action='store_true',help='Refresh archives and hashes without recompressing the installer')
     parser.add_argument('--installer-only',action='store_true',help='Build the installer for maintenance tests before final archiving')
     options=parser.parse_args()
+    # The Qt build keeps the QML sources embedded in the executable. Refuse a
+    # stale payload if an interface file was edited after that build.
+    for source in (ROOT/'qml').glob('*.qml'):
+        embedded=ROOT/'.build/qt/NetPulse/qml'/source.name
+        if embedded.is_file() and embedded.read_bytes()!=source.read_bytes():
+            raise RuntimeError('Rebuild NetPulse before packaging changed QML: '+source.name)
     for name in ['README.md','README.ru.md','ARCHITECTURE.md','THIRD-PARTY.md','VERIFICATION.md','VERIFICATION.json']:
         if (ROOT/name).is_file():shutil.copy2(ROOT/name,PAYLOAD/name)
     if (ROOT/'VERIFICATION.json').is_file():shutil.copy2(ROOT/'VERIFICATION.json',RELEASE/'VERIFICATION.json')
@@ -36,11 +42,11 @@ Var ExistingDirectory
 Var ExistingVersion
 Name "NetPulse"
 Caption "NetPulse"
-VIProductVersion "1.0.0.0"
+VIProductVersion "1.0.1.0"
 VIAddVersionKey "ProductName" "NetPulse"
 VIAddVersionKey "FileDescription" "NetPulse VPN client installer"
-VIAddVersionKey "ProductVersion" "1.0.0 beta"
-VIAddVersionKey "FileVersion" "1.0.0 beta"
+VIAddVersionKey "ProductVersion" "1.0.1 beta"
+VIAddVersionKey "FileVersion" "1.0.1 beta"
 VIAddVersionKey "LegalCopyright" "NetPulse contributors, GPL-3.0-or-later"
 OutFile "@OUTPUT@"
 InstallDir "$LOCALAPPDATA\Programs\NetPulse"
@@ -138,7 +144,7 @@ Section "NetPulse"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\NetPulseQt" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayName" "NetPulse"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.0-beta"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.1-beta"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "Publisher" "NetPulse"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "UninstallString" '"$INSTDIR\Uninstall.exe"'
@@ -235,7 +241,7 @@ SectionEnd
                 archive.write(file,relative.as_posix())
     source_archive=ROOT.parent/'ONE/release-v2/NetPulse-Engine-Sources.zip'
     if source_archive.is_file():shutil.copy2(source_archive,RELEASE/source_archive.name)
-    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.0-beta','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
+    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.1-beta','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
     (RELEASE/'netpulse-qt-update-v1.json').write_text(json.dumps(marker,indent=2)+'\n',encoding='utf-8')
     outputs=[RELEASE/'netpulse-qt-update-v1.json',RELEASE/'NetPulse-Setup.exe',RELEASE/'NetPulse-Portable.zip',RELEASE/'NetPulse-Source.zip',PAYLOAD/'NetPulse.exe',PAYLOAD/'netpulsed.exe',PAYLOAD/'NetPulseService.exe']
     outputs += [p for p in [RELEASE/'NetPulse-Engine-Sources.zip',RELEASE/'VERIFICATION.json'] if p.is_file()]
