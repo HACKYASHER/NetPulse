@@ -24,6 +24,7 @@ public:
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void quit();
     Q_INVOKABLE void clearError();
+    Q_INVOKABLE QString readableText(const QString& value) const;
     Q_INVOKABLE void copyText(const QString& text);
     Q_INVOKABLE QString clipboardText() const;
     Q_INVOKABLE void openDataDirectory();

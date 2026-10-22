@@ -354,6 +354,8 @@ mod tests {
                 while !done.load(Ordering::Acquire) {
                     match listener.accept() {
                         Ok((mut socket, _)) => {
+                            // Winsock inherits the listener nonblocking flag.
+                            socket.set_nonblocking(false).unwrap();
                             socket
                                 .set_read_timeout(Some(Duration::from_secs(2)))
                                 .unwrap();
@@ -564,7 +566,10 @@ mod tests {
     }
     #[test]
     fn thousands_of_rows_are_counted_without_retaining_all_metadata_or_burst_polling() {
-        let api = Api::new(|_| (Duration::from_millis(100), document(10000)));
+        // Build the fixture before starting the client's response deadline.
+        // This test measures bounded parsing and polling, not debug JSON generation.
+        let body = document(10000);
+        let api = Api::new(move |_| (Duration::from_millis(100), body.clone()));
         let monitor = Monitor::new(api.port, Zeroizing::new("fixture-secret".into())).unwrap();
         for _ in 0..1000 {
             monitor.reader.request();

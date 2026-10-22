@@ -16,7 +16,7 @@ pub fn validate(p: &Preferences) -> Result<()> {
         Error::new(
             "InvalidRoutingRule",
             "routing-rules",
-            "Правило: укажите домен, IP/CIDR, полный путь EXE, GeoIP (ru/de/…), либо имя набора Geosite; действие: proxy / direct / reject",
+            "Правило: укажите домен, IP/CIDR, имя EXE, GeoIP (ru/de/…), либо имя набора Geosite; действие: proxy / direct / reject",
         )
     };
     if p.routing_rules.len() > 64 || p.sniff_excluded_apps.len() > 200 {
@@ -39,17 +39,7 @@ pub fn validate(p: &Preferences) -> Result<()> {
                     })
                 })
             }
-            "process" => {
-                v.len() <= 32768
-                    && v.ends_with(['e', 'E'])
-                    && v.to_ascii_lowercase().ends_with(".exe")
-                    && ((v.as_bytes().get(1) == Some(&b':')
-                        && v.as_bytes()
-                            .get(2)
-                            .is_some_and(|b| *b == b'\\' || *b == b'/'))
-                        || v.starts_with("\\\\"))
-                    && !v.chars().any(char::is_control)
-            }
+            "process" => crate::app_rules::valid_executable(v) && !v.chars().any(char::is_control),
             "geoip" => {
                 sets.insert(format!("geoip-{}", v.to_ascii_lowercase()));
                 v.len() == 2 && v.bytes().all(|c| c.is_ascii_alphabetic())

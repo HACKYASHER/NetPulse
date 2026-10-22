@@ -1,6 +1,6 @@
 """Exercise the packaged controller with isolated data, without changing Windows networking."""
 from pathlib import Path
-import argparse, json, queue, subprocess, threading, time, uuid
+import argparse, copy, json, os, queue, socket, subprocess, sys, threading, time, uuid, winreg
 
 ROOT=Path(__file__).resolve().parents[1]
 class Host:
@@ -44,6 +44,7 @@ def run(directory):
             time.sleep(.2)
         assert boot['engine_ready'] and boot['xray_ready']
         assert not boot['snapshot']['engine_pid']
+        assert boot['preferences']['applications']==[] and boot['preferences']['bypass_domains']==[]
         checks.append('offline engines verified; no connection on startup')
         unknown=host.wait(host.send('arbitrary_shell',command='never executed'))
         assert unknown['error']['code']=='UnknownCommand'
@@ -65,6 +66,94 @@ def run(directory):
         assert checked['preferences']['theme']=='light' and checked['preferences']['selected_profile']==profile['id']
         assert secret.encode() not in (directory/'netpulse.db').read_bytes()
         checks.append('profile import, selection, encrypted persistence, settings validation')
+        preferences=checked['preferences']
+        assert preferences['ping_method']=='proxy_https_rtt' and preferences['ping_proxy_mode']=='keepalive'
+        preferences.update(dns={'mode':'udp','server':'1.1.1.1'},applications=[r'C:\Apps\Steam.EXE',r'D:\Other\steam.exe'],bypass_domains=['.ru','*.su'])
+        host.call('save_preferences',preferences=preferences)
+        checked=host.call('bootstrap')['preferences']
+        assert checked['dns']=={'mode':'udp','server':'1.1.1.1'}
+        assert checked['applications']==['steam.exe'] and checked['bypass_domains']==['ru','su']
+        routing=json.loads((directory/'routing-apps.json').read_text(encoding='utf-8'))
+        assert routing['applications']==['steam.exe'] and routing['bypass_domains']==['ru','su']
+        host.call('save_application_catalog',applications=[{'name':'NetPulse','path':str(ROOT/'release/NetPulse/NetPulse.exe'),'source':'test'}])
+        assert len(host.call('read_application_catalog'))==1
+        checks.append('DNS persists, EXE rules migrate and deduplicate, routing has its own JSON file')
+
+        # Exercise the same controller entry point as each settings form. The
+        # isolated host persists autostart intent without editing Windows Run.
+        run_key=r'Software\Microsoft\Windows\CurrentVersion\Run'
+        def autorun():
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,run_key) as key:
+                try:return winreg.QueryValueEx(key,'NetPulseQt')
+                except FileNotFoundError:return None
+        before_autorun=autorun()
+        baseline=host.call('bootstrap')['preferences']
+        settings_cases=[]
+        for field,values in {
+            'theme':['dark','light','system'],'language':['ru','en'],
+            'transport_engine':['auto','sing-box','xray'],
+            'route_mode':['global','whitelist','blacklist'],
+            'ping_method':['proxy_https_rtt','proxy_https_head_rtt','tcp_connect_rtt','icmp_rtt'],
+            'ping_proxy_mode':['double','keepalive'],'mtu':[1280,1400,1420,1500,9000],
+            'proxy_port':[1024,2080,65535],'network_preset':['balanced','compatibility','games','custom'],
+            'logging_level':['DEBUG','INFO','WARNING','ERROR'],
+            'fake_ip':[True,False],'autostart':[True,False],
+            'close_to_tray':[False,True],'minimize_to_tray':[True,False],
+            'auto_reconnect':[True,False],'auto_failover':[True,False]
+        }.items():
+            settings_cases.extend((field,{field:value}) for value in values)
+        for dns in [{'mode':'system'},{'mode':'udp','server':'9.9.9.9'},{'mode':'tls','server':'one.one.one.one'},{'mode':'https','server':'cloudflare-dns.com','path':'/dns-query'}]:
+            for route in ['direct','vpn']:
+                if dns['mode']=='system' and route=='vpn':continue
+                settings_cases.append(('dns',{'dns':dns,'dns_route':route}))
+        for mode in ['inherit','auto','custom','disabled']:
+            settings_cases.append(('tls_defaults',{'tls_defaults':{'sni_mode':mode,'server_name':'example.invalid','http_host':None,'fingerprint':None}}))
+        settings_cases += [
+            ('fragmentation',{'fragmentation':dict(baseline['fragmentation'],enabled=True)}),
+            ('multiplex',{'multiplex':dict(baseline['multiplex'],enabled=True)}),
+            ('routing_rules',{'routing_rules':[{'enabled':True,'kind':'domain','value':'.ru','action':action} for action in ['direct','proxy','reject']]})
+        ]
+        for field,patch in settings_cases:
+            candidate=copy.deepcopy(baseline);candidate.update(patch)
+            host.call('save_preferences',preferences=candidate)
+            saved=host.call('bootstrap')['preferences']
+            for key,value in patch.items():assert saved[key]==value,(key,saved[key],value)
+            assert host.call('snapshot')['engine_pid'] is None
+        for patch in [{'mtu':1279},{'mtu':9001},{'proxy_port':1023},{'dns':{'mode':'udp','server':'invalid'}},{'probe_url':'http://example.com'},{'applications':['not-executable']},{'bypass_domains':['https://example.com']}]:
+            previous=host.call('bootstrap')['preferences'];candidate=dict(previous,**patch)
+            assert 'error' in host.wait(host.send('save_preferences',preferences=candidate)),patch
+            assert host.call('bootstrap')['preferences']==previous
+        host.call('save_preferences',preferences=baseline)
+        assert before_autorun==autorun()
+        checks.append(f'{len(settings_cases)} settings form variants persist; invalid saves are atomic; isolated tests preserve Windows autorun')
+        host.call('quick_ui',patch={'favorite_id':profile['id']})
+        assert profile['id'] in host.call('bootstrap')['preferences']['favorites']
+        host.call('quick_ui',patch={'favorite_id':profile['id']})
+        assert profile['id'] not in host.call('bootstrap')['preferences']['favorites']
+        checks.append('pin and unpin actions persist')
+
+        # A real socket owned by this test process must appear in both PID and
+        # EXE-group analyses, even with no active engine connection.
+        processes=host.call('playground_processes')
+        process=next(p for p in processes if p['pid']==os.getpid())
+        # A Python venv redirector can run a different physical executable than
+        # sys.executable; use the path actually returned by Windows inventory.
+        process_path=process['path']
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1',0));listener.listen()
+            with socket.create_connection(listener.getsockname()) as client:
+                accepted,_=listener.accept()
+                with accepted:
+                    endpoint='127.0.0.1:'+str(listener.getsockname()[1])
+                    for pid in [os.getpid(),None]:
+                        analysis=host.call('connection_analysis',pid=pid,path=process_path)
+                        assert any(c.get('destination')==endpoint for c in analysis['connections']),analysis
+        processes=host.call('playground_processes')
+        assert any(p['pid']==os.getpid() for p in processes)
+        assert all('cpu_percent' not in p and 'memory_bytes' not in p for p in processes)
+        checks.append('Playground exposes owned TCP connections by PID and EXE group, with network-focused process data')
+
+        assert host.wait(host.send('start_mtu_tuning',url='https://speed.cloudflare.com/__down?bytes=4194304',goal='balanced'))['error']['code']=='TunRequired'
         assert host.wait(host.send('connect',id=profile['id']))['error']['code']=='ConnectionModeRequired'
         checks.append('connection cannot start with both modes disabled')
         ids=[host.send('snapshot') for _ in range(10)]
@@ -78,6 +167,9 @@ def run(directory):
             assert time.monotonic()<end
             time.sleep(.1)
         assert len(status['results'])==1
+        assert host.call('diagnostic_history',kind='latency')
+        for category in ['main','core','tunnel','subscriptions','service']:
+            assert isinstance(host.call('log_read',day=host.call('log_days')[0],category=category),str)
         checks.append('real diagnostic job completes over owned loopback target')
         days=host.call('log_days');assert days
         assert isinstance(host.call('log_read',day=days[0],category='main'),str)

@@ -1,52 +1,83 @@
-# Verification вЂ” NetPulse 1.0.0 beta
+# Verification — NetPulse 1.0.0 beta
 
-Validation was performed on Windows x64 on October 22, 2026. The native client
-was built with Qt 6.8.3 and MSVC 2022. The network layer is retained from
-NetPulse 3.0.4, with separate service and data identities.
+Validated on Windows x64 on October 22, 2026, with Qt 6.8.3 and MSVC 2022.
+The retained Rust network core uses the bundled sing-box and Xray executables.
 
 ## Executed checks
 
 | Area | Result |
 |---|---|
-| Rust network unit tests | 79 passed, 0 failed |
-| Additional tests with the actual bundled engines | 18 passed, 0 failed |
-| Packaged Qt UI | All 10 pages rendered in RU/dark, EN/light and EN/dark; 0 QML warnings/errors |
-| Private controller protocol | 8 grouped integration checks passed |
-| Packaged service self-test | SID validation, security descriptor and protected directory checks passed |
-| Portable dependencies | UI launched with a Windows-only PATH and no external Qt import/plugin paths |
-| Per-user installer round-trip | Installation, installed UI launch, uninstall and registration cleanup passed |
-| Version metadata | Client and controller report 1.0.0 beta / 1.0.0-beta |
+| Core unit tests | 86 passed, 0 failed |
+| Additional tests with actual bundled engines | 18 passed, 0 failed |
+| Settings matrix | 82 variants saved, reopened and accepted by actual engine configuration validators |
+| Invalid settings and combinations | 16 invalid values and 2 incompatible combinations rejected |
+| Controller integration | 12 grouped checks, including 59 settings form variants |
+| Packaged Qt UI | 8 pages and 17 page/tab/dialog frames in RU/dark, EN/light and EN/dark; 0 QML issues |
+| Portable dependencies | Windows-only PATH; no external Qt import/plugin paths |
+| Playground | Owned TCP connection found by PID and EXE group; network-focused process data |
+| Service self-test | SID, security descriptor and protected-directory lookup passed |
+| Scoped installer lifecycle | Install, update/repair, damaged-controller replacement, installed UI and uninstall passed; test data preserved |
 
-Engine-backed checks exercised configuration validation, supported transport
-selection, real local HTTPS probes, speed payload limits, connection switching,
-rollback, direct exceptions, closed-flow accounting and kill-on-close Jobs.
-They used owned loopback fixtures and did not enable system TUN or change
-Windows' global proxy configuration.
+The settings matrix exercises DNS modes/routes, MTU boundaries and presets,
+connection switches, engine selection, SNI, TLS fingerprints, HTTP Host,
+fragmentation, multiplexing, application and domain routing, ping preferences,
+themes/languages and launch preferences. Each valid variant is reopened from
+SQLite and its generated configuration is checked by the real bundled cores.
+These are configuration checks, not remote VPN sessions.
 
-Controller integration covered offline engine preparation, malformed/unknown
-request rejection, encrypted profile persistence, selection, settings validation,
-10 concurrent response IDs, a real diagnostic job, safe log paths and restart
-persistence. No real user profile or subscription was used.
+Controller tests verify empty new rule lists, encrypted profile storage, DNS
+persistence, EXE basename migration/deduplication, the dedicated routing JSON,
+pinning, atomic failed saves, request correlation, diagnostic history and journal
+selection/path validation. Real owned Windows sockets are inspected by PID and
+EXE group. Restart persistence is checked. Autostart intent is saved in isolation
+without editing the user's Windows Run entry.
 
-The service self-test checks local security primitives without installing or
-starting a Windows service. The smoke run saves screenshots in an isolated
-directory and never connects. Generated test data is excluded from release
-archives and the Git repository.
+Engine-backed tests exercise authenticated local HTTPS, transport selection,
+bounded speed payloads, routing, switching/rollback, closed-flow accounting and
+Windows Job cleanup. They use owned loopback fixtures, with no system TUN or
+global proxy changes.
 
-Installer round-trip results and release hashes are recorded in the accompanying
-`VERIFICATION.json` and `checksums.sha256` after packaging. The installer uses
-a separate per-user installation key and does not install TUN automatically.
+UI rendering covers all seven Network tabs plus the connection-mode, import and
+measurement-history dialogs. It also exposed and helped fix a light-theme tray
+menu crash. Unsaved forms survive snapshot polling; ping mode is no longer reset
+when Diagnostics is reopened. Manual interactive coverage remains partial.
+
+Installer tests use a separate installation folder, registry and shortcut names.
+Both elevated service hooks are disabled in the test copy. They verify update
+and repair semantics by replacing a deliberately damaged controller, then check
+installed UI launch, uninstall registration cleanup and retained test data. The
+production installer attempts service installation through normal Windows UAC.
+Elevated service installation itself was not exercised.
+
+## MTU comparison
+
+The algorithm requires repeated candidate measurements and a stable original-MTU
+control. It rejects failed samples and large variation, and compares speed and
+latency against the better original-MTU samples to avoid attributing a general
+network improvement to MTU. Tests cover noise, failed probes, baseline drift,
+repeatability and crash recovery preserving unrelated preferences.
+
+The optional live comparison changes only MTU during trials, reconnects the active
+owned TUN session, limits download payload to 36 MiB plus overhead and keeps a
+recovery journal. The original MTU is restored while the session/settings remain
+owned; unrelated user changes take priority. A candidate is applied manually.
+HTTPS measurements do not establish game-UDP latency or a universal optimum.
+
+DF path analysis keeps measured IPv4 path MTU separate from a conservative VPN
+estimate. Timeouts do not establish a fragmentation boundary. Reference material:
+[Windows ping](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping),
+[RFC 8899](https://www.rfc-editor.org/rfc/rfc8899.html), and
+[the supplied MTU article](https://serveradmin.ru/kak-pravilno-vybrat-mtu-na-setevom-interfejse/).
 
 ## Remaining limits
 
-- A full elevated TUN connection through a remote server and a physical network
-  adapter has not been tested in this environment.
-- Recovery of physical adapter/DNS state after an OS-level failure needs a
-  dedicated Windows test. Existing engine/watchdog ownership logic is retained.
-- No production subscription, real remote VPN account or provider endpoint was tested.
-- The application and installer are unsigned.
-- Advanced transport/routing parameters are exposed through the validated JSON
-  editor; not all specialized editors or graphs from the previous UI are present.
+- Elevated TUN through a real remote VPN and a physical adapter, including the
+  live MTU benchmark, has not been verified in this environment.
+- Physical adapter/DNS recovery after an OS-level failure needs a dedicated
+  Windows test. Existing ownership and recovery safeguards are retained.
+- No production subscription, provider endpoint or remote VPN account was tested.
+- Application and installer are unsigned.
 
-These checks demonstrate the stated local behavior, not a guarantee of remote
-server availability, anonymity, censorship resistance or performance.
+The machine-readable report is included as `VERIFICATION.json`. Release asset
+hashes are listed in `checksums.sha256`. Test data, build caches and private
+journals are excluded from source and portable archives.

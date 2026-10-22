@@ -267,8 +267,8 @@ impl Default for Preferences {
             sniff_excluded_apps: vec![],
             fragmentation: Default::default(),
             multiplex: Default::default(),
-            ping_method: "tcp_connect_rtt".into(),
-            ping_proxy_mode: "double".into(),
+            ping_method: "proxy_https_rtt".into(),
+            ping_proxy_mode: "keepalive".into(),
             selected_profile: None,
             favorites: vec![],
             whitelist: vec![],
@@ -335,6 +335,8 @@ impl Preferences {
             }
         }
 
+        self.applications = self.applications.iter().map(|p| crate::app_rules::executable_name(p)).collect();
+        for group in &mut self.application_groups { group.paths = group.paths.iter().map(|p| crate::app_rules::executable_name(p)).collect(); }
         for paths in [
             &mut self.applications,
             &mut self.whitelist,
@@ -406,8 +408,7 @@ impl Preferences {
                     || g.name.chars().any(char::is_control)
                     || g.paths.len() > 200
                     || g.paths.iter().any(|p| {
-                        !std::path::Path::new(p).is_absolute()
-                            || !p.to_ascii_lowercase().ends_with(".exe")
+                        !crate::app_rules::valid_executable(p)
                             || p.chars().any(char::is_control)
                     })
             })
@@ -456,13 +457,12 @@ impl Preferences {
         ] {
             if paths.len() > limit
                 || paths.iter().any(|p| {
-                    !std::path::Path::new(p).is_absolute()
-                        || !p.to_ascii_lowercase().ends_with(".exe")
+                    !crate::app_rules::valid_executable(p)
                         || p.chars().any(char::is_control)
                 })
             {
                 return Err(fail(
-                    "Rules require absolute EXE paths (maximum 600 shared paths / 200 legacy paths)",
+                    "Rules require executable names ending in .exe (maximum 600 shared entries)",
                 ));
             }
         }
@@ -584,7 +584,7 @@ mod launch_tests {
     use super::*;
     #[test]
     fn fresh_install_uses_tcp_but_saved_ping_choice_is_preserved() {
-        assert_eq!(Preferences::default().ping_method, "tcp_connect_rtt");
+        assert_eq!(Preferences::default().ping_method, "proxy_https_rtt");
         let saved = Preferences {
             ping_method: "proxy_https_head_rtt".into(),
             ..Preferences::default()
@@ -602,7 +602,7 @@ mod launch_tests {
         };
         let launch = saved.clone().for_startup();
         assert!(!launch.tun && !launch.system_proxy);
-        assert_eq!(launch.applications, saved.whitelist);
+        assert_eq!(launch.applications, saved.whitelist.iter().map(|p|crate::app_rules::executable_name(p)).collect::<Vec<_>>());
         assert!(!launch.effective_tun());
         let automatic = Preferences {
             auto_reconnect: true,

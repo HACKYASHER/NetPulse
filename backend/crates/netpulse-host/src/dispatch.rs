@@ -8,6 +8,9 @@ fn encode<T: Serialize>(value:T) -> Result<serde_json::Value> {
 }
 async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
     match method {
+        "check_client_update" => encode(check_client_update().await?),
+        "download_client_update" => encode(download_client_update(host::State(state), argument(&params,"release")?).await?),
+        "install_client_update" => encode(install_client_update(host::State(state), argument(&params,"release")?).await?),
         "bootstrap" => encode(bootstrap(host::State(state)).await?),
         "connect" => encode(connect(host::State(state), argument::<String>(&params, "id")?).await?),
         "disconnect" => encode(disconnect(host::State(state)).await?),
@@ -17,7 +20,7 @@ async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> 
         "save_profile_transport" => encode(save_profile_transport(host::State(state), argument::<String>(&params, "id")?, argument::<Option<netpulse_core::transport_options::ProfileTransport>>(&params, "value")?).await?),
         "profile_json" => encode(profile_json(host::State(state), argument::<String>(&params, "id")?).await?),
         "save_profile_json" => encode(save_profile_json(host::State(state), argument::<String>(&params, "id")?, argument::<String>(&params, "json")?).await?),
-        "playground_processes" => encode(playground_processes().await?),
+        "playground_processes" => encode(playground_processes(host::State(state)).await?),
         "connection_analysis" => encode(connection_analysis(host::State(state), argument::<Option<u32>>(&params, "pid")?, argument::<String>(&params, "path")?).await?),
         "snapshot" => encode(snapshot(host::State(state)).await?),
         "import_text" => encode(import_text(host::State(state), argument::<String>(&params, "text")?).await?),
@@ -70,6 +73,7 @@ async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> 
         "delete_local_data" => encode(delete_local_data(host::State(state)).await?),
         "ui_event" => encode(actions::ui_event(host::State(state), argument::<String>(&params, "action")?, argument::<String>(&params, "target")?).await?),
         "open_log_folder" => encode(actions::open_log_folder(host::State(state)).await?),
+        "start_mtu_tuning" => encode(actions::start_mtu_tuning(host::State(state),argument(&params,"url")?,argument(&params,"goal")?).await?),
         "start_mtu" => encode(actions::start_mtu(host::State(state), argument::<String>(&params, "target")?).await?),
         "start_best_server" => encode(actions::start_best_server(host::State(state), argument::<u8>(&params, "samples")?).await?),
         _ => Err(Error::new("UnknownCommand", "ipc", "Unsupported command")),

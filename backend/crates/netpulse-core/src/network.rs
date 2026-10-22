@@ -913,6 +913,15 @@ impl AnalysisRequest {
             alive = result.0;
             rows = result.1;
         }
+        // A collapsed EXE group has no single PID: inspect every live instance.
+        if self.pid.is_none() && !self.path.is_empty() {
+            let name=crate::app_rules::executable_name(&self.path);
+            alive=false;
+            for p in crate::playground::processes()?.into_iter().filter(|p|crate::app_rules::executable_name(&p.path)==name).take(128) {
+                if let Ok((running,mut sockets))=crate::playground::sockets(p.pid,&p.path){alive|=running;rows.append(&mut sockets);}
+                if rows.len()>=300{rows.truncate(300);break;}
+            }
+        }
         let mut truncated = rows.len() >= 300;
         let mut core_available = false;
         if let Some(reader) = self.reader {
@@ -931,6 +940,12 @@ impl AnalysisRequest {
                             c.process = self.path.clone();
                         }
                     }
+                    if self.pid.is_none() && !self.path.is_empty() {
+                        let name=crate::app_rules::executable_name(&self.path);
+                        core_rows.retain(|c|crate::app_rules::executable_name(&c.process)==name || rows.iter().any(|os|os.network==c.network&&os.local==c.local));
+                    }
+                    // A matched Windows socket and core row describe the same flow.
+                    rows.retain(|os|!core_rows.iter().any(|c|os.network==c.network&&os.local==c.local));
                     rows.splice(0..0, core_rows);
                 }
                 Err(e) => errors.push(format!("{}: {}", e.code, e.message)),
@@ -1027,10 +1042,11 @@ pub fn public_ips(route: crate::diagnostics::DiagnosticRoute) -> PublicIps {
                 )
             })
     }
-    let direct = fetch(route.direct_port, &route.password);
-    let vpn = route
-        .vpn_port
-        .map(|port| fetch(Some(port), &route.password));
+    let (direct,vpn)=std::thread::scope(|scope| {
+        let direct=scope.spawn(||fetch(route.direct_port,&route.password));
+        let vpn=route.vpn_port.map(|port|fetch(Some(port),&route.password));
+        (direct.join().unwrap_or_else(|_|Err(Error::new("PublicIpFailed","public-ip","Direct IP check failed"))),vpn)
+    });
     PublicIps {
         direct: direct.as_ref().ok().cloned(),
         direct_error: direct.err(),

@@ -205,6 +205,15 @@ impl Store {
         let prefs = prefs.clone().normalized();
         prefs.validate()?;
         self.db.execute("INSERT INTO settings VALUES(1,?1) ON CONFLICT(id) DO UPDATE SET value=excluded.value",[serde_json::to_string(&prefs).unwrap()]).map_err(db)?;
+        // Routing has a portable, human-readable file separate from the settings database.
+        let document=crate::routing::RoutingSettings::from_preferences(&prefs);
+        let path=self.directory.join("routing-apps.json");
+        let pending=self.directory.join(format!("routing-apps-{}.tmp",uuid::Uuid::new_v4()));
+        let result=(|| -> Result<()> {
+            std::fs::write(&pending,serde_json::to_vec_pretty(&document).map_err(|_|Error::new("RoutingWrite","routing","Could not serialize routing"))?).map_err(|e|Error::io("routing-write",e))?;
+            std::fs::rename(&pending,&path).map_err(|e|Error::io("routing-replace",e))
+        })();
+        if let Err(e)=result { let _=std::fs::remove_file(&pending); let _=self.log("WARNING","Routing",&e.stage,&e.code,&e.message); }
         let _=self.log("INFO","Settings","preferences","Saved",&format!("TUN={} SystemProxy={} routing={:?} MTU={} DNS={} engine={} applications={} autostart={} close_to_tray={} minimize_to_tray={} auto_failover={} theme={}",prefs.tun,prefs.system_proxy,prefs.route_mode,prefs.mtu,prefs.dns_route,prefs.transport_engine,prefs.applications.len(),prefs.autostart,prefs.close_to_tray,prefs.minimize_to_tray,prefs.auto_failover,prefs.theme));
         Ok(())
     }
@@ -708,7 +717,7 @@ impl Store {
             );
         }
 
-        if !["latency", "speed"].contains(&kind) {
+        if !["latency", "speed", "mtu", "mtu_tuning"].contains(&kind) {
             return Err(Error::new(
                 "MeasurementKind",
                 "diagnostics-save",

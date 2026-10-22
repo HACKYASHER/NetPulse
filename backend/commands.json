@@ -523,5 +523,40 @@
         "type": "u8"
       }
     ]
+  },
+  {
+    "method": "check_client_update",
+    "parameters": []
+  },
+  {
+    "method": "download_client_update",
+    "parameters": [
+      {
+        "name": "release",
+        "type": "netpulse_core::client_updates::Release"
+      }
+    ]
+  },
+  {
+    "method": "install_client_update",
+    "parameters": [
+      {
+        "name": "release",
+        "type": "netpulse_core::client_updates::Release"
+      }
+    ]
+  },
+  {
+    "method": "start_mtu_tuning",
+    "parameters": [
+      {
+        "name": "url",
+        "type": "String"
+      },
+      {
+        "name": "goal",
+        "type": "String"
+      }
+    ]
   }
 ]

@@ -104,7 +104,7 @@ void Backend::readOutput() {
                 state.insert(QStringLiteral("state"), payload);
                 m_data.insert(QStringLiteral("snapshot"), state); emit dataChanged();
             }
-            if (name == QStringLiteral("runtime-prepared") || name == QStringLiteral("subscriptions-updated") || name == QStringLiteral("automatic-selection")) refresh();
+            if (name == QStringLiteral("runtime-prepared") || name == QStringLiteral("subscriptions-updated") || name == QStringLiteral("automatic-selection") || name == QStringLiteral("mtu-tuning-finished")) refresh();
             if (name == QStringLiteral("host-error")) setError(payload.toMap().value(QStringLiteral("message")).toString());
             continue;
         }
@@ -141,4 +141,19 @@ void Backend::confirmDelete(const QString& method, const QVariantMap& params, co
     static const QSet<QString> allowed{QStringLiteral("delete_profile"), QStringLiteral("delete_subscription"), QStringLiteral("clear_logs"), QStringLiteral("clear_file_logs"), QStringLiteral("delete_local_data")};
     if (!allowed.contains(method)) return;
     if (QMessageBox::question(nullptr, QStringLiteral("NetPulse"), label, QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes) request(method, params);
+}
+
+QString Backend::readableText(const QString& value) const {
+ static constexpr ushort table[128]={0x402,0x403,0x201a,0x453,0x201e,0x2026,0x2020,0x2021,0x20ac,0x2030,0x409,0x2039,0x40a,0x40c,0x40b,0x40f,0x452,0x2018,0x2019,0x201c,0x201d,0x2022,0x2013,0x2014,0xffff,0x2122,0x459,0x203a,0x45a,0x45c,0x45b,0x45f,0xa0,0x40e,0x45e,0x408,0xa4,0x490,0xa6,0xa7,0x401,0xa9,0x404,0xab,0xac,0xad,0xae,0x407,0xb0,0xb1,0x406,0x456,0x491,0xb5,0xb6,0xb7,0x451,0x2116,0x454,0xbb,0x458,0x405,0x455,0x457,0x410,0x411,0x412,0x413,0x414,0x415,0x416,0x417,0x418,0x419,0x41a,0x41b,0x41c,0x41d,0x41e,0x41f,0x420,0x421,0x422,0x423,0x424,0x425,0x426,0x427,0x428,0x429,0x42a,0x42b,0x42c,0x42d,0x42e,0x42f,0x430,0x431,0x432,0x433,0x434,0x435,0x436,0x437,0x438,0x439,0x43a,0x43b,0x43c,0x43d,0x43e,0x43f,0x440,0x441,0x442,0x443,0x444,0x445,0x446,0x447,0x448,0x449,0x44a,0x44b,0x44c,0x44d,0x44e,0x44f};
+ QString text=value;
+ for(int pass=0;pass<2;pass++) {
+  if(text.count(QChar(0x420))+text.count(QChar(0x421))<2)break;
+  QByteArray bytes;bool ok=true;
+  for(QChar ch:text) {if(ch.unicode()<128){bytes.append(char(ch.unicode()));continue;}int found=-1;for(int i=0;i<128;i++)if(table[i]==ch.unicode()){found=i;break;}if(found<0){ok=false;break;}bytes.append(char(found+128));}
+  if(!ok)break;
+  const QString decoded=QString::fromUtf8(bytes);
+  if(decoded.contains(QChar(0xfffd))||decoded.size()>=text.size())break;
+  text=decoded;
+ }
+ return text;
 }

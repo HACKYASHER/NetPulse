@@ -18,39 +18,55 @@ traffic capture through a virtual network adapter.
 
 ## Features
 
-- **Server profiles and subscriptions.** Import links, configuration files and
-  QR images. Refresh subscriptions manually or on a schedule. The retained
-  network core supports VLESS/Reality, VMess, Trojan, Shadowsocks, SOCKS and
-  supported Hysteria2/TUIC profiles.
-- **System Proxy and TUN.** Configure application routing, direct exceptions,
-  DNS, MTU and transport engines.
-- **Separate network engines.** Bundled sing-box 1.14.3 and Xray 26.10.17 are
-  verified against pinned SHA-256 hashes. Engine updates and rollback are available.
-- **Diagnostics.** Test server latency, select a healthy server, run bounded
-  HTTPS speed tests, analyze MTU and inspect process connection metadata.
-- **Local storage.** SQLite, Windows DPAPI protection for profiles and backups,
-  bounded logs, a system tray and optional Windows startup.
-- **Native interface.** QML / Qt Quick, dark/light/system themes and English/Russian
-  UI. No WebView2, browser or local web server is required.
+- **Overview:** country flags, transport engine selection, a connection-mode
+  picker, automatic HTTPS latency and copyable VPN/direct public IP results.
+- **Servers and subscriptions:** one compact grouped list, pinned servers,
+  context-menu actions, protected URLs and refresh on startup and by interval.
+- **Routing:** EXE-name rules that survive application moves and updates,
+  application icons, complete saved lists, JSON import/export, domain suffix
+  exceptions and custom direct/proxy/block routes. New rule lists start empty.
+- **Network:** separate Connection, DNS, MTU, SNI/TLS, Transport, TUN Service
+  and Engines tabs, with explanations for settings.
+- **Diagnostics:** Proxy GET/HEAD, TCP and ICMP latency; keepalive by default;
+  bounded HTTPS speed tests and persistent measurement history.
+- **MTU:** automatic target selection, IPv4 DF path analysis with explicit
+  measured/estimated labels, presets and an optional measured comparison of
+  candidates using throughput, latency, loaded latency and jitter.
+- **Playground:** grouped processes, observed sockets and engine traffic,
+  per-application connection events, automatic refresh and routing controls.
+- **Activity:** selectable journal/date, severity colours, copying and optional
+  follow-to-latest mode. Dark/light/system themes and English/Russian UI.
+- **Updates and cleanup:** official verified engine updates and rollback,
+  native client update checks on startup/every six hours, automatic disposal of
+  managed download archives and interrupted downloads.
+- **Native desktop:** C++ / Qt Quick, a Rust controller and a Windows TUN
+  service. No WebView2, browser or local web server is required.
 
-NetPulse is a client: you supply the server or subscription. This project does
-not include a VPN hosting service or server credentials.
+NetPulse is a client: supply your own server or subscription.
 
 ## Getting started
 
 1. Install `NetPulse-Setup.exe`, or extract the entire portable ZIP and run
-   `NetPulse/NetPulse.exe`. Keep all DLLs, QML modules and `cores` together.
-2. Open **Servers → Add** and import a profile or subscription.
-3. Select a server. In **Overview**, enable **System Proxy** and/or **TUN**.
-4. For TUN, install the service in **Network** and confirm the standard Windows
-   UAC prompt. Click the power button to connect.
+   `NetPulse/NetPulse.exe`. Keep the complete runtime folder together.
+2. Open **Servers → Add connection** and import your subscription or profile.
+3. Select a server. Press the power button in **Overview** and choose
+   **System Proxy** or **TUN**. Service installation uses the normal Windows
+   UAC dialog; the installer attempts to install it by default.
+4. Configure application and domain rules in **Routing** and network settings
+   in the tabs under **Network**.
 
-The tray menu provides **Disconnect** and **Quit**. Closing the window can hide
-it to the tray, depending on your settings.
+The tray supports connect, disconnect, reconnect, connection modes, servers,
+IP checks and navigation. The installer supports update, repair and uninstall.
+Settings and subscriptions are preserved by repair and uninstall.
 
-The application and installer are unsigned. This beta was tested with owned
-local network fixtures. A full elevated TUN session through a real remote server
-and physical network adapter has not been verified in this environment.
+MTU comparison is an explicit, disruptive test: it reconnects the current TUN
+session multiple times, downloads up to 36 MiB of test payload plus overhead,
+then restores the original MTU. It recommends a change only after repeatable
+improvement and stable control measurements. HTTPS results do not measure game
+UDP performance. Apply the suggested candidate manually.
+
+Executables are unsigned. Tests use controlled network fixtures; elevated TUN
+and the MTU benchmark on a physical remote VPN have not been verified here.
 See [verification details](VERIFICATION.md).
 
 ## Data and previous versions
@@ -66,16 +82,11 @@ Qt edition's current data. Stop the old client before connecting with this one.
 is retained as an **archived fallback pre-release**. The active source branch
 starts with the new native desktop edition.
 
-## Beta scope
+## Update channel
 
-The network controller is retained from NetPulse 3.0.4. The interface has been
-rebuilt in QML. Advanced TLS, fragmentation, multiplex and routing settings
-remain available through the validated JSON preferences editor; the previous
-specialized editors and charts have not all been recreated.
-
-Client self-updates from the old 3.x channel are disabled. Install future desktop
-releases manually. Network engine updates remain available. Application search
-displays the first 150 matching catalog entries.
+Client updates accept the native Qt release channel marker and verified official
+GitHub installer digests. The archived 3.0.4 build is excluded from this channel.
+A newer installer is downloaded and run only after the user selects it.
 
 ## Source layout
 

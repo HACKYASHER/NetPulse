@@ -39,7 +39,7 @@ def main():
     run(['cmake','-S',ROOT,'-B',ROOT/'.build/qt','-G','Ninja','-DCMAKE_BUILD_TYPE=Release',f'-DCMAKE_PREFIX_PATH={qt}'],env)
     run(['cmake','--build',ROOT/'.build/qt','--parallel','4'],env)
     shutil.copy2(ROOT/'.build/qt/NetPulse.exe',out/'NetPulse.exe')
-    run([qt/'bin/windeployqt.exe','--release','--no-translations','--no-compiler-runtime','--qmldir',ROOT/'qml',out/'NetPulse.exe'],env)
+    run([qt/'bin/windeployqt.exe','--release','--verbose','0','--no-translations','--no-compiler-runtime','--qmldir',ROOT/'qml',out/'NetPulse.exe'],env)
     # Portable distribution also includes the Microsoft C++ runtime, licensed
     # for redistribution with applications built using these tools.
     runtime=msvc.parents[2]/'Redist/MSVC'

@@ -507,7 +507,22 @@ pub fn install(
         }
         let _ = std::fs::remove_dir(stage);
     }
+    let _ = cleanup_downloads(&data.join("core-downloads"));
     result
+}
+pub fn cleanup_stages(data:&Path)->Result<usize> {
+ let mut count=0;
+ for item in std::fs::read_dir(data).map_err(|e|Error::io("core-stage-clean",e))? {
+  let item=item.map_err(|e|Error::io("core-stage-clean",e))?;
+  let name=item.file_name().to_string_lossy().into_owned();
+  if !item.file_type().is_ok_and(|t|t.is_dir()) || !name.strip_prefix("core-stage-").is_some_and(|s|uuid::Uuid::parse_str(s).is_ok()){continue}
+  for name in ["sing-box.exe","libcronet.dll","xray.exe","sing-box-release.json","xray-release.json"] {
+   let path=item.path().join(name);
+   if path.symlink_metadata().is_ok_and(|m|m.file_type().is_file()){std::fs::remove_file(path).map_err(|e|Error::io("core-stage-clean",e))?;count+=1}
+  }
+  let _=std::fs::remove_dir(item.path());
+ }
+ Ok(count)
 }
 pub fn cleanup_downloads(directory: &Path) -> Result<usize> {
     if !directory.exists() {

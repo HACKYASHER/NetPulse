@@ -16,100 +16,34 @@ fn quote_path(path: &str) -> String {
     result
 }
 
-fn discord_root(path: &str) -> Option<String> {
-    let parts: Vec<_> = path.split(['\\', '/']).collect();
-    let leaf = parts.last()?.to_ascii_lowercase();
-    if ![
-        "discord.exe",
-        "discordptb.exe",
-        "discordcanary.exe",
-        "discordsystemhelper.exe",
-        "update.exe",
-    ]
-    .contains(&leaf.as_str())
-    {
-        return None;
-    }
-    let root = parts.iter().rposition(|s| {
-        ["discord", "discordptb", "discordcanary"]
-            .iter()
-            .any(|name| s.eq_ignore_ascii_case(name))
-    })?;
-    if root < 1 || parts.iter().any(|s| *s == "." || *s == "..") {
-        return None;
-    }
-    let rest = &parts[root + 1..];
-    let is_updater = rest.len() == 1 && leaf == "update.exe";
-    let is_version = rest.len() >= 2
-        && rest[0]
-            .to_ascii_lowercase()
-            .strip_prefix("app-")
-            .is_some_and(|version| {
-                !version.is_empty() && version.bytes().all(|ch| ch.is_ascii_digit() || ch == b'.')
-            })
-        && leaf != "update.exe";
-    (is_updater || is_version).then(|| parts[..=root].join("\\"))
+/// Windows EXE rules follow an executable name across installs and updates.
+pub fn executable_name(path: &str) -> String {
+    path.trim().trim_matches('"').rsplit(['\\', '/']).next().unwrap_or("").to_lowercase()
 }
-
+pub fn valid_executable(value: &str) -> bool {
+    let name = executable_name(value);
+    name.len() > 4 && name.len() <= 260 && name.ends_with(".exe")
+        && !name.chars().any(|c| c.is_control() || "<>:\"/\\|?*".contains(c))
+}
 pub fn process_patterns(paths: &[String]) -> Vec<String> {
-    let mut patterns = BTreeSet::new();
-    for path in paths {
-        if let Some(root) = discord_root(path) {
-            // Scope updater/helper matching to this selected installation, never
-            // every Update.exe or every executable in the user's AppData.
-            patterns.insert(format!(r"(?i)^{}[\\/](Update\.exe|app-[0-9][0-9.]*[\\/](?:[^\\/:]+[\\/])*(?:Discord(?:PTB|Canary)?\.exe|DiscordSystemHelper\.exe))$", quote_path(&root)));
-        } else if let Some(root) = roblox_versions(path) {
-            patterns.insert(format!(r"(?i)^{}[\\/]version-[a-f0-9]+[\\/](?:RobloxPlayerBeta|RobloxPlayerInstaller|RobloxPlayerLauncher|RobloxCrashHandler)\.exe$", quote_path(&root)));
-        } else {
-            patterns.insert(format!("(?i)^{}$", quote_path(path)));
-        }
-    }
-    patterns.into_iter().collect()
+    paths.iter().map(|p|format!(r"(?i)(?:^|[\\/]){}$",quote_path(&executable_name(p))))
+        .collect::<BTreeSet<_>>().into_iter().collect()
 }
 
-fn roblox_versions(path: &str) -> Option<String> {
-    let parts: Vec<_> = path.split(['\\', '/']).collect();
-    if parts.len() < 4 || parts.iter().any(|s| *s == "." || *s == "..") {
-        return None;
-    }
-    let n = parts.len();
-    let exe = parts[n - 1].to_ascii_lowercase();
-    if ![
-        "robloxplayerbeta.exe",
-        "robloxplayerinstaller.exe",
-        "robloxplayerlauncher.exe",
-        "robloxcrashhandler.exe",
-    ]
-    .contains(&exe.as_str())
-        || !parts[n - 3].eq_ignore_ascii_case("versions")
-    {
-        return None;
-    }
-    let version = parts[n - 2].to_ascii_lowercase();
-    let hash = version.strip_prefix("version-")?;
-    if hash.is_empty() || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return None;
-    }
-    Some(parts[..n - 2].join("\\"))
-}
+/// Internal runtime bypasses retain the full verified executable path.
+pub fn exact_process_patterns(paths:&[String])->Vec<String> { paths.iter().map(|p|format!("(?i)^{}$",quote_path(p))).collect() }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn only_recognized_installations_expand() {
-        assert_eq!(
-            discord_root(r"C:\Users\fixture\Discord\app-1.0.9220\Discord.exe").as_deref(),
-            Some(r"C:\Users\fixture\Discord")
-        );
-        assert!(discord_root(r"C:\Other\Update.exe").is_none());
-        assert!(discord_root(r"C:\Discord\arbitrary\Discord.exe").is_none());
-        assert!(discord_root(r"C:\Discord\app-1.0\Other.exe").is_none());
-        assert!(discord_root(r"C:\Discord\..\Update.exe").is_none());
-        assert_eq!(
-            process_patterns(&[r"C:\Apps (test)\a+.exe".into()]),
-            [r"(?i)^C:[\\/]Apps \(test\)[\\/]a\+\.exe$"]
-        );
+    fn executable_rules_ignore_install_directory_and_escape_names() {
+        assert_eq!(executable_name(r"C:\Apps\Steam.EXE"),"steam.exe");
+        assert_eq!(process_patterns(&[r"C:\Apps (test)\a+.exe".into(),"A+.exe".into()]),[r"(?i)(?:^|[\\/])a\+\.exe$"]);
+        assert!(valid_executable("steam.exe"));
+        assert!(!valid_executable("*.exe"));
+        assert!(!valid_executable("bad.exe:stream"));
+        assert_eq!(exact_process_patterns(&[r"C:\Trusted\xray.exe".into()]),[r"(?i)^C:[\\/]Trusted[\\/]xray\.exe$"]);
     }
 
     #[cfg(windows)]
@@ -133,14 +67,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let clients = [
             (r"Discord\app-2.0.0\Discord.exe", true),
-            (r"Discord\Update.exe", true),
+            (r"Discord\Update.exe", false),
             (
                 r"Discord\app-2.0.0\modules\discord_utils-2\DiscordSystemHelper.exe",
-                true,
+                false,
             ),
             (r"Other\Update.exe", false),
             (r"Discord\app-2.0.0\unrelated.exe", false),
-            (r"DiscordCopy\app-2.0.0\Discord.exe", false),
+            (r"DiscordCopy\app-2.0.0\Discord.exe", true),
             (r"Apps (test)\Tool+.exe", true),
             (r"Apps (test)\Tool++.exe", false),
             (
@@ -149,12 +83,12 @@ mod tests {
             ),
             (
                 r"Roblox\Versions\version-aabb1122\RobloxPlayerInstaller.exe",
-                true,
+                false,
             ),
             (r"Roblox\Versions\version-abcdef12\unrelated.exe", false),
             (
                 r"RobloxCopy\Versions\version-abcdef12\RobloxPlayerBeta.exe",
-                false,
+                true,
             ),
         ];
         let template = std::env::var_os("NETPULSE_ROUTING_CLIENT").unwrap();

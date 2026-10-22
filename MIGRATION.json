@@ -4,7 +4,7 @@
   "ui": "C++20 / Qt 6.8.3 / QML",
   "controller": "retained Rust NetworkCore",
   "version": "1.0.0-beta",
-  "commands": 64,
+  "commands": 68,
   "service_name": "NetPulseCoreQt",
   "service_pipe_prefix": "NetPulse.CoreQt.",
   "service_directory": "NetPulse Core Qt",

@@ -235,6 +235,29 @@ pub fn df_echo(target: std::net::Ipv4Addr, size: u16) -> Echo {
         _ => Echo::Unknown,
     }
 }
+/// Check the actual Windows ICMP route, including routes installed by other VPNs.
+/// Source binding alone does not prove an echo bypasses a userspace TUN.
+#[cfg(windows)]
+fn physical_icmp_route(target:std::net::Ipv4Addr)->bool {
+ use windows_sys::Win32::{NetworkManagement::IpHelper::GetBestInterfaceEx,Networking::WinSock::*};
+ let mut address=SOCKADDR_IN{sin_family:AF_INET,..Default::default()};
+ address.sin_addr.S_un.S_addr=u32::from_ne_bytes(target.octets());
+ let mut index=0;
+ if unsafe{GetBestInterfaceEx((&address as *const SOCKADDR_IN).cast(),&mut index)}!=0{return false}
+ let Ok(view)=crate::routes::inspect() else{return false};
+ view.interfaces.iter().any(|i|i.index==index&&i.up&&matches!(i.kind,6|71)&&!i.alias.eq_ignore_ascii_case("NetPulse")&&!i.description.to_ascii_lowercase().contains("tun"))
+}
+/// A bounded DNS lookup picks the selected server's IPv4 without manual input.
+pub fn target(server:Option<&str>)->(std::net::Ipv4Addr,&'static str) {
+ if let Some(host)=server {
+  if let Ok(ip)=host.parse::<std::net::Ipv4Addr>() {return (ip,"selected_server")}
+  if let Ok(runtime)=tokio::runtime::Builder::new_current_thread().enable_all().build() {
+   let resolved=runtime.block_on(async {tokio::time::timeout(std::time::Duration::from_secs(4),tokio::net::lookup_host((host,443))).await.ok()?.ok()?.find_map(|a|match a.ip(){std::net::IpAddr::V4(v)=>Some(v),_=>None})});
+   if let Some(ip)=resolved{return (ip,"selected_server")}
+  }
+ }
+ (std::net::Ipv4Addr::new(1,1,1,1),"public_probe")
+}
 #[cfg(windows)]
 pub fn analyze(target: std::net::Ipv4Addr, tun: bool, cancel: &AtomicBool) -> Result<Report> {
     if cancel.load(Ordering::SeqCst) {
@@ -245,8 +268,8 @@ pub fn analyze(target: std::net::Ipv4Addr, tun: bool, cancel: &AtomicBool) -> Re
         .iter()
         .find(|a| a.selected && a.up && a.mtu >= 1280)
         .map(|a| a.mtu.min(9000) as u16);
-    let path = if tun {
-        PathResult { note: "DF-измерение внешнего пути пропущено: включён TUN. Его локальная обработка ICMP может дать ложное число. Для измерения отключите TUN и повторите; HTTPS через VPN проверяется отдельно.".into(), ..Default::default() }
+    let path = if !physical_icmp_route(target) {
+        PathResult { note: "ICMP маршрут проходит через виртуальный или недоступный интерфейс. Точный MTU внешнего пути не измерен: ниже показана оценка по физическому адаптеру. Для измерения отключите TUN и повторите автоподбор.".into(), ..Default::default() }
     } else if let Some(upper) = ceiling {
         search(upper, cancel, |size| df_echo(target, size))?
     } else {

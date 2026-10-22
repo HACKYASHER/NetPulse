@@ -5,8 +5,9 @@ use std::sync::atomic::Ordering;
 pub fn subscription_monitor(app: host::AppHandle, core: Arc<Mutex<NetworkCore>>) {
     std::thread::spawn(move || {
         let mut attempts = std::collections::HashMap::<String, std::time::Instant>::new();
+        let mut first = true;
         loop {
-            std::thread::sleep(std::time::Duration::from_secs(60));
+            std::thread::sleep(std::time::Duration::from_millis(if first { 100 } else { 60_000 }));
             let due = {
                 let Ok(c) = core.try_lock() else {
                     continue;
@@ -18,12 +19,11 @@ pub fn subscription_monitor(app: host::AppHandle, core: Arc<Mutex<NetworkCore>>)
                 subscriptions
                     .into_iter()
                     .filter(|s| {
-                        s.due(netpulse_core::store::now())
+                        (first || s.due(netpulse_core::store::now()))
                             && attempts
                                 .get(&s.id)
                                 .is_none_or(|at| at.elapsed().as_secs() >= 15 * 60)
                     })
-                    .take(20)
                     .collect::<Vec<_>>()
             };
             for s in due {
@@ -49,7 +49,7 @@ pub fn subscription_monitor(app: host::AppHandle, core: Arc<Mutex<NetworkCore>>)
                     .ok()
                     .and_then(|v| v.into_iter().find(|v| v.id == s.id));
                 if !current.is_some_and(|v| {
-                    v.updated_at == s.updated_at && v.due(netpulse_core::store::now())
+                    v.updated_at == s.updated_at && (first || v.due(netpulse_core::store::now()))
                 }) {
                     continue;
                 }
@@ -72,6 +72,7 @@ pub fn subscription_monitor(app: host::AppHandle, core: Arc<Mutex<NetworkCore>>)
                     }
                 }
             }
+            first = false;
         }
     });
 }
@@ -152,13 +153,8 @@ fn open_path(path: &Path) -> Result<()> {
 
 type Session = Option<(u32, String)>;
 pub async fn start_mtu(state: host::State<'_, AppState>, target: String) -> Result<String> {
-    let target = target
-        .parse::<std::net::Ipv4Addr>()
-        .map_err(|_| Error::new("MtuTarget", "mtu", "РЈРєР°Р¶РёС‚Рµ IPv4 Р°РґСЂРµСЃ, РѕС‚РІРµС‡Р°СЋС‰РёР№ РЅР° ICMP"))?;
-    if target.is_unspecified() || target.is_multicast() || target.is_broadcast() {
-        return Err(Error::new("MtuTarget", "mtu", "РќСѓР¶РµРЅ Р°РґСЂРµСЃ РѕРґРЅРѕРіРѕ СѓР·Р»Р°"));
-    }
-    let (route, profile, prefs, path, tun) = with_core(&state, "mtu-start", |c| {
+    let explicit_target=if target.trim().is_empty(){None}else{Some(target.trim().parse::<std::net::Ipv4Addr>().map_err(|_|Error::new("MtuTarget","mtu","Неверный IPv4 адрес"))?)};
+    let (route, profile, prefs, path, tun, server) = with_core(&state, "mtu-start", |c| {
         let route = c.diagnostic_route();
         let snapshot = c.snapshot();
         let profile = snapshot
@@ -166,12 +162,15 @@ pub async fn start_mtu(state: host::State<'_, AppState>, target: String) -> Resu
             .as_ref()
             .map(|p| c.store.profile(&p.id))
             .transpose()?;
+        let prefs=c.store.preferences()?;
+        let server=snapshot.active.as_ref().map(|p|p.host.clone()).or_else(||c.store.profiles().ok()?.into_iter().find(|p|Some(&p.id)==prefs.selected_profile.as_ref()).map(|p|p.host));
         Ok((
             route,
             profile,
-            c.store.preferences()?,
+            prefs,
             c.engine_path.clone(),
             snapshot.tun_active,
+            server,
         ))
     })
     .await?;
@@ -181,11 +180,13 @@ pub async fn start_mtu(state: host::State<'_, AppState>, target: String) -> Resu
     let returned = id.clone();
     std::thread::spawn(move || {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
+            let (target,target_source)=explicit_target.map(|ip|(ip,"explicit")).unwrap_or_else(||netpulse_core::mtu::target(server.as_deref()));
+            if target.is_unspecified()||target.is_multicast()||target.is_broadcast(){return Err(Error::new("MtuTarget","mtu","Нужен адрес одного узла"));}
             let mut report = netpulse_core::mtu::analyze(target, tun, &cancel)?;
             if let Some(profile) = profile {
                 let latency = diagnostics::latency_samples_on_route(
                     profile,
-                    prefs,
+                    prefs.clone(),
                     path,
                     "proxy_https_rtt",
                     &cancel,
@@ -193,15 +194,21 @@ pub async fn start_mtu(state: host::State<'_, AppState>, target: String) -> Resu
                     2,
                 );
                 report.tunnel_https_ok = Some(latency.successes > 0);
-                report.tunnel_note = "HTTPS РїСЂРѕРІРµСЂСЏРµС‚ РґРѕСЃС‚СѓРїРЅРѕСЃС‚СЊ С‚РµРєСѓС‰РµРіРѕ VPN. Р­С‚Рѕ РЅРµ РёР·РјРµСЂРµРЅРёРµ MTU РёР»Рё РїСЂРѕРїСѓСЃРєРЅРѕР№ СЃРїРѕСЃРѕР±РЅРѕСЃС‚Рё С‚СѓРЅРЅРµР»СЏ.".into();
+                report.tunnel_note = "HTTPS проверяет доступность текущего VPN. Это не измерение MTU или пропускной способности туннеля.".into();
             } else {
                 report.tunnel_note =
-                    "VPN РЅРµ РїРѕРґРєР»СЋС‡С‘РЅ; РїСЂРѕРІРµСЂРµРЅ С‚РѕР»СЊРєРѕ СЃРµС‚РµРІРѕР№ РїСѓС‚СЊ Windows.".into();
+                    "VPN не подключён; проверен только сетевой путь Windows.".into();
             }
             if cancel.load(Ordering::SeqCst) {
-                return Err(Error::new("Cancelled", "mtu", "РџСЂРѕРІРµСЂРєР° РѕС‚РјРµРЅРµРЅР°"));
+                return Err(Error::new("Cancelled", "mtu", "Проверка отменена"));
             }
-            jobs.append(&id, serde_json::to_value(report).unwrap_or_default());
+            let mut value = serde_json::to_value(report).unwrap_or_default();
+            value["timestamp"]=serde_json::json!(netpulse_core::store::now());
+            value["target_source"]=serde_json::json!(target_source);
+            value["max_icmp_payload"]=serde_json::json!(value["path"]["confirmed_mtu"].as_u64().map(|n|n.saturating_sub(28)));
+            value["current_mtu"]=serde_json::json!(prefs.mtu);
+            jobs.append(&id, value.clone());
+            if let Ok(c) = core.lock() { let _ = c.store.add_measurement("mtu", &value); }
             if let Ok(c) = core.lock() {
                 let _ = c.store.log("INFO", "Diagnostics", "mtu", "Completed", "Adapter, DF path and tunnel health analysis completed; recommendations are estimates");
             }
@@ -209,7 +216,7 @@ pub async fn start_mtu(state: host::State<'_, AppState>, target: String) -> Resu
         }));
         let error = match result {
             Ok(r) => r.err(),
-            Err(_) => Some(Error::new("MtuFailed", "mtu", "РђРЅР°Р»РёР· MTU РЅРµ Р·Р°РІРµСЂС€С‘РЅ")),
+            Err(_) => Some(Error::new("MtuFailed", "mtu", "Анализ MTU не завершён")),
         };
         jobs.finish(&id, error);
     });
@@ -235,7 +242,7 @@ fn begin_selection(
             return Err(Error::new(
                 "NoProfiles",
                 "selection",
-                "Add 1вЂ“2000 servers first",
+                "Add 1–2000 servers first",
             ));
         }
         let profiles = summaries
@@ -318,7 +325,7 @@ fn begin_selection(
                 return Err(Error::new(
                     "NoHealthyServer",
                     "selection",
-                    "РќРё РѕРґРёРЅ СЃРµСЂРІРµСЂ РЅРµ РїСЂРѕС€С‘Р» РїСЂРѕРІРµСЂРєСѓ HTTPS; С‚РµРєСѓС‰РµРµ РїРѕРґРєР»СЋС‡РµРЅРёРµ СЃРѕС…СЂР°РЅРµРЅРѕ",
+                    "Ни один сервер не прошёл проверку HTTPS; текущее подключение сохранено",
                 ));
             }
             let mut c = core
@@ -393,7 +400,7 @@ pub async fn start_best_server(state: host::State<'_, AppState>, samples: u8) ->
         return Err(Error::new(
             "SelectionSamples",
             "selection",
-            "Use 5вЂ“15 samples",
+            "Use 5–15 samples",
         ));
     }
     // snapshot() may synchronously query the TUN service using its own Tokio
@@ -487,3 +494,61 @@ pub fn selection_monitor(
     });
 }
 
+
+
+pub async fn start_mtu_tuning(state:host::State<'_,AppState>,url:String,goal:String)->Result<String> {
+ use netpulse_core::{diagnostics::{SpeedRequest,speed},mtu_tuning::{Trial,compare,candidates}};
+ if !["balanced","latency"].contains(&goal.as_str()){return Err(Error::new("MtuGoal","mtu-tuning","Unknown goal"))}
+ let request=SpeedRequest{mode:"vpn".into(),download_url:url,upload_url:None,upload_endpoint_confirmed:false,duration_seconds:3,max_payload_mib:4};request.validate()?;
+ let (original,mut expected_session,profile)=with_core(&state,"mtu-tuning",|c|{
+  let snapshot=c.snapshot();if !snapshot.tun_active||snapshot.engine_pid.is_none(){return Err(Error::new("TunRequired","mtu-tuning","Для сравнения MTU подключитесь в режиме TUN"))}
+  Ok((c.store.preferences()?,session(&snapshot),c.store.profile(&snapshot.active.unwrap().id)?))
+ }).await?;
+ let ceiling=netpulse_core::mtu::adapters()?.iter().find(|a|a.selected&&a.up&&a.kind!="TUN").map(|a|a.mtu.min(1500) as u16).unwrap_or(1420);
+ let values=candidates(original.mtu,ceiling);let jobs=state.diagnostics.clone();let core=state.core.clone();
+ let (id,cancel)=jobs.begin("mtu_tuning",values.len()+3)?;let returned=id.clone();
+ std::thread::spawn(move || {
+  let mut expected=original.clone();let mut trials=Vec::new();
+  let work=std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
+   {let c=core.lock().map_err(|_|Error::new("CoreUnavailable","mtu-tuning","Core unavailable"))?;netpulse_core::mtu_tuning::save_recovery(c.store.data_directory(),&original,&expected)?;}
+   let mut measure=|mtu:u16,phase:&str|->Result<Trial>{
+    let (route,path,mut prefs)={
+     let mut c=core.lock().map_err(|_|Error::new("CoreUnavailable","mtu-tuning","Core unavailable"))?;
+     if cancel.load(Ordering::SeqCst){return Err(Error::new("Cancelled","mtu-tuning","Тест отменён"))}
+     if session(&c.snapshot())!=expected_session||c.store.preferences()?!=expected {return Err(Error::new("ConnectionChanged","mtu-tuning","Подключение или настройки изменились; тест остановлен"))}
+     if expected.mtu!=mtu {let mut next=expected.clone();next.mtu=mtu;c.guarded(|c|c.apply_preferences(next))?;expected=c.store.preferences()?;expected_session=session(&c.snapshot());netpulse_core::mtu_tuning::save_recovery(c.store.data_directory(),&original,&expected)?;}
+     (c.diagnostic_route(),c.engine_path.clone(),expected.clone())
+    };
+    prefs.ping_proxy_mode="keepalive".into();
+    let latency=diagnostics::latency_samples_on_route(profile.clone(),prefs,path,"proxy_https_rtt",&cancel,Some(&route),3);
+    let measured=speed(&request,&route,"vpn",4*1024*1024,&cancel);
+    let trial=Trial{mtu,phase:phase.into(),download_mbps:measured.download_mbps,latency_ms:latency.avg_ms,jitter_ms:measured.jitter_ms,loaded_ms:measured.loaded_latency_ms,bytes:measured.download_bytes,error:measured.error.map(|e|e.message).or_else(||latency.error.map(|e|e.message))};
+    jobs.append(&id,serde_json::to_value(&trial).unwrap_or_default());Ok(trial)
+   };
+   for mtu in values {trials.push(measure(mtu,"candidate")?)}
+   let baseline=trials[0].clone();
+   // Provisional ranking duplicates trials only to select which candidate to recheck.
+   let duplicated:Vec<_>=trials.iter().chain(trials.iter()).cloned().collect();
+   let leader=compare(&duplicated,&baseline,&baseline,&goal).suggested_mtu.unwrap_or(original.mtu);
+   trials.push(measure(leader,"verify")?);
+   let control=measure(original.mtu,"control")?;
+   let report=compare(&trials,&baseline,&control,&goal);
+   let value=serde_json::json!({"kind":"comparison","timestamp":netpulse_core::store::now(),"comparison":report,"trials":trials,"control":control});
+   jobs.append(&id,value.clone());if let Ok(c)=core.lock(){let _=c.store.add_measurement("mtu_tuning",&value);}
+   Ok(())
+  }));
+  let mut error=match work{Ok(r)=>r.err(),Err(_)=>Some(Error::new("MtuTuningFailed","mtu-tuning","Тест прерван"))};
+  // Restore only the session and settings still owned by this worker. Never
+  // overwrite a user's new connection or preference changes after cancellation.
+  if let Ok(mut c)=core.lock() {
+   if (session(&c.snapshot())==expected_session||c.snapshot().engine_pid.is_none())&&c.store.preferences().ok().as_ref()==Some(&expected)&&expected!=original {
+    if let Err(e)=c.guarded(|c|c.apply_preferences(original.clone())){error=Some(e)}
+   }
+  }
+  if let Ok(c)=core.lock(){
+   if c.store.preferences().ok().is_some_and(|p|p.mtu==original.mtu&&p.network_preset==original.network_preset){let _=std::fs::remove_file(c.store.data_directory().join("mtu-tuning-recovery.json"));}
+  }
+  let _=host::AppHandle.emit("mtu-tuning-finished",());jobs.finish(&id,error);
+ });
+ Ok(returned)
+}

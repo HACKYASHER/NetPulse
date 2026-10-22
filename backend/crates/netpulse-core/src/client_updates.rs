@@ -36,7 +36,7 @@ fn version(v: &str) -> Option<(u64, u64, u64, u8, u64)> {
         return None;
     }
     let (rank, num) = if let Some(p) = pre {
-        let (label, num) = p.split_once('.')?;
+        let (label, num) = p.split_once('.').unwrap_or((p, "0"));
         (
             match label {
                 "alpha" => 0,
@@ -105,6 +105,7 @@ fn parse(v: &serde_json::Value) -> Result<Release> {
     if v["draft"] == true {
         return Err(invalid());
     }
+    if !v["assets"].as_array().is_some_and(|a| a.iter().any(|a| a["name"] == "netpulse-qt-update-v1.json" && a["state"] == "uploaded")) { return Err(invalid()); }
     let a = v["assets"]
         .as_array()
         .ok_or_else(invalid)?
@@ -244,6 +245,27 @@ pub fn download(dir: &Path, r: &Release) -> Result<()> {
     }
     result
 }
+/// Remove only updater-owned downloads. Keep a newer verified installer pending
+/// installation; current/older installers and interrupted partials are disposable.
+pub fn cleanup(directory:&Path,current:&str)->Result<usize> {
+ let root=directory.join("updates");if !root.exists(){return Ok(0)}
+ if root.symlink_metadata().is_ok_and(|m|m.file_type().is_symlink()){return Ok(0)}
+ let mut removed=0;
+ for item in std::fs::read_dir(&root).map_err(|e|Error::io("update-cleanup",e))? {
+  let item=item.map_err(|e|Error::io("update-cleanup",e))?;
+  if !item.file_type().is_ok_and(|t|t.is_dir()){continue}
+  let tag=item.file_name().to_string_lossy().into_owned();if version(&tag).is_none(){continue}
+  for file in std::fs::read_dir(item.path()).map_err(|e|Error::io("update-cleanup",e))? {
+   let file=file.map_err(|e|Error::io("update-cleanup",e))?;
+   if !file.file_type().is_ok_and(|t|t.is_file()){continue}
+   let name=file.file_name().to_string_lossy().into_owned();
+   let partial=name.strip_prefix("NetPulse-Setup.").and_then(|s|s.strip_suffix(".partial")).is_some_and(|s|uuid::Uuid::parse_str(s).is_ok());
+   if partial||(name=="NetPulse-Setup.exe"&&version(&tag)<=version(current)){std::fs::remove_file(file.path()).map_err(|e|Error::io("update-cleanup",e))?;removed+=1}
+  }
+  let _=std::fs::remove_dir(item.path());
+ }
+ Ok(removed)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,6 +274,8 @@ mod tests {
         assert!(version("2.0.0-alpha.10") > version("2.0.0-alpha.6"));
         assert!(version("2.0.0") > version("2.0.0-rc.9"));
         assert!(version("../../x").is_none());
+        assert!(version("1.0.0-beta").is_some());
+        assert!(parse(&serde_json::json!({"tag_name":"v3.0.4","assets":[]})).is_err());
         let mut r = Release {
             tag: "v2.0.0-alpha.7".into(),
             page: format!("https://github.com/{REPOSITORY}/releases/tag/v2.0.0-alpha.7"),
@@ -265,6 +289,21 @@ mod tests {
         assert!(validate(&r).is_ok());
         r.url = "https://example.com/installer.exe".into();
         assert!(validate(&r).is_err());
+    }
+    #[test]
+    fn qt_channel_excludes_legacy_and_requires_official_installer_digest() {
+        let mut metadata=serde_json::json!({"tag_name":"v3.0.4","html_url":format!("https://github.com/{REPOSITORY}/releases/tag/v3.0.4"),"prerelease":true,"assets":[{"name":"NetPulse-Setup.exe","state":"uploaded","browser_download_url":format!("https://github.com/{REPOSITORY}/releases/download/v3.0.4/NetPulse-Setup.exe"),"digest":format!("sha256:{}","a".repeat(64)),"size":2048}]});
+        assert!(parse(&metadata).is_err());
+        metadata["assets"].as_array_mut().unwrap().push(serde_json::json!({"name":"netpulse-qt-update-v1.json","state":"uploaded"}));
+        assert!(parse(&metadata).is_ok());
+        metadata["assets"][0]["digest"]=serde_json::json!(null);
+        assert!(parse(&metadata).is_err());
+    }
+    #[test]
+    fn cleanup_preserves_newer_installers_and_unrelated_files() {
+        let d=tempfile::tempdir().unwrap();let old=d.path().join("updates/v1.0.0-beta");let new=d.path().join("updates/v1.1.0-beta");std::fs::create_dir_all(&old).unwrap();std::fs::create_dir_all(&new).unwrap();
+        std::fs::write(old.join("NetPulse-Setup.exe"),b"old").unwrap();std::fs::write(old.join("notes.txt"),b"keep").unwrap();std::fs::write(new.join("NetPulse-Setup.exe"),b"new").unwrap();std::fs::write(new.join(format!("NetPulse-Setup.{}.partial",uuid::Uuid::new_v4())),b"partial").unwrap();
+        assert_eq!(cleanup(d.path(),"1.0.0-beta").unwrap(),2);assert!(old.join("notes.txt").exists());assert!(new.join("NetPulse-Setup.exe").exists());
     }
     #[test]
     fn altered_cached_installer_is_rejected() {

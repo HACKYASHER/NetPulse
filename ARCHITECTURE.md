@@ -17,7 +17,7 @@ netpulsed.exe — Rust NetworkCore, SQLite and DPAPI
 
 The C++ client starts only the bundled controller using an absolute path. It
 does not start a shell or local HTTP server. Inherited stdin/stdout belong to
-the parent QProcess. `backend/commands.json` lists 64 typed commands adapted
+the parent QProcess. `backend/commands.json` lists 68 typed commands adapted
 from NetPulse 3.0.4. Frames are limited to 12 MiB and concurrent execution to
 eight requests. Method names use an explicit allowlist, not shell interpretation.
 
@@ -35,7 +35,10 @@ managed engines. Input EOF also requests cleanup. The retained independent
 watchdog uses an encrypted journal; engine processes belong to a Windows Job.
 Full physical adapter recovery still needs elevated Windows validation.
 
-TUN service management is explicit and uses standard UAC. The service retains
+The installer offers update, repair and uninstall, preserving user data. It
+attempts TUN service installation by default through standard UAC; portable
+users can install or repair the service from Network. Service management uses
+the same verified helper. The service retains
 typed requests, SID/PID checks, pipe ACLs, a protected directory and independent
 engine hash validation. Separate identities prevent replacing the old service:
 
@@ -59,6 +62,18 @@ validation and application logic.
 ## Migration scope
 
 The application layer is C++/Qt; the retained network layer is Rust. QML replaces
-the React screens. Advanced options remain available through a JSON editor;
-some specialized editors and charts are deferred. The old client update channel
-is disconnected so it cannot replace the new edition with a legacy installer.
+the React screens. Network forms cover DNS, MTU, TLS/SNI, fragmentation and Mux;
+the validated JSON editor remains available for less common options. Application
+routes use EXE basenames, with discovery paths retained separately for icons.
+`routing-apps.json` is a portable rules copy alongside the authoritative database.
+
+Client updates require the native Qt channel marker and an official GitHub
+installer digest, excluding the archived legacy release. Managed ZIP caches,
+interrupted downloads and obsolete client installers are cleaned up; the previous
+engine bundle remains available for rollback.
+
+MTU comparison is user initiated and restricted to the active owned TUN session.
+It benchmarks bounded HTTPS payloads, repeats the leading candidate, checks the
+original baseline again, then restores MTU. A recovery journal handles interrupted
+tests without replacing unrelated preferences. Applying a recommendation is
+explicit; the measurements do not establish a universal or game-UDP optimum.

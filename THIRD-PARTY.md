@@ -22,3 +22,5 @@ Tauri/React/WebView2 notices are preserved in the license archive for provenance
 these are not dependencies of the new executable.
 
 NetPulse source is GPL-3.0-or-later. See `LICENSE.txt`.
+
+Country flags: [flag-icons 7.5.0](https://github.com/lipis/flag-icons/tree/v7.5.0), MIT license. Full license: `licenses/flag-icons.txt`.

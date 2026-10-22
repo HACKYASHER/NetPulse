@@ -14,7 +14,11 @@ fn prepare(directory: &Path, resources: &Path, isolated: bool) -> Result<AppStat
     if !isolated {
         let _ = netpulse_core::proxy_recovery::recover_stale(&directory.join("recovery"));
     }
+    let _=netpulse_core::core_releases::cleanup_stages(directory);
+    let _=netpulse_core::core_releases::cleanup_downloads(&directory.join("core-downloads"));
+    let _=netpulse_core::client_updates::cleanup(directory,env!("CARGO_PKG_VERSION"));
     let store=Store::open(&directory.join("netpulse.db"))?;
+    if let Err(e)=netpulse_core::mtu_tuning::recover(&store){let _=store.log("WARNING","Network",&e.stage,&e.code,&e.message);}
     let preferences=store.preferences()?.for_startup();
     store.save_preferences(&preferences)?;
     let core=Arc::new(Mutex::new(NetworkCore::new(store,engine::installed_engine(directory))?));
@@ -62,6 +66,12 @@ fn prepare(directory: &Path, resources: &Path, isolated: bool) -> Result<AppStat
 
 fn run() -> Result<()> {
     let args=std::env::args_os().collect::<Vec<_>>();
+    if args.get(1).is_some_and(|v|v=="--installer-service-install") {
+        let executable=std::env::current_exe().map_err(|e|Error::io("installer",e))?;
+        let root=executable.parent().unwrap();
+        let installed=netpulse_core::service::installation_status()?.installed;
+        return netpulse_core::service::elevated_install(&root.join("NetPulseService.exe"),&root.join("cores"),true,installed);
+    }
     if args.get(1).is_some_and(|v|v=="--installer-service-remove") {
         if netpulse_core::service::installation_status()?.installed {
             let executable=std::env::current_exe().map_err(|e|Error::io("installer",e))?;

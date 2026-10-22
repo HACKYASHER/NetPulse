@@ -699,7 +699,7 @@ mod tests {
         unsafe { CloseHandle(handle) };
     }
     #[test]
-    fn rules_use_paths_and_no_plain_config() {
+    fn rules_use_executable_names_and_no_plain_config() {
         let p = crate::imports::parse_uri("socks5://127.0.0.1:1080").unwrap();
         let prefs = Preferences {
             route_mode: RouteMode::Whitelist,
@@ -711,7 +711,7 @@ mod tests {
         assert_eq!(c["route"]["final"], "direct");
         assert_eq!(
             c["route"]["rules"][2]["process_path_regex"][0],
-            r"(?i)^C:[\\/]Apps[\\/]Telegram\.exe$"
+            r"(?i)(?:^|[\\/])telegram\.exe$"
         );
         assert_eq!(c["inbounds"][1]["type"], "tun");
     }

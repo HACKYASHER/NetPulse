@@ -16,13 +16,13 @@ Button {
     contentItem: Text {
         textFormat: Text.PlainText
         text: control.text; font: control.font
-        color: control.primary ? "#ffffff" : control.danger ? "#f08393" : control.palette.text
+        color: control.primary ? "#ffffff" : control.danger ? (control.appWindow && control.appWindow.light ? "#a52b43" : "#f5a0ae") : control.palette.text
         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
     }
     background: Rectangle {
         radius: 10
-        color: control.primary ? (control.down ? "#6855dc" : control.hovered ? "#9888ff" : "#8775ff")
+        color: control.primary ? (control.down ? "#4f37b3" : control.hovered ? "#755bd5" : control.appWindow && control.appWindow.light ? "#6047ce" : "#7058d5")
              : control.hovered ? control.palette.mid : control.palette.button
         border.color: control.primary ? "transparent" : control.palette.mid
         border.width: 1

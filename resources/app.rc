@@ -9,7 +9,7 @@ BEGIN
   BEGIN
     BLOCK "040904B0"
     BEGIN
-      VALUE "FileDescription", "NetPulse Native Qt Client\0"
+      VALUE "FileDescription", "NetPulse VPN Client\0"
       VALUE "FileVersion", "1.0.0 beta\0"
       VALUE "ProductName", "NetPulse\0"
       VALUE "ProductVersion", "1.0.0 beta\0"

@@ -6,6 +6,12 @@ use serde_json::Value;
 #[derive(Serialize)]
 pub struct Process {
     pub pid: u32,
+    pub parent_pid: u32,
+    pub sockets: Option<usize>,
+    pub engine_connections: usize,
+    pub upload: Option<u64>,
+    pub download: Option<u64>,
+    pub route: String,
     pub name: String,
     pub path: String,
 }
@@ -32,10 +38,8 @@ pub struct Analysis {
     pub truncated: bool,
 }
 fn text(v: &Value, key: &str) -> String {
-    v[key]
-        .as_str()
-        .unwrap_or("")
-        .chars()
+    let value=v[key].as_str().map(str::to_owned).or_else(||v[key].as_u64().map(|n|n.to_string())).unwrap_or_default();
+    value.chars()
         .filter(|c| !c.is_control())
         .take(512)
         .collect()
@@ -131,6 +135,7 @@ pub fn processes() -> Result<Vec<Process>> {
         ..Default::default()
     };
     let mut rows = Vec::new();
+    let counts = network_counts().ok();
     let mut next = unsafe { Process32FirstW(snap, &mut entry) };
     while next != 0 && rows.len() < 4096 {
         if let Some(path) = process_path(entry.th32ProcessID) {
@@ -141,6 +146,9 @@ pub fn processes() -> Result<Vec<Process>> {
                 .into_owned();
             rows.push(Process {
                 pid: entry.th32ProcessID,
+                parent_pid:entry.th32ParentProcessID,
+                sockets:counts.as_ref().map(|v|*v.get(&entry.th32ProcessID).unwrap_or(&0)),
+                engine_connections:0,upload:None,download:None,route:String::new(),
                 name,
                 path,
             });
@@ -158,6 +166,28 @@ pub fn processes() -> Result<Vec<Process>> {
     Ok(vec![])
 }
 
+/// Attribute only observed core counters. Missing counters remain unknown.
+pub fn attach_network(processes:&mut [Process],connections:&[Connection]) {
+ for c in connections {
+  let index=c.pid.and_then(|pid|processes.iter().position(|p|p.pid==pid))
+   .or_else(||(!c.process.is_empty()).then(||processes.iter().position(|p|p.path.eq_ignore_ascii_case(&c.process))).flatten());
+  if let Some(i)=index { let p=&mut processes[i]; p.engine_connections+=1;
+   if let Some(v)=c.upload {p.upload=Some(p.upload.unwrap_or(0).saturating_add(v))}
+   if let Some(v)=c.download {p.download=Some(p.download.unwrap_or(0).saturating_add(v))}
+   if !c.route.is_empty() {if p.route.is_empty(){p.route=c.route.clone()}else if p.route!=c.route{p.route="mixed".into()}}
+  }
+ }
+}
+#[cfg(windows)]
+fn network_counts()->Result<std::collections::HashMap<u32,usize>> {
+ use windows_sys::Win32::{NetworkManagement::IpHelper::*,Networking::WinSock::{AF_INET,AF_INET6}};
+ let mut counts=std::collections::HashMap::new();
+ for r in table::<MIB_TCPROW_OWNER_PID>(AF_INET as u32,true)? {if ![1,2,12].contains(&r.dwState){*counts.entry(r.dwOwningPid).or_insert(0)+=1}}
+ for r in table::<MIB_TCP6ROW_OWNER_PID>(AF_INET6 as u32,true)? {if ![1,2,12].contains(&r.dwState){*counts.entry(r.dwOwningPid).or_insert(0)+=1}}
+ for r in table::<MIB_UDPROW_OWNER_PID>(AF_INET as u32,false)? {*counts.entry(r.dwOwningPid).or_insert(0)+=1}
+ for r in table::<MIB_UDP6ROW_OWNER_PID>(AF_INET6 as u32,false)? {*counts.entry(r.dwOwningPid).or_insert(0)+=1}
+ Ok(counts)
+}
 #[cfg(windows)]
 fn table<T: Copy>(family: u32, tcp: bool) -> Result<Vec<T>> {
     use windows_sys::Win32::{
@@ -358,6 +388,17 @@ pub fn sockets(_pid: u32, _path: &str) -> Result<(bool, Vec<Connection>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn numeric_ports_and_network_attribution_are_preserved() {
+        let v=serde_json::json!({"connections":[{"id":"one","metadata":{"processPath":r"C:\Apps\app.exe","pid":42,"network":"tcp","sourceIP":"127.0.0.1","sourcePort":12000,"destinationIP":"203.0.113.1","destinationPort":443},"upload":12,"download":34,"chains":["proxy"]}]});
+        let connections=core_connections(&v,"");
+        assert_eq!(connections[0].local,"127.0.0.1:12000");
+        assert_eq!(connections[0].destination,"203.0.113.1:443");
+        let mut processes=vec![Process{pid:42,parent_pid:1,name:"app.exe".into(),path:r"C:\Apps\app.exe".into(),sockets:Some(1),engine_connections:0,upload:None,download:None,route:String::new()}];
+        attach_network(&mut processes,&connections);
+        assert_eq!(processes[0].upload,Some(12));assert_eq!(processes[0].download,Some(34));assert_eq!(processes[0].engine_connections,1);
+    }
+
     #[test]
     fn metadata_is_bounded_filtered_and_never_forwards_unknown_fields() {
         let v = serde_json::json!({"connections":[{"id":"one","metadata":{"processPath":"C:\\App.exe","host":"fixture.test","network":"tcp","destinationPort":"443","password":"secret"},"upload":10,"download":20,"chains":["proxy"]},{"id":"two","metadata":{"processPath":"C:\\Other.exe"}}]});

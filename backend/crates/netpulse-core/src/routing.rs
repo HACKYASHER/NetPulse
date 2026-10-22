@@ -149,7 +149,7 @@ mod tests {
         assert_eq!(restored.mtu, 1400);
         assert_eq!(restored.accent, base.accent);
         assert_eq!(restored.bypass_domains, ["example.com"]);
-        assert_eq!(restored.applications, source.applications);
+        assert_eq!(restored.applications, ["test.exe"]);
         assert_eq!(restored.route_mode, RouteMode::Whitelist);
         let mut bad = serde_json::to_value(RoutingSettings::from_preferences(&source)).unwrap();
         bad["version"] = 99.into();

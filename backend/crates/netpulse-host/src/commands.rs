@@ -46,7 +46,7 @@ async fn with_core<T: Send + 'static>(
         return Err(Error::new(
             "RuntimePreparing",
             "startup",
-            "РЇРґСЂР° РµС‰С‘ РїСЂРѕРІРµСЂСЏСЋС‚СЃСЏ. Р”РѕР¶РґРёС‚РµСЃСЊ Р·Р°РІРµСЂС€РµРЅРёСЏ РїСЂРѕРІРµСЂРєРё.",
+            "Ядра ещё проверяются. Дождитесь завершения проверки.",
         ));
     }
     let core = s.core.clone();
@@ -163,7 +163,7 @@ async fn connect(state: host::State<'_, AppState>, id: String) -> Result<Snapsho
             return Err(Error::new(
                 "ConnectionModeRequired",
                 "connect-mode",
-                "Р’РєР»СЋС‡РёС‚Рµ TUN Рё/РёР»Рё System Proxy РїРµСЂРµРґ РїРѕРґРєР»СЋС‡РµРЅРёРµРј",
+                "Включите TUN и/или System Proxy перед подключением",
             ));
         }
         c.connect(&id)
@@ -190,7 +190,7 @@ async fn log_days(state: host::State<'_, AppState>) -> Result<Vec<String>> {
             Error::new(
                 "LogReadFailed",
                 "audit-days",
-                "РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ РєР°С‚Р°Р»РѕРі Р¶СѓСЂРЅР°Р»РѕРІ",
+                "Не удалось прочитать каталог журналов",
             )
         })?
 }
@@ -204,7 +204,7 @@ async fn log_read(
         netpulse_core::audit::read(&directory, &day, &category)
     })
     .await
-    .map_err(|_| Error::new("LogReadFailed", "audit-read", "РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ Р¶СѓСЂРЅР°Р»"))?
+    .map_err(|_| Error::new("LogReadFailed", "audit-read", "Не удалось прочитать журнал"))?
 }
 async fn profile_transport(
     state: host::State<'_, AppState>,
@@ -247,16 +247,13 @@ async fn save_profile_json(
     })
     .await
 }
-async fn playground_processes() -> Result<Vec<netpulse_core::playground::Process>> {
-    host::async_runtime::spawn_blocking(netpulse_core::playground::processes)
-        .await
-        .map_err(|_| {
-            Error::new(
-                "ProcessListFailed",
-                "playground",
-                "РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ СЃРїРёСЃРѕРє РїСЂРѕС†РµСЃСЃРѕРІ",
-            )
-        })?
+async fn playground_processes(state:host::State<'_,AppState>) -> Result<Vec<netpulse_core::playground::Process>> {
+    let request=with_core(&state,"playground-processes",|c|c.analysis_request(None,String::new())).await?;
+    host::async_runtime::spawn_blocking(move || {
+        let mut processes=netpulse_core::playground::processes()?;
+        if let Ok(sample)=request.run(){netpulse_core::playground::attach_network(&mut processes,&sample.connections);}
+        Ok(processes)
+    }).await.map_err(|_|Error::new("ProcessListFailed","playground","Не удалось прочитать сетевую активность процессов"))?
 }
 async fn connection_analysis(
     state: host::State<'_, AppState>,
@@ -273,7 +270,7 @@ async fn connection_analysis(
             Error::new(
                 "AnalysisFailed",
                 "playground",
-                "РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ СЃРѕРµРґРёРЅРµРЅРёСЏ",
+                "Не удалось прочитать соединения",
             )
         })?
 }
@@ -492,7 +489,7 @@ fn decode_qr(bytes: &[u8]) -> Result<Zeroizing<String>> {
     Err(Error::new(
         "QrNotFound",
         "qr-read",
-        "QR-РєРѕРґ РЅРµ СЂР°СЃРїРѕР·РЅР°РЅ. Р’С‹Р±РµСЂРёС‚Рµ РёСЃС…РѕРґРЅРѕРµ РёР·РѕР±СЂР°Р¶РµРЅРёРµ, СЃРѕС…СЂР°РЅРёРІ РїРѕР»СЏ РІРѕРєСЂСѓРі РєРѕРґР°.",
+        "QR-код не распознан. Выберите исходное изображение, сохранив поля вокруг кода.",
     ))
 }
 fn copy_log_text(text: String) -> Result<()> {
@@ -509,7 +506,7 @@ async fn copy_event(state: host::State<'_, AppState>, id: String) -> Result<bool
     with_core(&state, "copy_event", move |c| {
         let event = c.store.event(&id)?;
         copy_clipboard(&serde_json::to_string_pretty(&event).map_err(|_| {
-            Error::new("CopyFailed", "event-copy", "РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРіРѕС‚РѕРІРёС‚СЊ СЃРѕР±С‹С‚РёРµ")
+            Error::new("CopyFailed", "event-copy", "Не удалось подготовить событие")
         })?)?;
         Ok(true)
     })
@@ -518,7 +515,7 @@ async fn copy_event(state: host::State<'_, AppState>, id: String) -> Result<bool
 fn copy_ip(ip: String) -> Result<bool> {
     let ip = ip
         .parse::<std::net::IpAddr>()
-        .map_err(|_| Error::new("InvalidIp", "ip-copy", "РќРµРІРµСЂРЅС‹Р№ IP Р°РґСЂРµСЃ"))?;
+        .map_err(|_| Error::new("InvalidIp", "ip-copy", "Неверный IP адрес"))?;
     copy_clipboard(&ip.to_string())?;
     Ok(true)
 }
@@ -628,7 +625,7 @@ async fn import_routing() -> Result<Option<netpulse_core::routing::RoutingSettin
         Error::new(
             "RoutingImportFailed",
             "routing-import",
-            "РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ С„Р°Р№Р»",
+            "Не удалось открыть файл",
         )
     })?
 }
@@ -649,7 +646,7 @@ async fn export_routing(routing: netpulse_core::routing::RoutingSettings) -> Res
             Error::new(
                 "RoutingExportFailed",
                 "routing-export",
-                "РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРіРѕС‚РѕРІРёС‚СЊ РЅР°СЃС‚СЂРѕР№РєРё",
+                "Не удалось подготовить настройки",
             )
         })?;
         std::fs::write(path, bytes).map_err(|e| Error::io("routing-export", e))?;
@@ -660,7 +657,7 @@ async fn export_routing(routing: netpulse_core::routing::RoutingSettings) -> Res
         Error::new(
             "RoutingExportFailed",
             "routing-export",
-            "РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ С„Р°Р№Р»",
+            "Не удалось сохранить файл",
         )
     })?
 }
@@ -694,12 +691,14 @@ async fn save_preferences(
     preferences: Preferences,
 ) -> Result<bool> {
     state.diagnostics.cancel_all();
+    let isolated = state.startup_smoke;
     with_core(&state, "save_preferences", move |c| {
+        preferences.clone().normalized().validate()?;
         let old = c.store.preferences()?;
-        if old.autostart != preferences.autostart {
+        if !isolated && old.autostart != preferences.autostart {
             desktop::autostart(preferences.autostart)?;
         }
-        let autostart_changed = old.autostart != preferences.autostart;
+        let autostart_changed = !isolated && old.autostart != preferences.autostart;
         if let Err(e) = c.apply_preferences(preferences) {
             if autostart_changed {
                 let _ = desktop::autostart(old.autostart);
@@ -795,7 +794,9 @@ async fn active_latency(
         ))
     })
     .await?;
-    let method = prefs.ping_method.clone();
+    let mut prefs=prefs;
+    prefs.ping_proxy_mode="keepalive".into();
+    let method = "proxy_https_rtt".to_string();
     host::async_runtime::spawn_blocking(move || {
         netpulse_core::diagnostics::latency_on_route(
             profile,
@@ -837,7 +838,7 @@ async fn update_core(
             return Err(Error::new(
                 "ConnectionInUse",
                 "core-update",
-                "РћС‚РєР»СЋС‡РёС‚Рµ VPN РїРµСЂРµРґ РѕР±РЅРѕРІР»РµРЅРёРµРј СЏРґСЂР°",
+                "Отключите VPN перед обновлением ядра",
             ));
         }
         let profiles = c
@@ -955,7 +956,7 @@ async fn start_latency(
         return Err(Error::new(
             "InvalidLatencyTest",
             "latency-start",
-            "Select 1вЂ“2000 profiles and a valid measurement method",
+            "Select 1–2000 profiles and a valid measurement method",
         ));
     }
     let (profiles, prefs, path) = with_core(&state, "start_latency", move |c| {
@@ -1015,7 +1016,7 @@ async fn start_latency(
                 }
             })
         }));
-        jobs.finish(&id, work.err().map(|_|Error::new("DiagnosticWorkerFailed","latency-job","РџСЂРѕРІРµСЂРєР° РѕСЃС‚Р°РЅРѕРІР»РµРЅР° РёР·-Р·Р° РѕС€РёР±РєРё СЂР°Р±РѕС‡РµРіРѕ РїСЂРѕС†РµСЃСЃР°; РјРѕР¶РЅРѕ Р·Р°РїСѓСЃС‚РёС‚СЊ РµС‘ РїРѕРІС‚РѕСЂРЅРѕ")));
+        jobs.finish(&id, work.err().map(|_|Error::new("DiagnosticWorkerFailed","latency-job","Проверка остановлена из-за ошибки рабочего процесса; можно запустить её повторно")));
     });
     Ok(result_id)
 }
@@ -1265,7 +1266,7 @@ async fn public_ips(
             Error::new(
                 "PublicIpFailed",
                 "public-ip",
-                "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РІРµСЂС€РёС‚СЊ РїСЂРѕРІРµСЂРєСѓ IP",
+                "Не удалось завершить проверку IP",
             )
         })
 }
@@ -1349,3 +1350,28 @@ async fn delete_local_data(state: host::State<'_, AppState>) -> Result<()> {
 
 
 
+
+async fn check_client_update() -> Result<serde_json::Value> {
+    let result=host::async_runtime::spawn_blocking(||netpulse_core::client_updates::check(env!("CARGO_PKG_VERSION"))).await
+        .map_err(|_|Error::new("UpdateTaskFailed","client-update","Update check failed"))?;
+    Ok(match result { Ok(release)=>serde_json::json!({"release":release,"checked_at":netpulse_core::store::now()}),
+        Err(error)=>serde_json::json!({"error":error}) })
+}
+async fn download_client_update(state:host::State<'_,AppState>, release:netpulse_core::client_updates::Release)->Result<()> {
+    let directory=state.data_dir.clone();
+    host::async_runtime::spawn_blocking(move ||netpulse_core::client_updates::download(&directory,&release)).await
+        .map_err(|_|Error::new("UpdateTaskFailed","client-update","Download task failed"))?
+}
+async fn install_client_update(state:host::State<'_,AppState>, release:netpulse_core::client_updates::Release)->Result<()> {
+    let directory=state.data_dir.clone();
+    let path=host::async_runtime::spawn_blocking(move || {
+        netpulse_core::client_updates::revalidate(&release)?;
+        netpulse_core::client_updates::verify_download(&directory,&release)
+    }).await.map_err(|_|Error::new("UpdateTaskFailed","client-update","Verification failed"))??;
+    with_core(&state,"client-update",|c|c.disconnect().map(|_|())).await?;
+    let mut command=std::process::Command::new(path);
+    command.arg("/WAITFORCLIENT");
+    #[cfg(windows)] { use std::os::windows::process::CommandExt; command.creation_flags(0x08000000); }
+    command.spawn().map_err(|e|Error::io("client-update-install",e))?;
+    Ok(())
+}

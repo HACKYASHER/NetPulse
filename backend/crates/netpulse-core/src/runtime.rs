@@ -137,8 +137,12 @@ impl RuntimePlan {
                 if let Ok(view) = crate::routes::inspect()
                     && !crate::routes::interface_has_ipv6_default(&view, &interface)
                 {
-                    // Prefer IPv4 for direct domains on this physical interface.
-                    // Keep IPv6-only answers available; literal IPv6 needs a usable route.
+                    // Windows may advertise an IPv6-capable TUN while the physical
+                    // adapter has no IPv6 route. Do not hand TUN clients unusable
+                    // AAAA answers: their direct flows cannot leave this adapter.
+                    if prefs.effective_tun() && !prefs.fake_ip {
+                        config["dns"]["strategy"] = json!("ipv4_only");
+                    }
                     config["outbounds"][1]["domain_resolver"] =
                         json!({"server":"bootstrap","strategy":"prefer_ipv4"});
                 }
@@ -160,7 +164,7 @@ impl RuntimePlan {
         if use_xray && prefs.effective_tun() {
             // Xray's transport sockets must leave through the physical NIC. If
             // captured by our TUN, route only this pinned bridge process direct.
-            config["route"]["rules"].as_array_mut().unwrap().insert(0,json!({"process_path_regex":crate::app_rules::process_patterns(&[xray_path.to_string_lossy().into_owned()]),"action":"route","outbound":"direct"}));
+            config["route"]["rules"].as_array_mut().unwrap().insert(0,json!({"process_path_regex":crate::app_rules::exact_process_patterns(&[xray_path.to_string_lossy().into_owned()]),"action":"route","outbound":"direct"}));
         }
         Ok(Self {
             config,

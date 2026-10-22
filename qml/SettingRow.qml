@@ -14,5 +14,5 @@ RowLayout {
         Label { textFormat: Text.PlainText; text: row.title; font.pixelSize: 14; font.weight: Font.DemiBold; color: ApplicationWindow.window.textColor }
         Label { textFormat: Text.PlainText; text: row.description; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 12; color: ApplicationWindow.window.mutedColor }
     }
-    Switch { id: toggle; onToggled: row.toggled(checked) }
+    Toggle { id: toggle; onToggled: row.toggled(checked) }
 }
