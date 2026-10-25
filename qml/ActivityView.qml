@@ -99,6 +99,7 @@ ColumnLayout {
         sourceKey: view.displayedSource
         follow: view.follow
         emptyText: view.tr("В выбранном журнале пока нет записей", "No entries in this journal yet")
+        onReadingStarted: view.follow=false
         onCopyRequested: function(text) { view.bridge.copyText(text); view.appWindow.toast(view.tr("Скопировано", "Copied")) }
     }
 }

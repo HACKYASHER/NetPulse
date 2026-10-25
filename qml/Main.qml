@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "LogText.js" as LogText
 
 ApplicationWindow {
     id: win
@@ -61,7 +62,7 @@ ApplicationWindow {
     property int smokeStep: 0
     property string smokeFrame: "overview"
     property string smokeCaptured: ""
-    property var smokeSequence: [{page:0,name:"overview"},{page:1,name:"servers"},{page:2,name:"routing"},{page:3,tab:0,name:"connection"},{page:3,tab:1,name:"dns"},{page:3,tab:2,name:"mtu"},{page:3,tab:3,name:"tls"},{page:3,tab:4,name:"transport"},{page:3,tab:5,name:"service"},{page:3,tab:6,name:"engines"},{page:3,tab:7,name:"sniffing"},{page:4,name:"diagnostics"},{page:5,name:"playground"},{page:6,name:"activity"},{page:7,name:"settings"},{page:0,dialog:"mode",name:"connection-mode"},{page:1,dialog:"import",name:"add-connection"},{page:4,dialog:"history",name:"measurement-history"}]
+    property var smokeSequence: [{page:0,name:"overview"},{page:1,name:"servers"},{page:2,name:"routing"},{page:3,tab:0,name:"connection"},{page:3,tab:1,name:"dns"},{page:3,tab:2,name:"mtu"},{page:3,tab:3,name:"tls"},{page:3,tab:4,name:"transport"},{page:3,tab:5,name:"service"},{page:3,tab:6,name:"engines"},{page:3,tab:7,name:"sniffing"},{page:4,name:"diagnostics"},{page:5,name:"playground"},{page:6,name:"activity"},{page:7,name:"settings"},{page:0,dialog:"server",name:"server-picker"},{page:0,dialog:"mode",name:"connection-mode"},{page:1,dialog:"import",name:"add-connection"},{page:4,dialog:"history",name:"measurement-history"}]
     property bool smokeFinished: false
     property var pages: [overviewPage, serversPage, routingPage, networkPage, diagnosticsPage, playgroundPage, activityPage, settingsPage]
     color: bgColor
@@ -174,12 +175,14 @@ ApplicationWindow {
     function displayedServer() { return snapshot.active || selected() }
     function pinned(id) { return (prefs.favorites||[]).indexOf(id)>=0 }
     function serverGroups() {
-        var groups=subscriptions.map(function(x){ return Object.assign({},x,{items:[]}) })
-        groups.push({id:"",name:tr("Отдельные серверы","Standalone servers"),items:[]})
+        var groups=subscriptions.map(function(x){ return Object.assign({},x,{items:[],total_count:0}) })
+        groups.push({id:"",name:tr("Отдельные серверы","Standalone servers"),items:[],total_count:0})
         profiles.forEach(function(p){
+            var g=groups.find(function(g){return g.id===(p.subscription_id||"")});if(!g)return
+            g.total_count++
             if ((cleanName(p.name)+" "+p.host+" "+p.protocol).toLowerCase().indexOf(profileSearch.toLowerCase())<0) return
             if(sourceFilter!=="all" && (p.subscription_id||"")!==sourceFilter) return
-            var g=groups.find(function(g){return g.id===(p.subscription_id||"")});if(g)g.items.push(p)
+            g.items.push(p)
         })
         groups.forEach(function(g){g.items.sort(function(a,b){
             var pins=Number(pinned(b.id))-Number(pinned(a.id));if(pins)return pins
@@ -209,7 +212,11 @@ ApplicationWindow {
         return result.filter(function(a){return (a.name+" "+exe(a.path)).toLowerCase().indexOf(appSearch.toLowerCase())>=0})
     }
     function editSubscription(sub) { subEdit.sub=sub;subEditName.text=sub.name;subEditHours.value=sub.interval_hours;subEditProtect.checked=sub.url_protected;subEditLock.checked=sub.config_locked;subEdit.open() }
-    function logMessage(event) { return new Date(event.timestamp*1000).toLocaleString()+"  ["+event.level+"]  "+event.subsystem+" / "+event.code+"  "+backend.readableText(event.message) }
+    function logMessage(event) {
+        var message=backend.readableText(event.message)
+        var hint=(event.level==="ERROR"||event.level==="WARNING"||event.level==="WARN")?LogText.hint(message,prefs.language!=="en"):""
+        return new Date(event.timestamp*1000).toLocaleString()+"  ["+event.level+"]  "+event.subsystem+" / "+event.code+"  "+message+(hint?"\n    ↳ "+hint:"")
+    }
     function resultText(r) {
         if(r.comparison)return r.comparison.suggested_mtu?tr("Лучший результат: MTU ","Best result: MTU ")+r.comparison.suggested_mtu:tr("MTU: убедительного улучшения нет","MTU: no reliable improvement")
         if(r.avg_ms!==undefined)return tr("Задержка: ","Latency: ")+(r.avg_ms===null?"—":Number(r.avg_ms).toFixed(1)+" ms")+"   "+r.successes+" / "+(r.successes+r.failures+r.timeouts)+tr(" успешно"," successful")+"   "+r.method
@@ -274,11 +281,13 @@ ApplicationWindow {
         if(pageLoader.status!==Loader.Ready||smokeCaptured!==smokeFrame)return
         smokeCaptured=""
         modeDialog.close();importDialog.close();historyDialog.close()
+        if(pageLoader.item&&pageLoader.item.closeServerPicker)pageLoader.item.closeServerPicker()
         smokeStep++
         if(smokeStep>=smokeSequence.length){stop();page=0;smokePages=8;smokeFinished=true;return}
         var step=smokeSequence[smokeStep];page=step.page
         Qt.callLater(function(){
             if(step.tab!==undefined&&pageLoader.item)pageLoader.item.tab=step.tab
+            if(step.dialog==="server"&&pageLoader.item)pageLoader.item.openServerPicker()
             if(step.dialog==="mode")modeDialog.open()
             if(step.dialog==="import")importDialog.open()
             if(step.dialog==="history"){historyDialog.open();historyDialog.load()}
@@ -328,7 +337,7 @@ ApplicationWindow {
                     Layout.fillWidth: true; implicitHeight: 64
                     RowLayout { anchors.fill: parent; anchors.margins: 12; spacing: 9
                         Rectangle { width: 7; height: 7; radius: 4; color: modelData.engine_ready ? "#6bd9b0" : "#e0b86d" }
-                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.1 beta"; font.pixelSize: 10; color: mutedColor } }
+                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.2 beta"; font.pixelSize: 10; color: mutedColor } }
                     }
                 }
             }
@@ -371,6 +380,8 @@ ApplicationWindow {
     Component {
         id: overviewPage
         ColumnLayout {
+            function openServerPicker(){quickServer.clicked()}
+            function closeServerPicker(){quickServer.closePicker()}
             spacing: 18
             Card {
                 Layout.fillWidth: true; implicitHeight: heroContents.implicitHeight+42
@@ -392,7 +403,7 @@ ApplicationWindow {
                         }
                         Button {
                             id: powerButton; objectName: "overviewPower"; Layout.preferredWidth: 166; Layout.preferredHeight: 94
-                            enabled: backend.ready&&!busy("connect")&&!busy("disconnect")&&!busy("quick_network")&&!savingPreferences&&!(job&&job.running&&job.kind==="mtu_tuning")
+                            enabled: backend.ready&&!busy("select_profile")&&!busy("connect")&&!busy("disconnect")&&!busy("quick_network")&&!savingPreferences&&!(job&&job.running&&job.kind==="mtu_tuning")
                             contentItem: Column { spacing: 5; anchors.centerIn: parent
                                 Label { anchors.horizontalCenter: parent.horizontalCenter; text: "⏻"; font.pixelSize: 34; color: powerButton.enabled ? "#111122" : mutedColor }
                                 Label { anchors.horizontalCenter: parent.horizontalCenter; text: snapshot.engine_pid?tr("Отключиться","Disconnect"):tr("Подключиться","Connect"); font.pixelSize: 13; font.bold: true; color: powerButton.enabled ? "#111122" : mutedColor }
@@ -403,14 +414,21 @@ ApplicationWindow {
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: borderColor }
                     RowLayout { Layout.fillWidth: true; spacing: 12
-                        ActionButton { appWindow: win; text: tr("Выбрать сервер","Choose server"); onClicked: showServers() }
+                        ServerPicker {
+                            id: quickServer; objectName: "overviewServerPicker"
+                            appWindow: win; profiles: win.profiles; selectedProfile: displayedServer()
+                            Layout.preferredWidth: 280; Layout.minimumWidth: 200; Layout.maximumWidth: 280; Layout.alignment: Qt.AlignBottom
+                            busy: win.busy("select_profile")||win.busy("connect")||win.busy("disconnect")||win.busy("quick_network")||savingPreferences||!!(job&&job.running)
+                            onChosen: function(id){call("select_profile",{id:id},function(){quickServer.closePicker()})}
+                            onManageRequested: showServers()
+                        }
                         ColumnLayout { spacing: 4; Layout.preferredWidth: 170
                             Label { text: tr("Ядро","Engine"); color: mutedColor; font.pixelSize: 11 }
-                            Choice { appWindow: win; id: overviewEngine; objectName: "overviewEngine"; Layout.fillWidth: true; Layout.maximumWidth: 170; implicitWidth: 170; model: [tr("Авто","Auto"),"sing-box","Xray"]; values: ["auto","sing-box","xray"]; currentIndex: Math.max(0,values.indexOf(prefs.transport_engine||"auto")); enabled: !busy("quick_network")&&!savingPreferences&&!(job&&job.running); onActivated: { call("quick_network",{transport_engine:selectedValue});currentIndex=Qt.binding(function(){return Math.max(0,overviewEngine.values.indexOf(prefs.transport_engine||"auto"))}) } }
+                            Choice { appWindow: win; id: overviewEngine; objectName: "overviewEngine"; implicitHeight: 44; Layout.fillWidth: true; Layout.maximumWidth: 170; implicitWidth: 170; model: [tr("Авто","Auto"),"sing-box","Xray"]; values: ["auto","sing-box","xray"]; currentIndex: Math.max(0,values.indexOf(prefs.transport_engine||"auto")); enabled: !busy("quick_network")&&!busy("select_profile")&&!busy("connect")&&!busy("disconnect")&&!savingPreferences&&!(job&&job.running); onActivated: { call("quick_network",{transport_engine:selectedValue});currentIndex=Qt.binding(function(){return Math.max(0,overviewEngine.values.indexOf(prefs.transport_engine||"auto"))}) } }
                         }
                         Item { Layout.fillWidth: true }
-                        Label { text: pingLabel()+" · "+(jobTimer.running&&job&&job.kind==="latency"?tr("проверка…","testing…"):pingValue()); color: mutedColor; font.pixelSize: 11 }
-                        ActionButton { appWindow: win; objectName: "overviewPingRefresh"; text: "↻"; implicitWidth: 38; enabled: !!displayedServer()&&!jobTimer.running&&!savingPreferences; ToolTip.text: tr("Обновить пинг. Тип проверки задаётся в Диагностике.","Refresh latency. Select the method in Diagnostics."); ToolTip.visible: hovered; onClicked: refreshPing() }
+                        Label { Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 15; text: pingLabel()+" · "+(jobTimer.running&&job&&job.kind==="latency"?tr("проверка…","testing…"):pingValue()); color: mutedColor; font.pixelSize: 11 }
+                        ActionButton { appWindow: win; objectName: "overviewPingRefresh"; Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 3; implicitHeight: 38; text: "↻"; implicitWidth: 38; enabled: !!displayedServer()&&!jobTimer.running&&!savingPreferences; ToolTip.text: tr("Обновить пинг. Тип проверки задаётся в Диагностике.","Refresh latency. Select the method in Diagnostics."); ToolTip.visible: hovered; onClicked: refreshPing() }
                     }
                 }
             }
@@ -634,7 +652,7 @@ ApplicationWindow {
                             SpinBox { id: sniffTimeout; from: 10; to: 1000; value: 300; editable: true; enabled: sniffEnabled.checked }
                         }
                         HelpText { text: tr("Меньшее время сокращает ожидание, но ядро может не успеть определить домен. Исключения для приложений задаются в Маршрутизации.","A shorter timeout reduces waiting but may miss the hostname. Application exceptions are configured in Routing.") }
-                        ActionButton { appWindow: win; text: tr("Сохранить Sniffing","Save Sniffing"); enabled: !savingPreferences&&!jobTimer.running; onClicked: save({sniffing:{enabled:sniffEnabled.checked,http:sniffHttp.checked,tls:sniffTls.checked,quic:sniffQuic.checked,timeout_ms:sniffTimeout.value}}) }
+                        ActionButton { appWindow: win; text: tr("Сохранить Sniffing","Save Sniffing"); enabled: !savingPreferences&&!jobTimer.running&&!busy("quick_network")&&!busy("select_profile")&&!busy("connect"); onClicked: save({sniffing:{enabled:sniffEnabled.checked,http:sniffHttp.checked,tls:sniffTls.checked,quic:sniffQuic.checked,timeout_ms:sniffTimeout.value}}) }
                     }
                 }
                 Card { visible: networkView.tab===5; Layout.fillWidth: true; implicitHeight: serviceForm.implicitHeight+40
@@ -950,7 +968,7 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: aboutColumn.implicitHeight+40
                 ColumnLayout { id: aboutColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
                     Label { textFormat: Text.PlainText; text: tr("О клиенте","About NetPulse"); color: textColor; font.pixelSize: 17; font.bold: true }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.1 beta · Windows x64"; color: textColor }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.2 beta · Windows x64"; color: textColor }
                     Label { textFormat: Text.PlainText; text: "Qt Quick · Rust · sing-box "+(modelData.engine_version||"—")+" · Xray "+(modelData.xray_version||"—"); color: mutedColor; font.pixelSize: 12 }
                     ActionButton { appWindow: win; text: "GitHub · NetPulse ↗"; onClicked: Qt.openUrlExternally("https://github.com/HACKYASHER/NetPulse") }
                 }
@@ -992,7 +1010,7 @@ ApplicationWindow {
                     }
                     HelpText { text: tr("Временные архивы ядер очищаются после установки и при следующем запуске. Незавершённые загрузки и установщики уже установленной версии тоже удаляются; предыдущий комплект ядер остаётся для отката.","Temporary engine archives are cleared after installation and on startup. Interrupted downloads and installers for the installed version are also removed; the previous engine bundle remains for rollback.") }
                     ActionButton { appWindow: win; text: tr("Редактор всех параметров…", "Edit all preferences…"); onClicked: editJson(tr("Параметры NetPulse", "NetPulse preferences"), JSON.stringify(prefs, null, 2), "save_preferences") }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.1 beta  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.2 beta  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
                 }
             }
         }

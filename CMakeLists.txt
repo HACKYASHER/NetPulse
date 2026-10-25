@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(NetPulse VERSION 1.0.1 LANGUAGES CXX)
+project(NetPulse VERSION 1.0.2 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Widgets Network Qml Quick QuickControls2 Svg)
@@ -7,7 +7,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 qt_add_executable(NetPulse WIN32 src/main.cpp src/Backend.cpp src/Backend.h resources/app.rc)
 file(GLOB NETPULSE_FLAGS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" CONFIGURE_DEPENDS resources/flags/*.svg)
 qt_add_qml_module(NetPulse URI NetPulse VERSION 1.0
-    QML_FILES qml/ServersView.qml qml/RoutingApplications.qml qml/ActivityView.qml qml/ConsoleView.qml qml/ThemedMenu.qml qml/ThemedMenuItem.qml qml/ConnectionModes.qml qml/HelpText.qml qml/Choice.qml qml/Toggle.qml qml/Flag.qml qml/AppIcon.qml qml/Main.qml qml/ActionButton.qml qml/Card.qml qml/Input.qml qml/Metric.qml qml/SettingRow.qml
+    QML_FILES qml/LogText.js qml/SubscriptionUsage.qml qml/ServerPicker.qml qml/ServersView.qml qml/RoutingApplications.qml qml/ActivityView.qml qml/ConsoleView.qml qml/ThemedMenu.qml qml/ThemedMenuItem.qml qml/ConnectionModes.qml qml/HelpText.qml qml/Choice.qml qml/Toggle.qml qml/Flag.qml qml/AppIcon.qml qml/Main.qml qml/ActionButton.qml qml/Card.qml qml/Input.qml qml/Metric.qml qml/SettingRow.qml
     RESOURCES resources/pulse.svg ${NETPULSE_FLAGS})
 target_link_libraries(NetPulse PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Svg)
 target_include_directories(NetPulse PRIVATE resources)

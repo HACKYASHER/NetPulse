@@ -1,5 +1,5 @@
 use crate::{
-    Error, Result, engine,
+    Error, Result,
     imports::ImportReport,
     model::{Preferences, Profile, ProfileSummary},
     proxy::ProxyLease,
@@ -377,8 +377,9 @@ impl NetworkCore {
             || prefs.network_preset != self.prefs.network_preset
             || prefs.fake_ip != self.prefs.fake_ip
             || prefs.routing_rules != self.prefs.routing_rules
-            || prefs.sniff_excluded_apps != self.prefs.sniff_excluded_apps
-            || prefs.sniffing != self.prefs.sniffing
+            || ((prefs.effective_tun() || self.prefs.effective_tun())
+                && (prefs.sniff_excluded_apps != self.prefs.sniff_excluded_apps
+                    || prefs.sniffing != self.prefs.sniffing))
             || prefs.fragmentation != self.prefs.fragmentation
             || prefs.multiplex != self.prefs.multiplex
             || prefs.tls_defaults != self.prefs.tls_defaults
@@ -424,7 +425,9 @@ impl NetworkCore {
         });
         self.error = None;
         let result = (|| {
-            engine::verify_engine(&self.engine_path)?;
+            // RuntimePlan::validate verifies both pinned executables and config.
+            // Hashing sing-box/cronet again here and in preflight adds disk I/O
+            // to every switch without a new trust boundary.
             if prefs.system_proxy && self.proxy.is_none() {
                 ProxyLease::check_conflict()?;
             }
@@ -454,6 +457,11 @@ impl NetworkCore {
                 [probe_port, free_port()?],
             )?;
             plan.validate(&self.engine_path)?;
+            if self.engine.is_none() || prefs.proxy_port != self.prefs.proxy_port {
+                std::net::TcpListener::bind(("127.0.0.1",prefs.proxy_port)).map_err(|_|Error::new(
+                    "ProxyPortInUse","connection-prepare",
+                    format!("Локальный порт {} занят или недоступен. Выберите другой порт в Сети → Подключение либо завершите использующее его приложение. Текущее подключение сохранено.",prefs.proxy_port)))?;
+            }
             if previous.is_some() && self.engine.is_some() {
                 self.preflight(&next, prefs)?;
             }
@@ -530,7 +538,8 @@ impl NetworkCore {
             &secret,
             [free_port()?, free_port()?],
         )?;
-        plan.validate(&self.engine_path)?;
+        // The final plan was already hash/config checked. Starting this isolated
+        // candidate validates its own config too, while the old session is alive.
         let mut candidate = plan.start(&self.engine_path)?;
         #[cfg(not(test))]
         let certificate = None;
@@ -1146,7 +1155,7 @@ impl Drop for NetworkCore {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
-    use crate::engine::Engine;
+    use crate::engine::{self, Engine};
     use serde_json::json;
     use std::{
         io::{Read, Write},
@@ -1402,6 +1411,16 @@ mod tests {
         };
         assert!(metrics.download_total > 0);
         assert!(metrics.upload_total > 0);
+        let current_pid=core.snapshot().engine_pid;
+        let mut sniff=core.store.preferences().unwrap();
+        sniff.sniffing.enabled=!sniff.sniffing.enabled;
+        sniff.sniff_excluded_apps=vec!["browser.exe".into()];
+        core.apply_preferences(sniff).unwrap();
+        assert_eq!(core.snapshot().engine_pid,current_pid,"Sniffing without TUN must not restart the runtime");
+        let occupied=std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut port_conflict=core.store.preferences().unwrap();port_conflict.proxy_port=occupied.local_addr().unwrap().port();
+        assert_eq!(core.apply_preferences(port_conflict).unwrap_err().code,"ProxyPortInUse");
+        assert_eq!(core.snapshot().engine_pid,current_pid,"Port conflicts must preserve the runtime");
         // Switch both official transports repeatedly on the owned SOCKS/TLS
         // fixture. Every successful selection must still carry a real request.
         for transport in ["xray","sing-box","auto","xray","sing-box"] {

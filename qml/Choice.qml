@@ -11,7 +11,16 @@ ComboBox {
  font.pixelSize: 13
  opacity: enabled ? 1 : 0.5
  contentItem: Text { text: c.displayText; font: c.font; color: c.palette.text; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; leftPadding: 12; rightPadding: 32 }
- indicator: Text { text: "⌄"; color: c.palette.text; x: c.width-26; y: (c.height-height)/2; font.pixelSize: 19 }
+ indicator: Item {
+  objectName: "choiceIndicator"
+  implicitWidth: 12; implicitHeight: 9; width: implicitWidth; height: implicitHeight
+  x: c.width-width-14; y: Math.round((c.height-height)/2)
+  readonly property int status: arrowImage.status
+  Image { id: arrowImage; anchors.fill: parent
+   source: 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 12"><path d="M2 3 L8 9 L14 3" fill="none" stroke="'+(c.appWindow?c.appWindow.textColor:c.palette.text)+'" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+  }
+ }
+
  hoverEnabled: true
  background: Rectangle { color: c.hovered ? (c.lightTheme ? "#eeebfa" : "#1e2231") : c.palette.base; border.color: c.activeFocus || c.hovered ? (c.lightTheme ? "#8069cf" : "#9a86eb") : c.palette.mid; radius: 8 }
  delegate: ItemDelegate {

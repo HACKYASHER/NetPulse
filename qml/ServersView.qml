@@ -116,13 +116,6 @@ ColumnLayout {
                                 Layout.fillWidth: true
                                 elide: Text.ElideRight
                             }
-                            Label {
-                                text: groupCard.modelData.items.length
-                                color: view.appWindow.mutedColor
-                                font.pixelSize: 10
-                                padding: 4
-                                background: Rectangle { radius: 5; color: view.appWindow.bgColor; border.color: view.appWindow.borderColor }
-                            }
                         }
                         Label {
                             visible: !!groupCard.modelData.id
@@ -134,6 +127,20 @@ ColumnLayout {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
+                    }
+                    Label {
+                        objectName: "subscriptionServerCount"
+                        text: groupCard.modelData.total_count
+                        color: view.appWindow.textColor
+                        font.pixelSize: 11
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        Layout.minimumWidth: 26; Layout.preferredHeight: 26
+                        leftPadding: 6; rightPadding: 6
+                        background: Rectangle { radius: 5; color: view.appWindow.bgColor; border.color: view.appWindow.borderColor }
+                        ToolTip.visible: countHover.hovered
+                        ToolTip.text: view.tr("Всего серверов: ","Total servers: ")+text+view.tr(" · Показано: "," · Shown: ")+groupCard.modelData.items.length
+                        HoverHandler { id: countHover }
                     }
                     ActionButton { appWindow: view.appWindow;
                         visible: !!groupCard.modelData.id
@@ -154,7 +161,7 @@ ColumnLayout {
                         implicitHeight: 34
                         leftPadding: 4
                         rightPadding: 4
-                        enabled: !view.latencyBusy && groupCard.modelData.items.length > 0
+                        enabled: !view.latencyBusy && groupCard.modelData.total_count > 0
                         ToolTip.text: view.tr("Проверить пинг серверов подписки", "Test subscription server latency")
                         onClicked: view.testProfiles(view.subscriptionProfiles(groupCard.modelData))
                     }
@@ -170,27 +177,19 @@ ColumnLayout {
                     }
                 }
                 Rectangle {
-                    visible: !!groupCard.modelData.id && !groupCard.collapsed
+                    visible: !!groupCard.modelData.id
                     Layout.fillWidth: true
-                    implicitHeight: usageLabel.implicitHeight + 16
+                    implicitHeight: usageView.implicitHeight + 20
                     color: view.appWindow.light ? "#f7f8fc" : "#121621"
                     Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: view.appWindow.borderColor }
-                    Label {
-                        id: usageLabel
+                    SubscriptionUsage {
+                        id: usageView
+                        appWindow: view.appWindow
+                        usage: groupCard.modelData.usage||null
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.margins: 14
-                        textFormat: Text.PlainText
-                        text: {
-                            var usage = groupCard.modelData.usage
-                            if (!usage) return view.tr("Трафик без лимита · Без срока", "Unlimited traffic · No expiry")
-                            return view.tr("Трафик: ", "Traffic: ") + view.appWindow.bytes((usage.upload || 0) + (usage.download || 0)) + " / " + (usage.total ? view.appWindow.bytes(usage.total) : "∞")
-                                + (usage.expire ? " · " + new Date(usage.expire * 1000).toLocaleDateString() : view.tr(" · Без срока", " · No expiry"))
-                        }
-                        color: view.appWindow.mutedColor
-                        font.pixelSize: 11
-                        elide: Text.ElideRight
                     }
                 }
                 Repeater {
@@ -249,10 +248,10 @@ ColumnLayout {
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                             onClicked: function(mouse) {
                                 if (mouse.button === Qt.RightButton) { view.serverContext = serverRow.modelData; serverMenu.popup() }
-                                else view.appWindow.call("select_profile", {id: serverRow.modelData.id})
+                                else if(!view.appWindow.busy("select_profile"))view.appWindow.call("select_profile", {id: serverRow.modelData.id})
                             }
                             onDoubleClicked: function(mouse) {
-                                if (mouse.button === Qt.LeftButton) view.appWindow.call("select_profile", {id: serverRow.modelData.id}, function() { if (!view.appWindow.snapshot.engine_pid) view.appWindow.reconnectSelected() })
+                                if (mouse.button === Qt.LeftButton && !view.appWindow.busy("select_profile") && serverRow.selected && !view.appWindow.snapshot.engine_pid) view.appWindow.reconnectSelected()
                             }
                         }
                     }

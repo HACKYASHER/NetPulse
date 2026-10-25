@@ -132,16 +132,21 @@ pub fn configuration(
         json!({"port":53,"action":"sniff"}),
         json!({"protocol":"dns","action":"hijack-dns"}),
     ];
-    if prefs.sniffing.enabled {
+    if prefs.effective_tun() && prefs.sniffing.enabled {
         // TUN needs host discovery. Mixed/SOCKS/CONNECT already supplies
         // its target; sniffing it before CONNECT acknowledgement can stall
         // clients that wait for the acknowledgement before sending data.
         let mut sniff = json!({"inbound":["tun-in"],"action":"sniff","sniffer":prefs.sniffing.protocols(),"timeout":format!("{}ms",prefs.sniffing.timeout_ms)});
         if !prefs.sniff_excluded_apps.is_empty() {
-            sniff["process_path_regex"] = json!(crate::app_rules::process_patterns(
-                &prefs.sniff_excluded_apps
-            ));
-            sniff["invert"] = json!(true);
+            // Invert the process condition only. Inverting a basic rule also
+            // inverts inbound=tun-in and accidentally sniffs every SOCKS/CONNECT.
+            sniff.as_object_mut().unwrap().remove("inbound");
+            sniff["type"] = json!("logical");
+            sniff["mode"] = json!("and");
+            sniff["rules"] = json!([
+                {"inbound":["tun-in"]},
+                {"process_path_regex":crate::app_rules::process_patterns(&prefs.sniff_excluded_apps),"invert":true}
+            ]);
         }
         rules.push(sniff);
     }

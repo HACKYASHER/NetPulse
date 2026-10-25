@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtTest
 import "../../qml" as Client
+import "../../qml/LogText.js" as LogText
 
 Item {
     width: 1000; height: 800
@@ -13,12 +14,17 @@ ApplicationWindow {
     property color borderColor: light ? "#dfe2ed" : "#2a2e3e"
     property color textColor: light ? "#222536" : "#edf0fa"
     property color mutedColor: light ? "#536078" : "#a7b1c8"
+    property color bgColor: light ? "#f5f6fa" : "#10121c"
     property color accentColor: "#8775ff"
     property var prefs: ({applications:[]})
     function exe(path) { return path }
     function save(patch) { prefs=Object.assign({},prefs,patch) }
     function routingApps() { var rows=[];for(var i=0;i<50;++i)rows.push({name:"App "+i,path:"app"+i+".exe"});return rows }
     function tr(ru,en) { return ru }
+    function cleanName(name) { return name }
+    function bytes(value) { return String(value)+" B" }
+    Client.ServerPicker { id: serverPicker; x: 260; y: 20; appWindow: win; profiles: [{id:"fi",name:"Finland",host:"fi.example",port:443,protocol:"vless"},{id:"de",name:"Germany",host:"de.example",port:443,protocol:"vless"}]; onChosen: function(id){selectedProfile=profiles.find(function(p){return p.id===id});closePicker()} }
+    Client.SubscriptionUsage { id: usage; x: 570; y: 20; width: 300; appWindow: win }
     Client.Choice { id: choice; x: 20; y: 20; width: 210; model: ["Авто","sing-box","Xray"]; values: ["auto","sing-box","xray"] }
     Client.ConnectionModes { id: modes; x: 20; y: 100; width: 900; onChanged: function(tun,proxy){modes.tun=tun;modes.proxy=proxy} }
     Client.ConsoleView { id: logView; x: 20; y: 330; width: 800; height: 350; appWindow: win; sourceKey: "test" }
@@ -29,11 +35,16 @@ ApplicationWindow {
         Client.ThemedMenuItem { id: themeItem; appWindow: win; text: "Настройки подписки" }
         Client.ThemedMenuItem { id: protectedItem; appWindow: win; text: "Копировать ссылку"; visible: false }
     }
+    SignalSpy { id: copied; target: logView; signalName: "copyRequested" }
     SignalSpy { id: activated; target: choice; signalName: "activated" }
     TestCase {
         name: "ClientInteractions"
         when: windowShown
         function test_01_engine_picker_mouse() {
+            var arrow=findChild(choice,"choiceIndicator")
+            verify(arrow.width>0&&arrow.height>0)
+            tryCompare(arrow,"status",Image.Ready)
+            verify(Math.abs(arrow.y+arrow.height/2-choice.height/2)<=0.5)
             mouseClick(choice,100,20)
             tryCompare(choice.popup,"visible",true)
             var list=choice.popup.contentItem
@@ -93,6 +104,75 @@ ApplicationWindow {
             mouseMove(vertical,vertical.width/2,30,80)
             mouseRelease(vertical,vertical.width/2,30)
             tryVerify(function(){return viewport.contentY<viewport.contentHeight-viewport.height-10})
+        }
+        function test_06_console_edge_selection_and_plain_copy() {
+            var row="select text ".repeat(80)+"LAST COLUMN"
+            logView.follow=false;logView.rows=[{key:"copy",level:"INFO",text:row}]
+            var viewport=findChild(logView,"logViewport"),text=findChild(logView,"logConsole")
+            viewport.contentX=0;viewport.contentY=0
+            wait(40)
+            mousePress(viewport,15,20)
+            mouseMove(viewport,viewport.width+25,20,120)
+            tryVerify(function(){return viewport.contentX>40},2000)
+            var before=viewport.contentX
+            logView.rows=[{key:"copy",level:"INFO",text:row},{key:"append",level:"WARNING",text:"appended while selecting"}]
+            wait(150)
+            verify(viewport.contentX>before)
+            verify(logView.documentPending)
+            mouseRelease(viewport,viewport.width+25,20)
+            tryCompare(logView,"documentPending",false)
+            verify(text.selectedText.length>60)
+            text.selectAll();logView.copySelection()
+            compare(copied.signalArguments[copied.count-1][0],row+"\nappended while selecting")
+            text.deselect()
+            var copiesBefore=copied.count
+            text.forceActiveFocus();text.select(0,11);keyClick(Qt.Key_C,Qt.ControlModifier)
+            compare(copied.count,copiesBefore+1)
+            compare(copied.signalArguments[copied.count-1][0],"select text")
+            text.deselect()
+            viewport.contentX=300
+            mousePress(viewport,viewport.width-40,20)
+            mouseMove(viewport,-15,20,100)
+            tryVerify(function(){return viewport.contentX<200},2000)
+            mouseRelease(viewport,-15,20)
+            verify(text.selectedText.length>0)
+        }
+        function test_07_quick_server_search_and_select() {
+            mouseClick(serverPicker,100,20)
+            var dialog=findChild(serverPicker,"quickServerDialog"),search=findChild(serverPicker,"quickServerSearch"),list=findChild(serverPicker,"quickServerList")
+            tryCompare(dialog,"visible",true)
+            search.text="Germany"
+            tryCompare(list,"count",1)
+            tryVerify(function(){return list.itemAtIndex(0)!==null})
+            mouseClick(list.itemAtIndex(0),100,25)
+            tryCompare(dialog,"visible",false)
+            compare(serverPicker.selectedProfile.id,"de")
+            var group=findChild(serverPicker,"serverPickerNameGroup"),name=findChild(serverPicker,"serverPickerName")
+            for(var width of [280,200,350]) {
+                serverPicker.width=width;wait(20)
+                var center=group.mapToItem(serverPicker,group.width/2,group.height/2)
+                verify(Math.abs(center.x-serverPicker.width/2)<0.6)
+                verify(Math.abs(center.y-serverPicker.height/2)<0.6)
+                compare(name.verticalAlignment,Text.AlignVCenter)
+            }
+            serverPicker.width=280
+        }
+        function test_09_log_error_hints_keep_unknown_errors_visible() {
+            for(var message of ["network is unreachable","lookup disabled.invalid NXDOMAIN","DNS SERVFAIL","local error: tls: bad record MAC","http2: ClientConn.Close","DNS packet unexpected EOF","i/o timeout","address already in use"]) {
+                verify(LogText.hint(message,true).length>0)
+                verify(LogText.hint(message,false).length>0)
+            }
+            compare(LogText.hint("unknown engine failure",true),"")
+        }
+        function test_08_subscription_quota_and_expiry() {
+            usage.usage={upload:100,download:200,total:1000,expire:1}
+            compare(usage.ratio,0.3);compare(usage.expired,true)
+            verify(usage.expiryText.indexOf("Истёк")===0)
+            usage.usage={download:400,total:0,expire:4000000000}
+            compare(usage.ratio,0);verify(usage.trafficText.indexOf("∞")>0)
+            verify(usage.expiryText.indexOf("Действует до")===0)
+            usage.usage=null
+            verify(usage.expiryText.indexOf("не передан")>0)
         }
         function test_04_nested_routing_wheel_stays_in_application_list() {
             var list=findChild(routing,"routingApplications")

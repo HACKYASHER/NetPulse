@@ -1,27 +1,24 @@
-# Verification — NetPulse 1.0.1 beta
+# Verification — NetPulse 1.0.2 beta
 
-Validated on Windows x64 on October 23, 2026, with Qt 6.8.3 and the bundled official sing-box and Xray cores.
+Validated on Windows x64 on October 25, 2026 with Qt 6.8.3 and the bundled official sing-box and Xray cores. Exact results are in VERIFICATION.json.
 
 | Area | Result |
 |---|---|
-| Core tests, including actual engines | 112 distinct cases passed (94 regular, 18 engine-backed) |
-| Settings persistence and real configuration validation | 87 variants passed |
-| Invalid values / incompatible combinations | 16 / 2 rejected |
-| Packaged controller integration | 14 grouped checks, including 59 form variants |
-| UI interaction tests | 6 scenarios plus setup/cleanup passed |
-| Packaged UI rendering | 8 pages and 18 page/tab/dialog frames, RU/dark, RU/light, EN/light, EN/dark; zero QML issues |
-| Scoped installer lifecycle | Install, repair of a damaged controller, installed UI and uninstall passed; data preserved |
+| Core tests, including real engines | 112 passed in one combined run; zero failures |
+| Settings persistence and actual configuration validation | 87 variants passed; 16 invalid values and 2 incompatible combinations rejected |
+| Packaged controller integration | 14 grouped checks, including settings and ping persistence |
+| UI interaction tests | 10 scenarios plus setup/cleanup passed |
+| Packaged UI | 8 pages and 19 frames in each RU/dark, RU/light, EN/light, EN/dark run; zero QML issues |
+| Scoped installer lifecycle | Install, update/repair, installed UI, uninstall; user data preserved |
 
-Core tests use owned loopback endpoints. They exercise repeated sing-box ↔ Xray switches with real HTTPS requests, failed-switch rollback, profile switching, route validation, close-flow accounting, bounded sustained speed tests, latency persistence and history eviction. One Windows test fixture inherited nonblocking sockets; the fixture was corrected and the affected test passed on rerun. All other 111 cases passed in the combined run. No production exception was introduced to make the test pass.
+Journal checks drag selections past both horizontal edges, append during selection, test Ctrl+C and normal-text copying, and move both scrollbars. Other interactions cover engine selection, simultaneous modes, nested application scrolling, light-theme menus, searchable server selection, quota/expiry rendering, and network error explanations.
 
-The settings matrix saves each variant, reopens SQLite and runs actual engine configuration validators. It covers DNS and routes, MTU values and presets, independent TUN/proxy preferences, all engine choices, Sniffing protocols/timeouts, SNI, TLS fingerprints, HTTP Host, fragmentation, multiplexing, application/domain rules, languages, themes and launch preferences. It does not create a real TUN adapter.
+The core tests carry real HTTPS requests after repeated sing-box/Xray changes. Failed candidates and occupied ports keep the current process alive. Saving Sniffing without TUN preserves the process. Generated TUN rules validate the corrected AND condition for excluded processes with the actual bundled core.
 
-UI interaction checks click the engine picker, select both connection modes, append console entries while preserving scroll and selection, move both console scrollbars, test nested Routing scrolling, and check light-theme menus and hidden protected actions. Rendering uses synthetic loopback profiles in separate data folders with only packaged Qt dependencies.
+The same repeated switch/rollback scenario took 88.06 seconds before and 44.13 seconds after in a debug build on owned loopback endpoints. This describes the whole test scenario and is not a latency guarantee for an individual VPN server.
 
-Installer lifecycle tests use separate folders, shortcut/registry names and disabled service hooks. The final check can use faster compression; application payloads and maintenance behavior remain the same. Real service installation and the user's installed client are not changed by these tests.
+Installer tests use scoped registry/shortcut/folder names and disabled service hooks. Their faster compression changes neither the application payload nor the maintenance behavior. Production archives include checksums.
 
 ## Limits
 
-A live privileged TUN connection, MTU range scan over the user's VPN server, public-WAN speed tests, and production update installation were not exercised. The MTU algorithm was checked with synthetic samples and ownership/recovery tests. Its probes compare latency, loss and jitter; they do not measure download throughput. Self-steal awaits clarification of the intended feature.
-
-See [machine-readable verification](VERIFICATION.json). Download hashes are supplied separately in `checksums.sha256`.
+No live privileged TUN connection, real VPN MTU scan, public-WAN speed measurement or update installation over the user's running client was performed. Network tests use synthetic profiles and owned local endpoints. The reviewed logs contain external DNS/TLS interruptions, absent IPv6 routes and remote timeouts; errors remain visible with explanations. Self-steal awaits clarification.

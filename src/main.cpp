@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("NetPulse"));
     QCoreApplication::setOrganizationName(QStringLiteral("NetPulse"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.1-beta"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.2-beta"));
     QApplication::setFont(QFont(QStringLiteral("Segoe UI"), 10));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QCommandLineParser parser;

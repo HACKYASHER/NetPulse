@@ -1,14 +1,13 @@
 {
-  "version": "1.0.1-beta",
-  "validation_date": "2026-10-23",
+  "version": "1.0.2-beta",
+  "validation_date": "2026-10-25",
   "platform": "Windows x64",
   "result": "passed",
   "network_tests": {
     "distinct_passed": 112,
     "regular": 94,
     "engine_backed": 18,
-    "failed_after_corrections": 0,
-    "fixture_correction": "The combined run passed 111 cases; the remaining Windows nonblocking-socket fixture was corrected and its test passed on rerun. Production logic was not relaxed."
+    "failed": 0
   },
   "settings_matrix": {
     "autostart_registry_changed": false,
@@ -107,8 +106,8 @@
     "result": "passed",
     "windows_network_changed": false
   },
-  "controller": {
-    "result": "passed",
+  "controller_integration": {
+    "passed_groups": 14,
     "checks": [
       "offline engines verified; no connection on startup",
       "unknown and malformed requests rejected; channel remains usable",
@@ -124,73 +123,65 @@
       "audit reads work and path traversal is rejected",
       "last per-server ping survives controller restart",
       "settings and profile persist after controller restart"
-    ],
-    "system_network_changed": false
-  },
-  "ui_interactions": {
-    "result": "passed",
-    "scenarios": 6,
-    "setup_cleanup_cases": 2,
-    "scope": [
-      "engine picker mouse selection",
-      "independent TUN and proxy toggles",
-      "incremental console, selection and both scrollbars",
-      "nested Routing wheel ownership",
-      "light menu hover and hidden actions",
-      "light engine choices"
     ]
   },
-  "ui": [
+  "ui_interactions": {
+    "passed": 12,
+    "scenarios": 10,
+    "setup_cleanup": 2,
+    "failed": 0
+  },
+  "ui_rendering": [
     {
       "language": "ru",
       "theme": "dark",
-      "frames": 18,
+      "frames": 19,
       "network_changed": false,
       "pages": 8,
       "qml_issues": 0,
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.1-beta",
+      "version": "1.0.2-beta",
       "webview_used": false
     },
     {
       "language": "ru",
       "theme": "light",
-      "frames": 18,
+      "frames": 19,
       "network_changed": false,
       "pages": 8,
       "qml_issues": 0,
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.1-beta",
+      "version": "1.0.2-beta",
       "webview_used": false
     },
     {
       "language": "en",
       "theme": "light",
-      "frames": 18,
+      "frames": 19,
       "network_changed": false,
       "pages": 8,
       "qml_issues": 0,
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.1-beta",
+      "version": "1.0.2-beta",
       "webview_used": false
     },
     {
       "language": "en",
       "theme": "dark",
-      "frames": 18,
+      "frames": 19,
       "network_changed": false,
       "pages": 8,
       "qml_issues": 0,
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.1-beta",
+      "version": "1.0.2-beta",
       "webview_used": false
     }
   ],
@@ -202,28 +193,46 @@
     "data_preserved": true,
     "registry_removed": true,
     "installed_ui": {
-      "frames": 18,
+      "frames": 19,
       "network_changed": false,
       "pages": 8,
       "qml_issues": 0,
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.1-beta",
+      "version": "1.0.2-beta",
       "webview_used": false
     },
     "tun_service_installed": false,
     "global_network_changed": false
   },
-  "binary_sha256": {
-    "NetPulse.exe": "a5025676448b04c5b8ac16809d7a873b3d23a5537f0663e948180e36225e30b4",
-    "netpulsed.exe": "850b8ef8acf076b5773c138f6ce85e4182de2d6ed60f8e04d478debc0592a8b4",
-    "NetPulseService.exe": "d799e24b6867e644723e9386d6d5dd4a73e495ce8c3e77480529585d42fffb5a"
+  "switch_benchmark": {
+    "scenario": "real_connection_switch_rollback_metrics_and_cleanup; owned loopback SOCKS/TLS endpoints",
+    "build": "debug",
+    "before_seconds": 88.06,
+    "after_seconds": 44.13,
+    "per_remote_server_guarantee": false
   },
+  "log_review": {
+    "days": [
+      "2026-10-22",
+      "2026-10-23",
+      "2026-10-25"
+    ],
+    "latest_core_errors": 51,
+    "latest_error_types": {
+      "unreachable_ipv6": 25,
+      "timeout": 16,
+      "nxdomain": 3,
+      "dns_http2_interrupted": 4,
+      "dns_tls_bad_record_mac": 3
+    },
+    "external_errors_hidden": false
+  },
+  "system_network_changed": false,
   "limits": [
-    "Live privileged TUN and the MTU scan on a remote VPN were not run.",
-    "Public WAN speed tests and production update installation were not run.",
-    "MTU probes compare latency, loss and jitter; download throughput is not measured.",
-    "Self-steal awaits clarification."
+    "No live privileged TUN switch or MTU scan on the user VPN.",
+    "External DNS, TLS transport and remote reachability failures remain visible.",
+    "Self-steal awaits the intended feature description."
   ]
 }

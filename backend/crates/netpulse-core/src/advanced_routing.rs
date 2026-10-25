@@ -171,12 +171,22 @@ mod tests {
     #[test]
     fn sniffing_protocols_timeout_and_disable_reach_the_engine() {
         let profile=crate::imports::parse_uri("socks5://127.0.0.1:1080").unwrap();
-        let mut prefs=Preferences::default();
+        let mut prefs=Preferences { tun:true, ..Default::default() };
         prefs.sniffing.http=false;prefs.sniffing.quic=false;prefs.sniffing.timeout_ms=125;
         prefs.validate().unwrap();
         let config=crate::engine::configuration(&profile,&prefs,20001,"api","proxy").unwrap();
         let sniff=&config["route"]["rules"][2];
         assert_eq!(sniff["inbound"],json!(["tun-in"]));assert_eq!(sniff["sniffer"],json!(["tls"]));assert_eq!(sniff["timeout"],"125ms");
+        prefs.sniff_excluded_apps=vec!["browser.exe".into()];
+        let config=crate::engine::configuration(&profile,&prefs,20001,"api","proxy").unwrap();
+        let sniff=&config["route"]["rules"][2];
+        assert_eq!(sniff["type"],"logical");assert_eq!(sniff["mode"],"and");
+        assert_eq!(sniff["rules"][0]["inbound"],json!(["tun-in"]));
+        assert_eq!(sniff["rules"][1]["invert"],true);assert!(sniff["invert"].is_null());
+        prefs.tun=false;
+        let config=crate::engine::configuration(&profile,&prefs,20001,"api","proxy").unwrap();
+        assert!(!config["route"]["rules"].as_array().unwrap().iter().any(|r|r["sniffer"].is_array()));
+        prefs.tun=true;
         prefs.sniffing.enabled=false;
         let config=crate::engine::configuration(&profile,&prefs,20001,"api","proxy").unwrap();
         assert!(!config["route"]["rules"].as_array().unwrap().iter().any(|r|r["sniffer"].is_array()));

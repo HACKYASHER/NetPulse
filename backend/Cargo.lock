@@ -797,7 +797,7 @@ dependencies = [
 
 [[package]]
 name = "netpulse-core"
-version = "1.0.1-beta"
+version = "1.0.2-beta"
 dependencies = [
  "base64",
  "native-tls",
@@ -822,7 +822,7 @@ dependencies = [
 
 [[package]]
 name = "netpulse-host"
-version = "1.0.1-beta"
+version = "1.0.2-beta"
 dependencies = [
  "base64",
  "image",
@@ -840,7 +840,7 @@ dependencies = [
 
 [[package]]
 name = "netpulse-service"
-version = "1.0.1-beta"
+version = "1.0.2-beta"
 dependencies = [
  "netpulse-core",
  "serde_json",
