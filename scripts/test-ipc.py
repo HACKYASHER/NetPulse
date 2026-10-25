@@ -92,6 +92,7 @@ def run(directory):
         for field,values in {
             'theme':['dark','light','system'],'language':['ru','en'],
             'transport_engine':['auto','sing-box','xray'],
+            'ipv6_mode':['auto','ipv4_only','dual_stack'],
             'route_mode':['global','whitelist','blacklist'],
             'ping_method':['proxy_https_rtt','proxy_https_head_rtt','tcp_connect_rtt','icmp_rtt'],
             'ping_proxy_mode':['double','keepalive'],'mtu':[1280,1400,1420,1500,9000],

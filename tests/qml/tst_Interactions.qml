@@ -17,6 +17,22 @@ ApplicationWindow {
     property color bgColor: light ? "#f5f6fa" : "#10121c"
     property color accentColor: "#8775ff"
     property var prefs: ({applications:[]})
+    property int nextRequest: 1
+    function busy(method) { return false }
+    function logMessage(event) { return event.message }
+    function toast(message) {}
+    function call(method,params,done) {
+        var id=String(nextRequest++)
+        Qt.callLater(function(){
+            if(!done)return
+            if(method==="log_days")done(["2026-10-25"])
+            else if(method==="log_read")done(JSON.stringify({id:params.category,level:"INFO",message:params.category+" entry"}))
+            else if(method==="logs")done([{id:"events",level:"INFO",message:"events entry"}])
+        })
+        return id
+    }
+    QtObject { id: mockBridge; signal completed(string id,string method,var result,var error); function copyText(text){} }
+    Loader { id: activityLoader; x:20; y:85; width:900; height:650; z:20; active:false; sourceComponent: Component { Client.ActivityView { appWindow:win;bridge:mockBridge } } }
     function exe(path) { return path }
     function save(patch) { prefs=Object.assign({},prefs,patch) }
     function routingApps() { var rows=[];for(var i=0;i<50;++i)rows.push({name:"App "+i,path:"app"+i+".exe"});return rows }
@@ -117,7 +133,7 @@ ApplicationWindow {
             var before=viewport.contentX
             logView.rows=[{key:"copy",level:"INFO",text:row},{key:"append",level:"WARNING",text:"appended while selecting"}]
             wait(150)
-            verify(viewport.contentX>before)
+            tryVerify(function(){return viewport.contentX>before},2000)
             verify(logView.documentPending)
             mouseRelease(viewport,viewport.width+25,20)
             tryCompare(logView,"documentPending",false)
@@ -136,6 +152,14 @@ ApplicationWindow {
             tryVerify(function(){return viewport.contentX<200},2000)
             mouseRelease(viewport,-15,20)
             verify(text.selectedText.length>0)
+        }
+        function test_07_console_new_source_starts_at_left_edge() {
+            var viewport=findChild(logView,"logViewport"),text=findChild(logView,"logConsole")
+            logView.follow=false;logView.sourceKey="main";logView.rows=[{key:"main",level:"INFO",text:"wide ".repeat(300)}]
+            wait(40);viewport.contentX=800;text.select(2,20)
+            logView.sourceKey="core";logView.rows=[{key:"core",level:"INFO",text:"Core connected"}]
+            wait(40);compare(viewport.contentX,0);compare(text.selectedText,"")
+            verify(text.text.indexOf("Core")>=0)
         }
         function test_07_quick_server_search_and_select() {
             mouseClick(serverPicker,100,20)
@@ -156,6 +180,20 @@ ApplicationWindow {
                 compare(name.verticalAlignment,Text.AlignVCenter)
             }
             serverPicker.width=280
+        }
+        function test_10_activity_switches_all_sources_with_follow_paused() {
+            activityLoader.active=true
+            tryCompare(activityLoader,"status",Loader.Ready)
+            var view=activityLoader.item,category=findChild(view,"logCategory"),day=findChild(view,"logDay")
+            tryVerify(function(){return view.events.length===1})
+            compare(day.currentText,"2026-10-25")
+            view.follow=false
+            for(var index=0;index<6;index++) {
+                category.currentIndex=index;category.activated(index)
+                tryVerify(function(){return !view.loading&&view.events.length===1&&view.events[0].id===view.categories[index]})
+                verify(findChild(view,"activityConsole").plainText.indexOf(view.categories[index]+" entry")>=0)
+            }
+            activityLoader.active=false
         }
         function test_09_log_error_hints_keep_unknown_errors_visible() {
             for(var message of ["network is unreachable","lookup disabled.invalid NXDOMAIN","DNS SERVFAIL","local error: tls: bad record MAC","http2: ClientConn.Close","DNS packet unexpected EOF","i/o timeout","address already in use"]) {

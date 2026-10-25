@@ -273,48 +273,28 @@ pub fn read(directory: &Path, day: &str, category: &str) -> Result<String> {
             "Ссылка вместо папки журнала",
         ));
     }
-    let path = folder.join(format!("{category}.jsonl"));
-    if !path.exists() {
-        return Ok(String::new());
+    let _guard=WRITER.lock().map_err(|_|Error::new("AuditUnavailable","audit-read","Audit writer unavailable"))?;
+    let mut remaining=256*1024u64;
+    let mut newest=Vec::new();
+    for rotation in 0..=5 {
+        if remaining==0 || newest.len()>=500 {break}
+        let name=if rotation==0 {format!("{category}.jsonl")} else {format!("{category}.{rotation}.jsonl")};
+        let path=folder.join(name);
+        if !path.exists(){continue}
+        regular_metadata(&path)?;
+        let mut file=std::fs::File::open(&path).map_err(|e|Error::io("audit-read",e))?;
+        let length=file.metadata().map_err(|e|Error::io("audit-read",e))?.len();
+        let offset=length.saturating_sub(remaining);
+        file.seek(SeekFrom::Start(offset)).map_err(|e|Error::io("audit-read",e))?;
+        let mut bytes=Vec::new();
+        file.take(remaining).read_to_end(&mut bytes).map_err(|e|Error::io("audit-read",e))?;
+        remaining=remaining.saturating_sub(bytes.len() as u64);
+        let text=String::from_utf8_lossy(&bytes);
+        let complete=if offset>0 {text.split_once('\n').map(|(_,tail)|tail).unwrap_or("")} else {&text};
+        newest.extend(complete.lines().rev().take(500-newest.len()).map(str::to_owned));
     }
-    if path
-        .symlink_metadata()
-        .is_ok_and(|m| m.file_type().is_symlink())
-    {
-        return Err(Error::new(
-            "InvalidLogPath",
-            "audit-read",
-            "Ссылка вместо файла журнала",
-        ));
-    }
-    let mut file = std::fs::File::open(path).map_err(|e| Error::io("audit-read", e))?;
-    let length = file
-        .metadata()
-        .map_err(|e| Error::io("audit-read", e))?
-        .len();
-    let offset = length.saturating_sub(256 * 1024);
-    file.seek(SeekFrom::Start(offset))
-        .map_err(|e| Error::io("audit-read", e))?;
-    let mut bytes = Vec::new();
-    file.take(256 * 1024)
-        .read_to_end(&mut bytes)
-        .map_err(|e| Error::io("audit-read", e))?;
-    let mut text = String::from_utf8_lossy(&bytes).into_owned();
-    if offset > 0 {
-        text = text
-            .split_once('\n')
-            .map(|(_, tail)| tail.to_owned())
-            .unwrap_or_default();
-    }
-    Ok(text
-        .lines()
-        .rev()
-        .take(500)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect::<Vec<_>>()
-        .join("\n"))
+    newest.reverse();
+    Ok(newest.join("\n"))
 }
 #[cfg(test)]
 mod tests {
@@ -496,5 +476,21 @@ mod tests {
             .unwrap()
             .contains("Native command started")
         );
+    }
+}
+
+#[cfg(test)]
+mod rotation_reader_tests {
+    #[test]
+    fn empty_current_core_keeps_rotated_entries_in_order() {
+        let dir=tempfile::tempdir().unwrap();let folder=dir.path().join("logs/2026-10-25");std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("core.jsonl"),"").unwrap();
+        std::fs::write(folder.join("core.1.jsonl"),"old1\nold2\n").unwrap();
+        assert_eq!(super::read(dir.path(),"2026-10-25","core").unwrap(),"old1\nold2");
+        std::fs::write(folder.join("core.jsonl"),"current\n").unwrap();
+        assert_eq!(super::read(dir.path(),"2026-10-25","core").unwrap(),"old1\nold2\ncurrent");
+        std::fs::write(folder.join("core.2.jsonl"),(0..700).map(|i|format!("line{i}\n")).collect::<String>()).unwrap();
+        let text=super::read(dir.path(),"2026-10-25","core").unwrap();
+        assert_eq!(text.lines().count(),500);assert!(text.ends_with("old1\nold2\ncurrent"));
     }
 }

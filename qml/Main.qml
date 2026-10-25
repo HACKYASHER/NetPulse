@@ -62,7 +62,9 @@ ApplicationWindow {
     property int smokeStep: 0
     property string smokeFrame: "overview"
     property string smokeCaptured: ""
-    property var smokeSequence: [{page:0,name:"overview"},{page:1,name:"servers"},{page:2,name:"routing"},{page:3,tab:0,name:"connection"},{page:3,tab:1,name:"dns"},{page:3,tab:2,name:"mtu"},{page:3,tab:3,name:"tls"},{page:3,tab:4,name:"transport"},{page:3,tab:5,name:"service"},{page:3,tab:6,name:"engines"},{page:3,tab:7,name:"sniffing"},{page:4,name:"diagnostics"},{page:5,name:"playground"},{page:6,name:"activity"},{page:7,name:"settings"},{page:0,dialog:"server",name:"server-picker"},{page:0,dialog:"mode",name:"connection-mode"},{page:1,dialog:"import",name:"add-connection"},{page:4,dialog:"history",name:"measurement-history"}]
+    property int smokeCoreRows: 0
+    property bool smokePendingCore: false
+    property var smokeSequence: [{page:0,name:"overview"},{page:1,name:"servers"},{page:2,name:"routing"},{page:3,tab:0,name:"connection"},{page:3,tab:1,name:"dns"},{page:3,tab:2,name:"mtu"},{page:3,tab:3,name:"tls"},{page:3,tab:4,name:"transport"},{page:3,tab:5,name:"service"},{page:3,tab:6,name:"engines"},{page:3,tab:7,name:"sniffing"},{page:4,name:"diagnostics"},{page:5,name:"playground"},{page:6,name:"activity"},{page:6,category:1,name:"core-log"},{page:7,name:"settings"},{page:0,dialog:"server",name:"server-picker"},{page:0,dialog:"mode",name:"connection-mode"},{page:1,dialog:"import",name:"add-connection"},{page:4,dialog:"history",name:"measurement-history"}]
     property bool smokeFinished: false
     property var pages: [overviewPage, serversPage, routingPage, networkPage, diagnosticsPage, playgroundPage, activityPage, settingsPage]
     color: bgColor
@@ -291,7 +293,8 @@ ApplicationWindow {
             if(step.dialog==="mode")modeDialog.open()
             if(step.dialog==="import")importDialog.open()
             if(step.dialog==="history"){historyDialog.open();historyDialog.load()}
-            smokeFrame=step.name
+            if(step.category!==undefined&&pageLoader.item){smokePendingCore=true;pageLoader.item.selectCategory(step.category)}
+            else smokeFrame=step.name
         })
     } }
 
@@ -337,7 +340,7 @@ ApplicationWindow {
                     Layout.fillWidth: true; implicitHeight: 64
                     RowLayout { anchors.fill: parent; anchors.margins: 12; spacing: 9
                         Rectangle { width: 7; height: 7; radius: 4; color: modelData.engine_ready ? "#6bd9b0" : "#e0b86d" }
-                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.2 beta"; font.pixelSize: 10; color: mutedColor } }
+                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.3 beta"; font.pixelSize: 10; color: mutedColor } }
                     }
                 }
             }
@@ -522,6 +525,9 @@ ApplicationWindow {
                             SpinBox { id: proxyPort; from: 1024; to: 65535; value: prefs.proxy_port||2080; editable: true }
                         }
                         HelpText { text: tr("Порт локального прокси на этом компьютере. Меняйте его, если стандартный порт занят; это не порт VPN-сервера.","The local proxy port on this computer. Change it if the default port is busy; it is not the VPN server port.") }
+                        Label { text: tr("IPv6 в TUN","TUN IPv6"); color: mutedColor }
+                        Choice { appWindow: win; objectName: "tunIpv6Mode"; Layout.fillWidth: true; model: [tr("Автоматически","Automatic"),tr("Только IPv4","IPv4 only"),tr("IPv4 и IPv6","IPv4 and IPv6")]; values: ["auto","ipv4_only","dual_stack"]; currentIndex: Math.max(0,values.indexOf(prefs.ipv6_mode||"auto")); enabled: !savingPreferences&&!busy("select_profile")&&!busy("quick_network"); onActivated: save({ipv6_mode:selectedValue}) }
+                        HelpText { text: tr("В режиме только выбранных приложений Авто включает IPv6 в TUN, когда у физического подключения есть IPv6-маршрут. Это предотвращает ложный IPv6-доступ у остальных приложений. Для IPv6 через сервер можно явно выбрать IPv4 и IPv6; сервер должен его поддерживать. Весь трафик через VPN сохраняет IPv6 в режиме Авто.","In selected-app mode, Auto enables TUN IPv6 when the physical connection has an IPv6 route, preventing unusable IPv6 for other applications. Select IPv4 and IPv6 explicitly for server-side IPv6; the server must support it. Global VPN keeps IPv6 in Auto mode.") }
                         SettingRow { Layout.fillWidth: true; title: "Fake IP"; description: tr("Выдаёт временные адреса для сопоставления доменов в TUN. После изменения переоткройте соединения приложений.","Uses temporary addresses to match domains in TUN. Reopen application connections after changing this setting."); checked: !!prefs.fake_ip; onToggled: function(v){save({fake_ip:v})} }
                         Input { id: probeUrl; Layout.fillWidth: true; text: prefs.probe_url||"https://www.gstatic.com/generate_204"; placeholderText: "HTTPS probe URL" }
                         HelpText { text: tr("HTTPS-адрес для проверки доступности VPN и пинга. Выбирайте небольшой ресурс без авторизации; недоступный сайт может давать ошибку при рабочем VPN.","The HTTPS address used for VPN health and latency checks. Use a small resource without authentication; a blocked site can fail even when VPN works.") }
@@ -959,7 +965,10 @@ ApplicationWindow {
         }
     }
 
-    Component { id: activityPage; ActivityView { appWindow: win } }
+    Component { id: activityPage; ActivityView {
+        appWindow: win
+        onLoaded: function(source,count){if(smokeMode&&smokePendingCore&&source.indexOf("core:")===0){smokeCoreRows=count;smokePendingCore=false;smokeFrame="core-log"}}
+    } }
 
     Component {
         id: settingsPage
@@ -968,7 +977,7 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: aboutColumn.implicitHeight+40
                 ColumnLayout { id: aboutColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
                     Label { textFormat: Text.PlainText; text: tr("О клиенте","About NetPulse"); color: textColor; font.pixelSize: 17; font.bold: true }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.2 beta · Windows x64"; color: textColor }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.3 beta · Windows x64"; color: textColor }
                     Label { textFormat: Text.PlainText; text: "Qt Quick · Rust · sing-box "+(modelData.engine_version||"—")+" · Xray "+(modelData.xray_version||"—"); color: mutedColor; font.pixelSize: 12 }
                     ActionButton { appWindow: win; text: "GitHub · NetPulse ↗"; onClicked: Qt.openUrlExternally("https://github.com/HACKYASHER/NetPulse") }
                 }
@@ -1010,7 +1019,7 @@ ApplicationWindow {
                     }
                     HelpText { text: tr("Временные архивы ядер очищаются после установки и при следующем запуске. Незавершённые загрузки и установщики уже установленной версии тоже удаляются; предыдущий комплект ядер остаётся для отката.","Temporary engine archives are cleared after installation and on startup. Interrupted downloads and installers for the installed version are also removed; the previous engine bundle remains for rollback.") }
                     ActionButton { appWindow: win; text: tr("Редактор всех параметров…", "Edit all preferences…"); onClicked: editJson(tr("Параметры NetPulse", "NetPulse preferences"), JSON.stringify(prefs, null, 2), "save_preferences") }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.2 beta  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.3 beta  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
                 }
             }
         }

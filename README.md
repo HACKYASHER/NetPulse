@@ -7,11 +7,11 @@ C++ / Qt Quick desktop interface with a separate Rust network controller,
 sing-box and Xray. Use System Proxy for proxy-aware applications or TUN for
 traffic capture through a virtual network adapter.
 
-**Current release: 1.0.2 beta · Windows x64**
+**Current release: 1.0.3 beta · Windows x64**
 
-[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.2-beta/NetPulse-Setup.exe)
-· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.2-beta/NetPulse-Portable.zip)
-· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.2-beta)
+[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.3-beta/NetPulse-Setup.exe)
+· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.3-beta/NetPulse-Portable.zip)
+· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.3-beta)
 · [Русская инструкция](README.ru.md)
 
 ![NetPulse desktop interface](docs/images/overview.png)

@@ -188,7 +188,7 @@ pub fn configuration(
     if prefs.effective_tun() {
         inbounds.push(json!({"type":"tun","tag":"tun-in","interface_name":"NetPulse","address":["172.31.255.1/30","fdfe:dcba:9876::1/126"],"mtu":prefs.mtu,"auto_route":true,"strict_route":true,"stack":if prefs.network_preset == "compatibility" { "mixed" } else { "system" }}));
     }
-    let mut config = json!({"log":{"level":"warn","disabled":false,"timestamp":true},"dns":{"servers":[prefs.dns_server(),{"type":"local","tag":"bootstrap"}],"final":"resolver","strategy":"prefer_ipv4"},"inbounds":inbounds,"outbounds":[outbound,{"type":"direct","tag":"direct"}],"route":{"rules":rules,"final":final_,"auto_detect_interface":true,"default_domain_resolver":"bootstrap"},"experimental":{"clash_api":{"external_controller":format!("127.0.0.1:{api_port}"),"secret":api_secret}}});
+    let mut config = json!({"log":{"level":match prefs.logging_level.as_str(){"DEBUG"=>"debug","WARNING"=>"warn","ERROR"=>"error",_=>"info"},"disabled":false,"timestamp":true},"dns":{"servers":[prefs.dns_server(),{"type":"local","tag":"bootstrap"}],"final":"resolver","strategy":"prefer_ipv4"},"inbounds":inbounds,"outbounds":[outbound,{"type":"direct","tag":"direct"}],"route":{"rules":rules,"final":final_,"auto_detect_interface":true,"default_domain_resolver":"bootstrap"},"experimental":{"clash_api":{"external_controller":format!("127.0.0.1:{api_port}"),"secret":api_secret}}});
     if !prefs.bypass_domains.is_empty() {
         config["dns"]["reverse_mapping"] = json!(true);
         config["dns"]["rules"] =

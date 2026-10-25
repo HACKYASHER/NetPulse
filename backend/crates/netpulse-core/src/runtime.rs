@@ -2,7 +2,7 @@
 use crate::{
     Error, Result,
     engine::{self, Engine},
-    model::{Preferences, Profile},
+    model::{Preferences, Profile, RouteMode},
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -21,6 +21,31 @@ pub fn free_port() -> Result<u16> {
         .local_addr()
         .map_err(|e| Error::io("runtime-port", e))?
         .port())
+}
+/// Keep a split tunnel from advertising a default IPv6 route that its direct
+/// traffic cannot use. Global/blacklist VPNs retain server-side IPv6; an explicit
+/// dual-stack choice is always honored. Unknown capability never disables IPv6.
+pub(crate) fn apply_ipv6_policy(config: &mut Value,prefs:&Preferences,physical_ipv6:Option<bool>) {
+    if !prefs.effective_tun() { return }
+    let ipv4_only=match prefs.ipv6_mode.as_str() {
+        "ipv4_only"=>true,
+        "dual_stack"=>false,
+        _=>physical_ipv6==Some(false)&&matches!(prefs.route_mode,RouteMode::Whitelist|RouteMode::Direct),
+    };
+    if !ipv4_only {return}
+    if let Some(inbounds)=config["inbounds"].as_array_mut() {
+        for inbound in inbounds.iter_mut().filter(|v|v["type"]=="tun") {
+            if let Some(addresses)=inbound["address"].as_array_mut(){addresses.retain(|v|v.as_str().is_none_or(|s|!s.contains(':')))}
+        }
+    }
+    config["dns"]["strategy"]=json!("ipv4_only");
+    if let Some(servers)=config["dns"]["servers"].as_array_mut() {
+        for server in servers.iter_mut().filter(|v|v["type"]=="fakeip") {server.as_object_mut().unwrap().remove("inet6_range");}
+    }
+    // IP routing rules may have an explicit resolve action overriding DNS defaults.
+    if let Some(rules)=config["route"]["rules"].as_array_mut() {
+        for rule in rules.iter_mut().filter(|r|r["action"]=="resolve"){rule["strategy"]=json!("ipv4_only");}
+    }
 }
 pub fn verify_xray(path: &Path) -> Result<()> {
     if crate::core_releases::verify_custom(path, "xray")? {
@@ -110,10 +135,12 @@ impl RuntimePlan {
             let password = uuid::Uuid::new_v4().to_string();
             let mut xray = xray_config(profile, bridge_port, &password)?;
             crate::transport_options::apply_xray(&mut xray, prefs);
+            xray["log"]["loglevel"]=json!(match prefs.logging_level.as_str(){"DEBUG"=>"debug","WARNING"=>"warning","ERROR"=>"error",_=>"info"});
             bridge = Some(xray);
             routed.outbound = json!({"type":"socks","server":"127.0.0.1","server_port":bridge_port,"username":"netpulse","password":password,"version":"5"});
         }
         let mut config = engine::configuration(&routed, prefs, api_port, api_secret, proxy_secret)?;
+        let mut physical_ipv6 = None;
         #[cfg(windows)]
         {
             let host = profile.outbound["server"].as_str().unwrap_or("");
@@ -134,20 +161,16 @@ impl RuntimePlan {
                 }
                 // The local SOCKS bridge is deliberately left on loopback.
                 config["outbounds"][1]["bind_interface"] = json!(interface);
-                if let Ok(view) = crate::routes::inspect()
-                    && !crate::routes::interface_has_ipv6_default(&view, &interface)
-                {
-                    // Windows may advertise an IPv6-capable TUN while the physical
-                    // adapter has no IPv6 route. Do not hand TUN clients unusable
-                    // AAAA answers: their direct flows cannot leave this adapter.
-                    if prefs.effective_tun() && !prefs.fake_ip {
-                        config["dns"]["strategy"] = json!("ipv4_only");
-                    }
+                if let Ok(view) = crate::routes::inspect() {
+                    physical_ipv6=Some(crate::routes::interface_has_ipv6_default(&view,&interface));
+                }
+                if physical_ipv6==Some(false) {
                     config["outbounds"][1]["domain_resolver"] =
                         json!({"server":"bootstrap","strategy":"prefer_ipv4"});
                 }
             }
         }
+        apply_ipv6_policy(&mut config,prefs,physical_ipv6);
         // Diagnostics always traverse the selected outbound, even if this GUI is
         // excluded by a process whitelist. Normal traffic retains its actual rules.
         config["inbounds"].as_array_mut().unwrap().push(json!({"type":"mixed","tag":"diagnostic-proxy","listen":"127.0.0.1","listen_port":probe_port,"users":[{"username":"netpulse","password":proxy_secret}]}));
@@ -591,6 +614,57 @@ mod tests {
             )
             .unwrap();
             child.wait_checked(&config).unwrap();
+        }
+    }
+}
+
+#[cfg(test)]
+mod runtime_policy_tests {
+    use super::*;
+    fn config(p:&Preferences)->Value {
+        let profile=crate::imports::parse_uri("socks5://127.0.0.1:1080").unwrap();
+        engine::configuration(&profile,p,23450,"api","proxy").unwrap()
+    }
+    #[test]
+    fn ipv6_auto_respects_direct_capability_and_explicit_choices() {
+        for (mode,route,physical,only4) in [
+            ("auto",RouteMode::Whitelist,Some(false),true),
+            ("auto",RouteMode::Direct,Some(false),true),
+            ("auto",RouteMode::Global,Some(false),false),
+            ("auto",RouteMode::Blacklist,Some(false),false),
+            ("auto",RouteMode::Whitelist,Some(true),false),
+            ("auto",RouteMode::Whitelist,None,false),
+            ("dual_stack",RouteMode::Whitelist,Some(false),false),
+            ("ipv4_only",RouteMode::Global,Some(true),true),
+        ] {
+            let p=Preferences{tun:true,ipv6_mode:mode.into(),route_mode:route,..Default::default()};
+            let mut c=config(&p);apply_ipv6_policy(&mut c,&p,physical);
+            assert_eq!(c["inbounds"][1]["address"].as_array().unwrap().len()==1,only4,"{mode}: {physical:?}");
+            assert_eq!(c["dns"]["strategy"]=="ipv4_only",only4);
+        }
+        let mut p=Preferences{tun:true,ipv6_mode:"ipv4_only".into(),fake_ip:true,..Default::default()};
+        let mut c=config(&p);apply_ipv6_policy(&mut c,&p,Some(false));
+        assert!(c["dns"]["servers"].as_array().unwrap().iter().find(|s|s["type"]=="fakeip").unwrap()["inet6_range"].is_null());
+        p.ipv6_mode="bad".into();assert!(p.validate().is_err());
+        let old:Preferences=serde_json::from_value(json!({})).unwrap();assert_eq!(old.ipv6_mode,"auto");
+    }
+    #[test]
+    fn both_engines_receive_selected_logging_levels() {
+        let profile=crate::imports::parse_uri("socks5://127.0.0.1:1080").unwrap();
+        for (level,sing,xray) in [("DEBUG","debug","debug"),("INFO","info","info"),("WARNING","warn","warning"),("ERROR","error","error")] {
+            let p=Preferences{logging_level:level.into(),transport_engine:"xray".into(),..Default::default()};
+            let plan=RuntimePlan::new(std::path::Path::new("sing-box.exe"),&profile,&p,23450,"api","proxy",[23451,23452]).unwrap();
+            assert_eq!(plan.config["log"]["level"],sing);assert_eq!(plan.bridge.as_ref().unwrap()["log"]["loglevel"],xray);
+        }
+    }
+    #[test]
+    #[ignore="Requires pinned engine; config checks only, no TUN or routes"]
+    fn real_core_accepts_ipv4_tun_and_fakeip_policy() {
+        let path=std::path::PathBuf::from(std::env::var_os("NETPULSE_TEST_ENGINE").unwrap());
+        for fake_ip in [false,true] {
+            let p=Preferences{tun:true,ipv6_mode:"ipv4_only".into(),fake_ip,..Default::default()};
+            let mut c=config(&p);apply_ipv6_policy(&mut c,&p,Some(false));
+            engine::Engine::validate(&path,&c).unwrap();
         }
     }
 }

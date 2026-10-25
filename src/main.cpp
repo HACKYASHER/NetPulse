@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("NetPulse"));
     QCoreApplication::setOrganizationName(QStringLiteral("NetPulse"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.2-beta"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.3-beta"));
     QApplication::setFont(QFont(QStringLiteral("Segoe UI"), 10));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QCommandLineParser parser;
@@ -157,7 +157,7 @@ int main(int argc, char** argv) {
             window->grabWindow().save(output + QStringLiteral("/window.png"));
             const QJsonObject result{{QStringLiteral("result"), qmlIssues ? QStringLiteral("failed") : QStringLiteral("passed")}, {QStringLiteral("qt"), QString::fromLatin1(qVersion())},
                 {QStringLiteral("version"), QCoreApplication::applicationVersion()}, {QStringLiteral("pages"), window->property("smokePages").toInt()},
-                {QStringLiteral("frames"),capturedFrames.size()}, {QStringLiteral("qml_issues"), qmlIssues}, {QStringLiteral("qml_messages"), QJsonArray::fromStringList(qmlMessages)},
+                {QStringLiteral("frames"),capturedFrames.size()}, {QStringLiteral("core_log_rows"),window->property("smokeCoreRows").toInt()}, {QStringLiteral("qml_issues"), qmlIssues}, {QStringLiteral("qml_messages"), QJsonArray::fromStringList(qmlMessages)},
                 {QStringLiteral("network_changed"), false}, {QStringLiteral("webview_used"), false}};
             QFile file(output + QStringLiteral("/result.json")); if (file.open(QIODevice::WriteOnly)) file.write(QJsonDocument(result).toJson());
             backend.quit();

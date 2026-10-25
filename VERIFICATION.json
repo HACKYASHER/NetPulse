@@ -1,19 +1,20 @@
 {
-  "version": "1.0.2-beta",
+  "version": "1.0.3-beta",
   "validation_date": "2026-10-25",
   "platform": "Windows x64",
   "result": "passed",
   "network_tests": {
-    "distinct_passed": 112,
-    "regular": 94,
-    "engine_backed": 18,
-    "failed": 0
+    "distinct_passed": 116,
+    "regular": 97,
+    "engine_backed": 19,
+    "failed": 0,
+    "actual_info_connection_record_verified": true
   },
   "settings_matrix": {
     "autostart_registry_changed": false,
     "cores_actually_executed_in_validation_mode": true,
     "incompatible_combinations_rejected": 2,
-    "invalid_settings_rejected": 16,
+    "invalid_settings_rejected": 17,
     "persisted_and_validated_cases": [
       "language=\"ru\"",
       "language=\"en\"",
@@ -23,6 +24,9 @@
       "transport_engine=\"auto\"",
       "transport_engine=\"sing-box\"",
       "transport_engine=\"xray\"",
+      "ipv6_mode=\"auto\"",
+      "ipv6_mode=\"ipv4_only\"",
+      "ipv6_mode=\"dual_stack\"",
       "route_mode=\"global\"",
       "route_mode=\"whitelist\"",
       "route_mode=\"blacklist\"",
@@ -101,7 +105,9 @@
       "Fragmentation and multiplex",
       "Mux boundaries",
       "Mux UDP allow",
-      "TUN and System Proxy"
+      "TUN and System Proxy",
+      "IPv4 TUN with FakeIP",
+      "Forced dual stack split TUN"
     ],
     "result": "passed",
     "windows_network_changed": false
@@ -113,7 +119,7 @@
       "unknown and malformed requests rejected; channel remains usable",
       "profile import, selection, encrypted persistence, settings validation",
       "DNS persists, EXE rules migrate and deduplicate, routing has its own JSON file",
-      "59 settings form variants persist; invalid saves are atomic; isolated tests preserve Windows autorun",
+      "62 settings form variants persist; invalid saves are atomic; isolated tests preserve Windows autorun",
       "pin and unpin actions persist",
       "Playground exposes owned TCP connections by PID and EXE group, with network-focused process data",
       "engine choices persist; invalid choice rolls back; independent modes and Sniffing validate without starting VPN",
@@ -126,8 +132,8 @@
     ]
   },
   "ui_interactions": {
-    "passed": 12,
-    "scenarios": 10,
+    "passed": 14,
+    "scenarios": 12,
     "setup_cleanup": 2,
     "failed": 0
   },
@@ -135,53 +141,57 @@
     {
       "language": "ru",
       "theme": "dark",
-      "frames": 19,
+      "core_log_rows": 2,
+      "frames": 20,
       "network_changed": false,
       "pages": 8,
       "qml_issues": 0,
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.2-beta",
+      "version": "1.0.3-beta",
       "webview_used": false
     },
     {
       "language": "ru",
       "theme": "light",
-      "frames": 19,
+      "core_log_rows": 2,
+      "frames": 20,
       "network_changed": false,
       "pages": 8,
       "qml_issues": 0,
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.2-beta",
+      "version": "1.0.3-beta",
       "webview_used": false
     },
     {
       "language": "en",
       "theme": "light",
-      "frames": 19,
+      "core_log_rows": 2,
+      "frames": 20,
       "network_changed": false,
       "pages": 8,
       "qml_issues": 0,
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.2-beta",
+      "version": "1.0.3-beta",
       "webview_used": false
     },
     {
       "language": "en",
       "theme": "dark",
-      "frames": 19,
+      "core_log_rows": 2,
+      "frames": 20,
       "network_changed": false,
       "pages": 8,
       "qml_issues": 0,
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.2-beta",
+      "version": "1.0.3-beta",
       "webview_used": false
     }
   ],
@@ -193,46 +203,32 @@
     "data_preserved": true,
     "registry_removed": true,
     "installed_ui": {
-      "frames": 19,
+      "core_log_rows": 1,
+      "frames": 20,
       "network_changed": false,
       "pages": 8,
       "qml_issues": 0,
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.2-beta",
+      "version": "1.0.3-beta",
       "webview_used": false
     },
     "tun_service_installed": false,
     "global_network_changed": false
   },
-  "switch_benchmark": {
-    "scenario": "real_connection_switch_rollback_metrics_and_cleanup; owned loopback SOCKS/TLS endpoints",
-    "build": "debug",
-    "before_seconds": 88.06,
-    "after_seconds": 44.13,
-    "per_remote_server_guarantee": false
-  },
   "log_review": {
-    "days": [
-      "2026-10-22",
-      "2026-10-23",
-      "2026-10-25"
-    ],
-    "latest_core_errors": 51,
-    "latest_error_types": {
-      "unreachable_ipv6": 25,
-      "timeout": 16,
-      "nxdomain": 3,
-      "dns_http2_interrupted": 4,
-      "dns_tls_bad_record_mac": 3
-    },
+    "supplied_errors": 91,
+    "direct_timeouts": 66,
+    "unreachable_ipv6": 23,
+    "interrupted_dns_http2": 2,
+    "user_settings_inspected_read_only": true,
     "external_errors_hidden": false
   },
   "system_network_changed": false,
   "limits": [
-    "No live privileged TUN switch or MTU scan on the user VPN.",
-    "External DNS, TLS transport and remote reachability failures remain visible.",
-    "Self-steal awaits the intended feature description."
+    "No live privileged TUN connection or route/proxy changes were performed on the user network.",
+    "Automatic IPv6 policy is verified with injected interface capabilities and real core configuration checks.",
+    "External reachability failures remain visible; user application/domain routes were not modified."
   ]
 }

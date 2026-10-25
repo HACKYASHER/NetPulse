@@ -376,6 +376,7 @@ impl NetworkCore {
             || prefs.mtu != self.prefs.mtu
             || prefs.network_preset != self.prefs.network_preset
             || prefs.fake_ip != self.prefs.fake_ip
+            || prefs.ipv6_mode != self.prefs.ipv6_mode
             || prefs.routing_rules != self.prefs.routing_rules
             || ((prefs.effective_tun() || self.prefs.effective_tun())
                 && (prefs.sniff_excluded_apps != self.prefs.sniff_excluded_apps
@@ -385,7 +386,8 @@ impl NetworkCore {
             || prefs.tls_defaults != self.prefs.tls_defaults
             || prefs.transport_engine != self.prefs.transport_engine
             || prefs.proxy_port != self.prefs.proxy_port
-            || prefs.probe_url != self.prefs.probe_url;
+            || prefs.probe_url != self.prefs.probe_url
+            || prefs.logging_level != self.prefs.logging_level;
         let active = self.active.clone();
         let applied = self.prefs.clone();
         if routing_changed && let Some(p) = &active {
@@ -434,6 +436,9 @@ impl NetworkCore {
             #[cfg(windows)]
             if prefs.effective_tun() {
                 crate::service::ensure_started()?;
+                if crate::service::status()?.version!=env!("CARGO_PKG_VERSION") {
+                    return Err(Error::new("ServiceUpgradeRequired","tun-prepare","Обновите службу TUN в разделе Сеть → Служба TUN (UAC). Текущее подключение сохранено."));
+                }
             }
             #[cfg(not(windows))]
             if prefs.effective_tun() {
@@ -1435,6 +1440,8 @@ mod tests {
                 .timeout(Duration::from_secs(5)).build().unwrap();
             assert_eq!(client.get(&prefs.probe_url).send().unwrap().text().unwrap(),"NETPULSE");
         }
+        let _=core.snapshot();
+        assert!(core.store.logs().unwrap().iter().any(|e|e.subsystem=="Core"&&e.code=="RuntimeOutput"&&e.level=="INFO"&&e.message.contains("connection")),"Core tab must receive real INFO runtime output");
         let before=core.store.preferences().unwrap();
         let mut rejected=before.clone();rejected.transport_engine="xray".into();
         core.store.test_read_only(true);assert!(core.apply_preferences(rejected).is_err());core.store.test_read_only(false);

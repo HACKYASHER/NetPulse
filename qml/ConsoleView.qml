@@ -88,7 +88,7 @@ Rectangle {
             }
         }
 
-        var oldX = viewport.contentX, oldY = viewport.contentY
+        var oldX = sameSource ? viewport.contentX : 0, oldY = viewport.contentY
         var oldCursor = consoleText.cursorPosition, start = consoleText.selectionStart, end = consoleText.selectionEnd
         var previousHeight = consoleText.contentHeight, removedCharacters = 0
         var incremental = prefix || overlap > 0
@@ -114,6 +114,7 @@ Rectangle {
             if (end > start) consoleText.select(Math.max(0, start - removedCharacters), Math.max(0, end - removedCharacters))
             else consoleText.cursorPosition = Math.max(0, Math.min(consoleText.length, oldCursor - removedCharacters))
         }
+        if (!sameSource) { consoleText.deselect(); consoleText.cursorPosition=0; viewport.contentX=0 }
         if (follow) scrollToBottom()
         else {
             viewport.contentX = Math.max(0, Math.min(oldX, Math.max(0, viewport.contentWidth - viewport.width)))

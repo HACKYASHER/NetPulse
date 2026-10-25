@@ -18,6 +18,7 @@ fn main() {
     for (field, values) in [
         ("language", json!(["ru","en"])), ("theme", json!(["dark","light","system"])),
         ("transport_engine", json!(["auto","sing-box","xray"])),
+        ("ipv6_mode", json!(["auto","ipv4_only","dual_stack"])),
         ("route_mode", json!(["global","whitelist","blacklist"])),
         ("logging_level", json!(["DEBUG","INFO","WARNING","ERROR"])),
         ("ping_method", json!(["proxy_https_rtt","proxy_https_head_rtt","tcp_connect_rtt","icmp_rtt"])),
@@ -65,6 +66,8 @@ fn main() {
         ("Mux boundaries".into(),json!({"multiplex":{"enabled":true,"concurrency":-1,"xudp_concurrency":128,"udp_443":"reject"}})),
         ("Mux UDP allow".into(),json!({"multiplex":{"enabled":true,"udp_443":"allow"}})),
         ("TUN and System Proxy".into(),json!({"tun":true,"system_proxy":true})),
+        ("IPv4 TUN with FakeIP".into(),json!({"tun":true,"fake_ip":true,"ipv6_mode":"ipv4_only"})),
+        ("Forced dual stack split TUN".into(),json!({"tun":true,"route_mode":"whitelist","ipv6_mode":"dual_stack"})),
     ]);
     let profile = imports::parse_uri("trojan://synthetic-test@127.0.0.1:443?security=tls&sni=example.invalid#Offline").unwrap();
     let database = directory.join("netpulse.db");
@@ -79,7 +82,7 @@ fn main() {
         plan.validate(&engine).unwrap_or_else(|e|panic!("Bundled core rejected {name}: {e:?}"));
         passed.push(name.clone());
     }
-    let invalid=[json!({"dns":{"mode":"udp","server":"not-an-ip"}}),json!({"dns_route":"vpn"}),json!({"mtu":1279}),json!({"mtu":9001}),json!({"proxy_port":1023}),json!({"probe_url":"http://example.com"}),json!({"probe_url":"https://user:pass@example.com"}),json!({"theme":"invalid"}),json!({"language":"invalid"}),json!({"transport_engine":"invalid"}),json!({"applications":["not-an-exe"]}),json!({"bypass_domains":["https://example.com/path"]}),json!({"fragmentation":{"length":"200-10"}}),json!({"multiplex":{"concurrency":129}}),json!({"tls_defaults":{"sni_mode":"custom","server_name":"https://invalid","http_host":null,"fingerprint":null}}),json!({"routing_rules":[{"enabled":true,"kind":"domain","value":"example.com","action":"invalid"}]})];
+    let invalid=[json!({"ipv6_mode":"bad"}),json!({"dns":{"mode":"udp","server":"not-an-ip"}}),json!({"dns_route":"vpn"}),json!({"mtu":1279}),json!({"mtu":9001}),json!({"proxy_port":1023}),json!({"probe_url":"http://example.com"}),json!({"probe_url":"https://user:pass@example.com"}),json!({"theme":"invalid"}),json!({"language":"invalid"}),json!({"transport_engine":"invalid"}),json!({"applications":["not-an-exe"]}),json!({"bypass_domains":["https://example.com/path"]}),json!({"fragmentation":{"length":"200-10"}}),json!({"multiplex":{"concurrency":129}}),json!({"tls_defaults":{"sni_mode":"custom","server_name":"https://invalid","http_host":null,"fingerprint":null}}),json!({"routing_rules":[{"enabled":true,"kind":"domain","value":"example.com","action":"invalid"}]})];
     for patch in &invalid { assert!(preferences(patch.clone()).validate().is_err(),"Accepted invalid setting: {patch}"); }
     for patch in [json!({"transport_engine":"sing-box","fragmentation":{"enabled":true}}),json!({"transport_engine":"xray","tls_defaults":{"sni_mode":"disabled","server_name":"example.invalid","http_host":null,"fingerprint":null}})] {
         let prefs=preferences(patch);assert!(RuntimePlan::new(&engine,&profile,&prefs,24560,"api","proxy",[24561,24562]).is_err());

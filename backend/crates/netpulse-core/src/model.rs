@@ -194,6 +194,7 @@ pub struct Preferences {
     pub transport_engine: String,
     pub tls_defaults: Option<crate::transport_options::ProfileTransport>,
     pub fake_ip: bool,
+    pub ipv6_mode: String,
     pub routing_rules: Vec<crate::advanced_routing::Rule>,
     pub sniff_excluded_apps: Vec<String>,
     pub sniffing: crate::advanced_routing::Sniffing,
@@ -264,6 +265,7 @@ impl Default for Preferences {
             transport_engine: "auto".into(),
             tls_defaults: None,
             fake_ip: false,
+            ipv6_mode: "auto".into(),
             routing_rules: vec![],
             sniff_excluded_apps: vec![],
             sniffing: Default::default(),
@@ -468,6 +470,7 @@ impl Preferences {
                 ));
             }
         }
+        if !["auto","ipv4_only","dual_stack"].contains(&self.ipv6_mode.as_str()) { return Err(fail("Unknown TUN IPv6 mode")); }
         if !["auto", "sing-box", "xray"].contains(&self.transport_engine.as_str()) {
             return Err(fail("Unknown transport engine"));
         }
