@@ -202,6 +202,22 @@ ApplicationWindow {
             }
             compare(LogText.hint("unknown engine failure",true),"")
         }
+        function test_11_activity_console_fits_available_height() {
+            activityLoader.active=true
+            tryCompare(activityLoader,"status",Loader.Ready)
+            var view=activityLoader.item,console=findChild(view,"activityConsole")
+            view.follow=false
+            for(var available of [650,500,300,230]) {
+                activityLoader.height=available
+                tryVerify(function(){return Math.abs(console.y+console.height-view.height)<1})
+                verify(console.height>0)
+                view.loadError="Ошибка службы: файлы недоступны. ".repeat(10)
+                tryVerify(function(){return Math.abs(console.y+console.height-view.height)<1})
+                verify(console.height>=0)
+                view.loadError=""
+            }
+            activityLoader.height=650;activityLoader.active=false
+        }
         function test_08_subscription_quota_and_expiry() {
             usage.usage={upload:100,download:200,total:1000,expire:1}
             compare(usage.ratio,0.3);compare(usage.expired,true)

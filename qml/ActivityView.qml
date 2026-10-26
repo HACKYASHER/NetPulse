@@ -14,6 +14,7 @@ ColumnLayout {
     property bool loading: false
     property string loadError: ""
     property string readRequestId: ""
+    readonly property bool consoleFitsViewport: logView.y >= 0 && Math.abs(logView.y + logView.height - height) < 1
     property var categories: ["main", "core", "tunnel", "subscriptions", "service", "events"]
     signal loaded(string source,int count)
     function selectCategory(index){logCategory.currentIndex=index;load()}
@@ -134,7 +135,9 @@ ColumnLayout {
         id: logView
         objectName: "activityConsole"
         Layout.fillWidth: true
-        Layout.preferredHeight: Math.max(420, view.appWindow.height - 330)
+        Layout.fillHeight: true
+        Layout.minimumHeight: 0
+        Layout.preferredHeight: 420
         appWindow: view.appWindow
         rows: view.renderRows()
         sourceKey: view.displayedSource

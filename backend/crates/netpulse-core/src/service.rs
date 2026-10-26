@@ -251,13 +251,12 @@ pub fn elevated_install(
     install: bool,
     upgrade: bool,
 ) -> Result<()> {
-    if !installer.is_file() {
-        return Err(Error::new(
-            "ServiceInstallerMissing",
-            "service-install",
-            "NetPulseService.exe is missing from application resources; use the complete release folder or installer",
-        ));
+    if install {
+        let state=installation_status()?;
+        if let Some(error)=state.error.filter(|e|matches!(e.code.as_str(),"ServiceRegistrationDamaged"|"ServiceRestartRequired")) { return Err(error); }
     }
+    if install { validate_install_source(installer, engine_directory)?; }
+    else { readable_service_component(installer)?; }
     let parameters = if install {
         format!(
             "{} {} \"{}\"",
@@ -269,6 +268,7 @@ pub fn elevated_install(
         format!("--uninstall {}", current_sid()?)
     };
     elevated_parameters(installer, &parameters)?;
+    if install { validate_service_files(&protected_directory()?)?; }
     let s = status()?;
     if s.installed != install {
         return Err(Error::new(
@@ -277,6 +277,29 @@ pub fn elevated_install(
             "Windows service state differs from the installation result",
         ));
     }
+    Ok(())
+}
+fn readable_service_component(path: &Path) -> Result<()> {
+    use std::os::windows::fs::MetadataExt;
+    let unavailable = |code: i32| Error::new(
+        "ServiceComponentsUnavailable", "service-files",
+        format!("Файл службы {} отсутствует или недоступен (Windows {code}). Операция остановлена. Проверьте отчёт антивируса; при срабатывании не повторяйте восстановление до проверки файла.",path.file_name().unwrap_or_default().to_string_lossy()),
+    );
+    let metadata = std::fs::symlink_metadata(path).map_err(|e|unavailable(e.raw_os_error().unwrap_or(0)))?;
+    if !metadata.is_file() || metadata.len()==0 || metadata.file_attributes() & 0x400 != 0 { return Err(unavailable(0)); }
+    std::fs::File::open(path).map_err(|e|unavailable(e.raw_os_error().unwrap_or(0)))?;
+    Ok(())
+}
+pub fn validate_service_files(directory: &Path) -> Result<()> {
+    for name in ["NetPulseService.exe","sing-box.exe","libcronet.dll","xray.exe"] {
+        readable_service_component(&directory.join(name))?;
+    }
+    Ok(())
+}
+pub fn validate_install_source(installer: &Path, directory: &Path) -> Result<()> {
+    readable_service_component(installer)?;
+    crate::engine::verify_engine(&directory.join("sing-box.exe"))?;
+    crate::runtime::verify_xray(&directory.join("xray.exe"))?;
     Ok(())
 }
 /// Installer preparation: stop only the verified service owned by this user.
@@ -341,6 +364,18 @@ fn elevated_parameters(installer: &Path, parameters: &str) -> Result<()> {
             std::io::Error::last_os_error(),
         ));
     }
+    maintenance_result(code)
+}
+fn maintenance_result(code: u32) -> Result<()> {
+    if code == 20 {
+        return Err(Error::new("ServiceUpdateInterrupted","service-install","Обслуживание службы остановлено: компонент отсутствует, заблокирован или изменён. Проверьте отчёт антивируса; автоматическое восстановление файлов не выполняется."));
+    }
+    if code == 21 {
+        return Err(Error::new("ServiceStopTimeout","service-install","Служба не подтвердила остановку. Обновление отменено, файлы сохранены. Закройте NetPulse и повторите после перезапуска Windows."));
+    }
+    if code == 22 { return Err(service_configuration_error(windows_service::Error::Winapi(std::io::Error::from_raw_os_error(2)))); }
+    if code == 23 { return Err(Error::new("UserCancelled","service-install","Установка службы отменена в окне подтверждения Windows.")); }
+    if code == 24 { return Err(service_error(windows_service::Error::Winapi(std::io::Error::from_raw_os_error(1072)))); }
     if code != 0 {
         return Err(Error::new(
             "ServiceInstallFailed",
@@ -351,6 +386,16 @@ fn elevated_parameters(installer: &Path, parameters: &str) -> Result<()> {
         ));
     }
     Ok(())
+}
+pub fn maintenance_exit_code(error: &Error) -> i32 {
+    match error.code.as_str() {
+        "ServiceComponentsUnavailable" | "ServiceUpdateInterrupted" | "RuntimeComponentUnavailable" | "ServiceSecurityBlocked" | "ServiceFilesMissing" => 20,
+        "ServiceStopTimeout" | "ServiceStopFailed" => 21,
+        "ServiceRegistrationDamaged" => 22,
+        "UserCancelled" => 23,
+        "ServiceRestartRequired" => 24,
+        _ => 1,
+    }
 }
 fn pipe_name(sid: &str) -> String {
     format!(r"\\.\pipe\NetPulse.CoreQt.{sid}")
@@ -397,15 +442,33 @@ fn service_error(e: windows_service::Error) -> Error {
         windows_service::Error::Winapi(e) => e.raw_os_error(),
         _ => None,
     };
+    if matches!(code, Some(2 | 3)) {
+        return Error::new("ServiceFilesMissing","service-control","Windows не нашла файл или путь службы NetPulse. Проверьте отчёт антивируса; повторная установка заблокированных файлов не выполняется автоматически.");
+    }
+    if code==Some(1072) {
+        return Error::new("ServiceRestartRequired","service-control","Windows ещё завершает удаление службы NetPulse. Закройте клиент и установщик; если состояние сохраняется, перезапустите Windows перед установкой службы.");
+    }
+    if code == Some(5) {
+        return Error::new("ServiceAccessDenied", "service-control", "Windows отказала в доступе к службе NetPulse (код 5). Проверьте доступность файлов и отчёт антивируса. Повторное обновление не выполняется автоматически.");
+    }
+    if matches!(code, Some(225 | 226)) {
+        return Error::new("ServiceSecurityBlocked", "service-control", format!("Windows заблокировала файл службы по результатам проверки безопасности (код {}). Проверьте отчёт антивируса; запуск остановлен.",code.unwrap()));
+    }
     Error::new(
         "WindowsServiceError",
         "service-control",
         format!("Windows service operation failed ({code:?})"),
     )
 }
+pub fn service_configuration_error(error: windows_service::Error) -> Error {
+    if matches!(&error,windows_service::Error::Winapi(e) if matches!(e.raw_os_error(),Some(2|3))) {
+        let code=match &error {windows_service::Error::Winapi(e)=>e.raw_os_error().unwrap_or(2),_=>2};
+        Error::new("ServiceRegistrationDamaged","service-config",format!("Windows ещё видит службу NetPulse, но не может прочитать её регистрацию (код {code}: файл или запись не найдены). Завершите обработку обнаружения антивирусом и перезапустите Windows. Повторная установка службы сейчас отменена."))
+    } else { service_error(error) }
+}
 pub fn status() -> Result<ServiceStatus> {
     let state = installation_status()?;
-    if state.running {
+    if state.running && state.error.is_none() {
         call_once(&Request::Status {}, Duration::from_millis(750))
     } else {
         Ok(state)
@@ -419,7 +482,7 @@ pub fn installation_status() -> Result<ServiceStatus> {
     };
     let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)
         .map_err(service_error)?;
-    let service = match manager.open_service(SERVICE_NAME, ServiceAccess::QUERY_STATUS) {
+    let service = match manager.open_service(SERVICE_NAME, ServiceAccess::QUERY_STATUS | ServiceAccess::QUERY_CONFIG) {
         Ok(s) => s,
         Err(windows_service::Error::Winapi(e)) if e.raw_os_error() == Some(1060) => {
             return Ok(ServiceStatus {
@@ -436,6 +499,7 @@ pub fn installation_status() -> Result<ServiceStatus> {
         Err(e) => return Err(service_error(e)),
     };
     let s = service.query_status().map_err(service_error)?;
+    let configuration_error=service.query_config().err().map(service_configuration_error);
     if s.current_state != windows_service::service::ServiceState::Running {
         return Ok(ServiceStatus {
             installed: true,
@@ -444,7 +508,7 @@ pub fn installation_status() -> Result<ServiceStatus> {
             owned_by_caller: false,
             tun_ready: false,
             version: env!("CARGO_PKG_VERSION").into(),
-            error: None,
+            error: configuration_error,
             diagnostic: String::new(),
         });
     }
@@ -455,7 +519,7 @@ pub fn installation_status() -> Result<ServiceStatus> {
         owned_by_caller: false,
         tun_ready: false,
         version: String::new(),
-        error: None,
+        error: configuration_error,
         diagnostic: String::new(),
     })
 }
@@ -472,7 +536,7 @@ fn expected_service_pid() -> Result<u32> {
             ServiceAccess::QUERY_STATUS | ServiceAccess::QUERY_CONFIG,
         )
         .map_err(service_error)?;
-    let config = s.query_config().map_err(service_error)?;
+    let config = s.query_config().map_err(service_configuration_error)?;
     let expected = protected_directory()?.join("NetPulseService.exe");
     // SCM quotes paths containing spaces. Never trust an unrelated service PID.
     let actual = config.executable_path.to_string_lossy();
@@ -504,15 +568,21 @@ pub fn ensure_started() -> Result<()> {
     let service = m
         .open_service(
             SERVICE_NAME,
-            ServiceAccess::START | ServiceAccess::QUERY_STATUS,
+            ServiceAccess::START | ServiceAccess::QUERY_STATUS | ServiceAccess::QUERY_CONFIG,
         )
-        .map_err(|_| {
-            Error::new(
+        .map_err(|error| {
+            if matches!(&error, windows_service::Error::Winapi(e) if e.raw_os_error()==Some(1060)) { Error::new(
                 "ServiceNotInstalled",
                 "tun-prepare",
                 "Install the NetPulse Windows service from Settings before enabling TUN",
-            )
+            ) } else { service_error(error) }
         })?;
+    let directory = protected_directory()?;
+    let config = service.query_config().map_err(service_configuration_error)?;
+    if !config.executable_path.to_string_lossy().trim_matches('"').eq_ignore_ascii_case(&directory.join("NetPulseService.exe").to_string_lossy()) {
+        return Err(Error::new("ServiceIdentityMismatch","tun-prepare","Путь службы отличается от защищённой установки NetPulse; запуск отменён."));
+    }
+    validate_service_files(&directory)?;
     if service.query_status().map_err(service_error)?.current_state != ServiceState::Running {
         service.start::<&str>(&[]).map_err(service_error)?;
     }
@@ -1072,7 +1142,7 @@ pub struct Controller {
     tun_health: TunHealth,
 }
 impl Controller {
-    fn inspect_tun(owned: &routes::NetworkView) -> Result<bool> {
+    fn inspect_tun(owned: &routes::NetworkView, families: routes::RouteFamilies) -> Result<bool> {
         let mut current = routes::capture_owned()?;
         current.interfaces.retain(|i| {
             owned
@@ -1080,7 +1150,7 @@ impl Controller {
                 .iter()
                 .any(|o| o.luid == i.luid && o.guid == i.guid)
         });
-        Ok(routes::default_routes_present(&current))
+        Ok(routes::default_routes_present(&current, families))
     }
     pub fn poll(&mut self) {
         let owner_dead = self
@@ -1095,7 +1165,8 @@ impl Controller {
         if self.engine.is_some()
             && let Some(owned) = &self.owned
         {
-            self.tun_health.refresh(now, || Self::inspect_tun(owned));
+            let families = self.plan.as_ref().map(RuntimePlan::tun_route_families).unwrap_or_default();
+            self.tun_health.refresh(now, || Self::inspect_tun(owned, families));
         } else {
             self.tun_health = TunHealth::default();
         }
@@ -1267,6 +1338,7 @@ impl Controller {
                     probe_ports,
                 )?;
                 plan.validate(engine_path)?;
+                let families = plan.tun_route_families();
                 self.engine = Some(plan.start(engine_path)?);
                 self.plan = Some(plan);
                 self.owner = Some(process);
@@ -1276,7 +1348,7 @@ impl Controller {
                 let result = (|| {
                     for _ in 0..100 {
                         let owned = routes::capture_owned()?;
-                        if routes::default_routes_present(&owned) {
+                        if routes::default_routes_present(&owned, families) {
                             save_owned(&owned)?;
                             self.owned = Some(owned);
                             self.tun_health = TunHealth {
@@ -1315,6 +1387,36 @@ impl Drop for Controller {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn missing_or_empty_service_components_stop_before_scm_start() {
+        let directory=std::env::temp_dir().join(format!("netpulse-service-files-{}",uuid::Uuid::new_v4()));
+        std::fs::create_dir(&directory).unwrap();
+        for name in ["NetPulseService.exe","sing-box.exe","libcronet.dll","xray.exe"] {
+            assert_eq!(validate_service_files(&directory).unwrap_err().code,"ServiceComponentsUnavailable");
+            std::fs::write(directory.join(name),b"fixture").unwrap();
+        }
+        validate_service_files(&directory).unwrap();
+        std::fs::write(directory.join("libcronet.dll"),b"").unwrap();
+        assert_eq!(validate_service_files(&directory).unwrap_err().code,"ServiceComponentsUnavailable");
+        std::fs::remove_dir_all(directory).unwrap();
+        assert_eq!(service_error(windows_service::Error::Winapi(std::io::Error::from_raw_os_error(5))).code,"ServiceAccessDenied");
+        assert_eq!(service_error(windows_service::Error::Winapi(std::io::Error::from_raw_os_error(225))).code,"ServiceSecurityBlocked");
+        assert!(maintenance_result(0).is_ok());
+        assert_eq!(maintenance_result(20).unwrap_err().code,"ServiceUpdateInterrupted");
+        assert_eq!(maintenance_result(21).unwrap_err().code,"ServiceStopTimeout");
+        assert_eq!(maintenance_result(7).unwrap_err().code,"ServiceInstallFailed");
+    }
+    #[test]
+    fn damaged_registration_and_cancel_keep_distinct_installer_results() {
+        for (code,name) in [(20,"ServiceUpdateInterrupted"),(21,"ServiceStopTimeout"),(22,"ServiceRegistrationDamaged"),(23,"UserCancelled"),(24,"ServiceRestartRequired")] {
+            let error=maintenance_result(code).unwrap_err();assert_eq!(error.code,name);
+            assert_eq!(maintenance_exit_code(&error),code as i32);
+        }
+        let error=service_error(windows_service::Error::Winapi(std::io::Error::from_raw_os_error(2)));
+        assert_eq!(error.code,"ServiceFilesMissing");
+        let error=service_configuration_error(windows_service::Error::Winapi(std::io::Error::from_raw_os_error(2)));
+        assert_eq!(error.code,"ServiceRegistrationDamaged");assert!(!error.message.contains("Some("));
+    }
     #[test]
     fn route_checks_are_coalesced_and_only_confirmed_loss_expires_the_session() {
         let now = std::time::Instant::now();

@@ -1,13 +1,22 @@
-# NetPulse 1.0.3 beta
+# NetPulse 1.0.4
 
-NetPulse fixes missing core connection logs and automatic IPv6 behavior in split tunneling.
+Исправления службы TUN, установщика и журнала для Windows x64.
 
-- Both sing-box and Xray now receive the selected logging level. INFO includes ordinary connection records; the journal has a visible level selector. Active level changes use the existing verified restart and rollback path.
-- Category switching resets horizontal scroll and selection, so shorter core lines cannot remain outside the visible area. Date/model loading settles before reading, and loading or read errors are shown explicitly.
-- The journal reads the newest 500 lines across managed rotation files within one 256 KiB budget. An empty current file no longer hides existing rotated core records.
-- TUN IPv6 has Auto, IPv4 only and IPv4/IPv6 modes. In Auto, a whitelist/direct split tunnel without a physical IPv6 default uses IPv4 instead of advertising unusable IPv6 to other applications. Global VPN keeps server-side IPv6. Explicit dual stack remains available.
-- Service compatibility is checked before tearing down a working connection, so an outdated TUN service does not cause a destructive failed switch.
+- Исправлена проверка готовности TUN в режиме только IPv4.
+- Обновление службы заменяет только изменившиеся файлы, проверяет их и сохраняет оригиналы. При внешнем удалении или блокировке обслуживание останавливается; принудительное завершение службы не используется.
+- Установщик различает повреждённую регистрацию службы, отсутствующие компоненты, отмену UAC и незавершённое удаление. Сообщения доступны на русском и английском. «Повтор» предлагается после отмены UAC.
+- Старые папки обновления сохраняются и сами по себе не блокируют новую установку после удаления старой регистрации.
+- Конфликт с уже включённым системным прокси Windows объясняется явно. Настройки другого клиента автоматически не заменяются.
+- Консоль «Активности» помещается в доступную высоту окна, в том числе при сообщении об ошибке.
 
-The supplied log contained 91 errors: 66 direct-connection timeouts, 23 unreachable IPv6 destinations and 2 interrupted DNS HTTP/2 requests. Timeouts to unavailable remote/local peers are not hidden or converted into successes. TLS verification and application routing choices remain enabled.
+**Проверка Касперским:** на предоставленном пользователем снимке контекстная проверка 3 381 объектов завершилась без обнаруженных угроз. Точный состав проверенных файлов и их хеши не показаны. Повторное обслуживание службы под защитой Касперского отдельно не проверялось; служба остаётся неподписанной. Исходное поведенческое срабатывание не подтверждено производителем как ложное.
 
-Automated checks use owned local endpoints and synthetic data. No live TUN, DNS, MTU or Windows proxy settings were changed during verification. Install the current TUN service when upgrading (normal Windows UAC); older service binaries cannot accept newer settings.
+Проверки: 117 пройденных тестов сетевого ядра и 2 проверки IPv6, заблокированные окружением, 8 тестов файлов службы, 15 проверок взаимодействия интерфейса, 14 групп команд клиента; установщик проверен на установку, восстановление, удаление и 8 сценариев ошибок службы. Тесты установщика используют имитацию службы и не меняют действующий VPN.
+
+Установка и обновление сохраняют настройки и подписки. Для TUN требуется служба и подтверждение Windows. Если регистрация повреждена после действий защиты, сначала завершите обработку обнаружения, закройте клиент и установщик и перезапустите Windows.
+
+Локальные тестовые сборки с номером 1.0.5-beta можно заменить вручную этим установщиком: автоматическая проверка не предлагает понижение номера.
+
+Ограничение среды проверки: стандартный ping Windows к ::1 не проходит, а независимое TCP-соединение с ::1 запрещено системой (10013). Настройки сети и защиты не менялись.
+
+Подробности: [проверки](https://github.com/HACKYASHER/NetPulse/blob/v1.0.4/VERIFICATION.md), [диагностика службы и прокси](https://github.com/HACKYASHER/NetPulse/blob/v1.0.4/docs/FIXES-1.0.4.ru.md).

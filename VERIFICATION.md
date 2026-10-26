@@ -1,17 +1,29 @@
-# Verification — NetPulse 1.0.3 beta
+# Verification — NetPulse 1.0.4
 
-Validated on Windows x64 on October 25, 2026 with Qt 6.8.3 and the bundled official cores. Machine-readable results are in VERIFICATION.json.
+Regular GitHub release, Windows x64, validated on October 26, 2026.
 
 | Area | Result |
 |---|---|
-| Core tests | 116 passed (97 regular, 19 engine-backed), zero failures |
-| Real INFO output | A separate owned-loopback switch test verifies an actual INFO connection record |
-| Settings | 92 persisted and real-core-validated variants; 17 invalid and 2 incompatible values rejected |
-| Controller integration | 14 groups, including 62 settings variants |
-| QML interactions | 12 scenarios plus setup/cleanup passed |
-| Packaged UI | 20 frames across 8 pages, RU/EN and dark/light; non-empty real core category and zero QML issues in every run |
-| Installer | Scoped install, repair/update, installed core journal, uninstall and data preservation passed |
+| Core checks | 117 passed, 2 blocked by the machine's IPv6 loopback restrictions |
+| Stable updates | 1.0.4 is newer than 1.0.3-beta and 1.0.4-beta; regular release metadata accepted |
+| Service file checks | 8 passed, including preservation of orphaned update directories |
+| Service binary | Safe self-test reports version 1.0.4 and no system changes |
+| QML interactions | 15 passed, including setup/cleanup |
+| Controller integration | 14 groups |
+| Packaged UI | 22 frames, 8 pages, RU/EN and dark/light; Activity fits the viewport |
+| Installer | Scoped install, repair/update, uninstall; 8 simulated failure cases and subsequent success |
 
-Tests cover all log categories with following paused, source scroll reset, edge selection/copying, rotation reading, logging levels for both cores, legacy preferences and automatic/forced IPv6 policy. The actual pinned engine validates IPv4 TUN with and without FakeIP. The current runtime remains alive when a candidate or local port fails. Service version is checked before teardown.
+Windows ping to ::1 fails independently of NetPulse; an independent local TCP
+IPv6 probe returns access denied (10013). The two affected tests are reported as
+blocked, not passed. Their strict source assertions remain in the repository.
+The initial run also exposed an HTTP fixture read-mode issue; the fixture now
+uses blocking reads and consumes the complete request headers before replying.
 
-No live TUN was established and the user's Windows routes, proxy, DNS and MTU were not modified. Native routes and saved settings were inspected read-only for diagnosis. IPv6 capability combinations are injected into policy tests; privileged service operation is outside this automated run. External direct-connection failures remain visible.
+The user supplied a Kaspersky Premium context-menu scan reporting no threats
+among 3,381 objects. Its exact files and hashes were not shown. The service is
+unsigned; the previous behavioral detection has not received a vendor false
+positive determination. Actual service maintenance under antivirus protection
+and a privileged TUN session were not tested. No protection, quarantine, global
+proxy or route settings were modified during these checks.
+
+Machine-readable evidence: VERIFICATION.json. Release notes: RELEASE_NOTES.md.

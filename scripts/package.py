@@ -43,11 +43,11 @@ Var ExistingDirectory
 Var ExistingVersion
 Name "NetPulse"
 Caption "NetPulse"
-VIProductVersion "1.0.3.0"
+VIProductVersion "1.0.4.0"
 VIAddVersionKey "ProductName" "NetPulse"
 VIAddVersionKey "FileDescription" "NetPulse VPN client installer"
-VIAddVersionKey "ProductVersion" "1.0.3 beta"
-VIAddVersionKey "FileVersion" "1.0.3 beta"
+VIAddVersionKey "ProductVersion" "1.0.4"
+VIAddVersionKey "FileVersion" "1.0.4"
 VIAddVersionKey "LegalCopyright" "NetPulse contributors, GPL-3.0-or-later"
 OutFile "@OUTPUT@"
 InstallDir "$LOCALAPPDATA\Programs\NetPulse"
@@ -78,6 +78,22 @@ LangString RepairLabel ${LANG_RUSSIAN} "Восстановить файлы пр
 LangString RepairLabel ${LANG_ENGLISH} "Repair application files and the TUN service"
 LangString RemoveLabel ${LANG_RUSSIAN} "Удалить NetPulse с компьютера"
 LangString RemoveLabel ${LANG_ENGLISH} "Uninstall NetPulse from this computer"
+LangString ServiceInstalling ${LANG_RUSSIAN} "Проверка и установка службы TUN NetPulse..."
+LangString ServiceInstalling ${LANG_ENGLISH} "Checking and installing the NetPulse TUN service..."
+LangString ServiceInstalled ${LANG_RUSSIAN} "Служба TUN установлена и проверена."
+LangString ServiceInstalled ${LANG_ENGLISH} "The TUN service is installed and verified."
+LangString ServiceUnavailable ${LANG_RUSSIAN} "Клиент установлен, но TUN недоступен. Код обслуживания: $ServiceResult."
+LangString ServiceUnavailable ${LANG_ENGLISH} "The client is installed, but TUN is unavailable. Maintenance code: $ServiceResult."
+LangString ServiceFilesBlocked ${LANG_RUSSIAN} "Компоненты службы отсутствуют или заблокированы. Проверьте отчёт антивируса. Повторная установка файлов сейчас отменена; клиент установлен без готовой службы TUN."
+LangString ServiceFilesBlocked ${LANG_ENGLISH} "Service components are missing or blocked. Check the antivirus report. File installation has stopped; the client is installed without a ready TUN service."
+LangString ServiceDamaged ${LANG_RUSSIAN} "Windows ещё видит старую службу NetPulse, но её регистрация повреждена. Завершите обработку обнаружения антивирусом, закройте клиент и установщик, затем перезапустите Windows. Повторная установка службы сейчас отменена."
+LangString ServiceDamaged ${LANG_ENGLISH} "Windows still lists the old NetPulse service, but its registration is damaged. Finish the antivirus remediation, close the client and installer, then restart Windows. Service installation has stopped."
+LangString ServiceRestart ${LANG_RUSSIAN} "Windows не подтвердила остановку или удаление службы. Закройте NetPulse и установщик. Если состояние сохраняется, перезапустите Windows; файлы службы сейчас не заменяются."
+LangString ServiceRestart ${LANG_ENGLISH} "Windows has not confirmed that the service stopped or was removed. Close NetPulse and the installer. If this persists, restart Windows; service files are not being replaced."
+LangString ServiceCancelled ${LANG_RUSSIAN} "Подтверждение Windows отменено. Нажмите «Повтор», чтобы снова запросить установку службы, или «Отмена», чтобы завершить установку клиента без готового TUN."
+LangString ServiceCancelled ${LANG_ENGLISH} "Windows confirmation was cancelled. Retry to request service installation again, or Cancel to finish installing the client without a ready TUN service."
+LangString ServiceFailed ${LANG_RUSSIAN} "Служба TUN не установлена (код $ServiceResult). Это не обязательно связано с подтверждением Windows. Клиент установлен; причина ошибки сохранена в подробностях установки."
+LangString ServiceFailed ${LANG_ENGLISH} "The TUN service was not installed (code $ServiceResult). This does not necessarily mean Windows confirmation was cancelled. The client is installed; the error is recorded in the installation details."
 
 Function MaintenanceCreate
   ReadRegStr $ExistingDirectory HKCU "Software\NetPulseQt" "InstallDir"
@@ -145,7 +161,7 @@ Section "NetPulse"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\NetPulseQt" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayName" "NetPulse"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.3-beta"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.4"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "Publisher" "NetPulse"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "UninstallString" '"$INSTDIR\Uninstall.exe"'
@@ -169,20 +185,47 @@ Section "NetPulse"
   ${GetOptions} $R0 "/NOSERVICE" $R1
   IfErrors install_service service_done
   install_service:
-  DetailPrint "Installing NetPulse TUN service (Windows confirmation required)..."
+  DetailPrint "$(ServiceInstalling)"
   nsExec::ExecToStack '"$INSTDIR\netpulsed.exe" --installer-service-install'
   Pop $ServiceResult
   Pop $1
   StrCmp $ServiceResult 0 service_success
-  DetailPrint "TUN service was not installed. System Proxy remains available."
+  DetailPrint "$(ServiceUnavailable)"
+  DetailPrint "$1"
   IfSilent service_failed
-  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "TUN service installation did not finish. Allow the Windows prompt to enable TUN. Retry, or Cancel to finish with System Proxy only." IDRETRY install_service
+  StrCmp $ServiceResult 20 service_files_blocked
+  StrCmp $ServiceResult 21 service_restart
+  StrCmp $ServiceResult 22 service_damaged
+  StrCmp $ServiceResult 23 service_cancelled
+  StrCmp $ServiceResult 24 service_restart
+  MessageBox MB_OK|MB_ICONEXCLAMATION "$(ServiceFailed)"
+  Goto service_failed
+  service_files_blocked:
+  MessageBox MB_OK|MB_ICONEXCLAMATION "$(ServiceFilesBlocked)"
+  Goto service_failed
+  service_damaged:
+  MessageBox MB_OK|MB_ICONEXCLAMATION "$(ServiceDamaged)"
+  Goto service_failed
+  service_restart:
+  MessageBox MB_OK|MB_ICONEXCLAMATION "$(ServiceRestart)"
+  Goto service_failed
+  service_cancelled:
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(ServiceCancelled)" IDRETRY install_service
   service_failed:
   WriteRegStr HKCU "Software\NetPulseQt" "TunService" "not-installed"
+  WriteRegStr HKCU "Software\NetPulseQt" "TunServiceError" "$ServiceResult"
+  StrCmp $ServiceResult "error" service_failure_unknown
+  StrCmp $ServiceResult "timeout" service_failure_unknown
+  SetErrorLevel $ServiceResult
+  Goto service_done
+  service_failure_unknown:
+  SetErrorLevel 29
   Goto service_done
   service_success:
+  SetErrorLevel 0
   WriteRegStr HKCU "Software\NetPulseQt" "TunService" "installed"
-  DetailPrint "TUN service installed and verified."
+  DeleteRegValue HKCU "Software\NetPulseQt" "TunServiceError"
+  DetailPrint "$(ServiceInstalled)"
   service_done:
 SectionEnd
 
@@ -243,7 +286,7 @@ SectionEnd
                 archive.write(file,relative.as_posix())
     source_archive=ROOT.parent/'ONE/release-v2/NetPulse-Engine-Sources.zip'
     if source_archive.is_file():shutil.copy2(source_archive,RELEASE/source_archive.name)
-    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.3-beta','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
+    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.4','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
     (RELEASE/'netpulse-qt-update-v1.json').write_text(json.dumps(marker,indent=2)+'\n',encoding='utf-8')
     outputs=[RELEASE/'netpulse-qt-update-v1.json',RELEASE/'NetPulse-Setup.exe',RELEASE/'NetPulse-Portable.zip',RELEASE/'NetPulse-Source.zip',PAYLOAD/'NetPulse.exe',PAYLOAD/'netpulsed.exe',PAYLOAD/'NetPulseService.exe']
     outputs += [p for p in [RELEASE/'NetPulse-Engine-Sources.zip',RELEASE/'VERIFICATION.json'] if p.is_file()]

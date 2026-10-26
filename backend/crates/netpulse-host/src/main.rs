@@ -137,7 +137,9 @@ fn main() {
     // Panic details can contain private data. Return a fixed message to stderr.
     std::panic::set_hook(Box::new(|_|eprintln!("NetPulse controller operation failed")));
     if let Err(error)=run() {
+        let installer=std::env::args_os().nth(1).is_some_and(|a|a=="--installer-service-install"||a=="--installer-service-remove");
+        let exit_code=if installer {netpulse_core::service::maintenance_exit_code(&error)} else {1};
         let _=host::send(&serde_json::json!({"event":"host-error","data":error}));
-        std::process::exit(1);
+        std::process::exit(exit_code);
     }
 }

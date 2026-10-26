@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use netpulse_core::{Error, Result, service};
+mod maintenance;
 use std::{
     ffi::OsString,
     sync::{
@@ -18,6 +19,9 @@ use windows_service::{
     service_dispatcher,
 };
 define_windows_service!(ffi_main, service_main);
+fn maintenance_exit(error: &Error) -> i32 {
+    service::maintenance_exit_code(error)
+}
 fn main() {
     let args: Vec<_> = std::env::args().collect();
     if args.get(1).is_some_and(|a| a == "--self-test") {
@@ -86,14 +90,14 @@ fn main() {
         })();
         if let Err(e) = result {
             eprintln!("{e}");
-            std::process::exit(1);
+            std::process::exit(maintenance_exit(&e));
         }
         return;
     }
     if args.get(1).is_some_and(|a| a == "--install") {
         if let Err(e) = install(&args) {
             eprintln!("{e}");
-            std::process::exit(1);
+            std::process::exit(maintenance_exit(&e));
         }
         return;
     }
@@ -212,7 +216,7 @@ impl Drop for InstallAttempt {
             if let Some(service) = self.registration.take() {
                 let _ = service.delete();
             }
-            // Directory was empty and protected before this transaction. No recursion.
+            // Fixed root filenames were absent; existing backup directories stay untouched. No recursion.
             for name in [
                 "NetPulseService.exe",
                 "sing-box.exe",
@@ -266,17 +270,7 @@ fn install(args: &[String]) -> Result<()> {
     }
     std::fs::create_dir_all(&dest).map_err(|e| Error::io("service-directory", e))?;
     service::protect_install_path(&dest)?;
-    if std::fs::read_dir(&dest)
-        .map_err(|e| Error::io("service-directory", e))?
-        .next()
-        .is_some()
-    {
-        return Err(Error::new(
-            "ExistingInstallFiles",
-            "service-install",
-            "Protected service directory is not empty; uninstall its existing version before installation",
-        ));
-    }
+    maintenance::validate_fresh_install_directory(&dest)?;
     let manager = ServiceManager::local_computer(
         None::<&str>,
         ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE,
@@ -418,13 +412,7 @@ fn upgrade(args: &[String]) -> Result<()> {
         }
     };
     let dest = service::protected_directory()?;
-    let config = handle.query_config().map_err(|_| {
-        Error::new(
-            "ServiceIdentity",
-            "service-upgrade",
-            "Cannot verify installed service",
-        )
-    })?;
+    let config = handle.query_config().map_err(service::service_configuration_error)?;
     if config.executable_path.to_string_lossy().trim_matches('"')
         != dest.join("NetPulseService.exe").to_string_lossy()
         || dest
@@ -452,36 +440,15 @@ fn upgrade(args: &[String]) -> Result<()> {
             "Installed service belongs to another user",
         ));
     }
-    let stage = dest.join(format!("upgrade-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir(&stage).map_err(|e| Error::io("service-upgrade-stage", e))?;
-    service::protect_install_path(&stage)?;
-    for name in [
-        "NetPulseService.exe",
-        "sing-box.exe",
-        "libcronet.dll",
-        "xray.exe",
-    ] {
-        let from = if name == "NetPulseService.exe" {
-            std::env::current_exe().map_err(|e| Error::io("service-source", e))?
-        } else {
-            source.join(name)
-        };
-        std::fs::copy(from, stage.join(name)).map_err(|e| Error::io("service-upgrade-stage", e))?;
-        service::protect_install_path(&stage.join(name))?;
-        if dest.join(name).exists() {
-            std::fs::copy(dest.join(name), stage.join(format!("previous-{name}")))
-                .map_err(|e| Error::io("service-upgrade-backup", e))?;
-        }
+    // A damaged installed bundle can indicate quarantine. Do not repeatedly
+    // repopulate missing files through the maintenance button.
+    service::validate_service_files(&dest)?;
+    let helper = std::env::current_exe().map_err(|e| Error::io("service-source",e))?;
+    let mut sources = vec![("NetPulseService.exe", Some(helper))];
+    for name in ["sing-box.exe", "libcronet.dll", "xray.exe"] {
+        sources.push((name, Some(source.join(name))));
     }
-    for name in ["sing-box-release.json", "xray-release.json"] {
-        if dest.join(name).is_file() {
-            std::fs::copy(dest.join(name), stage.join(format!("previous-{name}")))
-                .map_err(|e| Error::io("service-upgrade-backup", e))?;
-        }
-    }
-    netpulse_core::core_releases::write_approvals(&stage, &approvals)?;
-    netpulse_core::engine::verify_engine(&stage.join("sing-box.exe"))?;
-    netpulse_core::runtime::verify_xray(&stage.join("xray.exe"))?;
+    let mut transaction = maintenance::Upgrade::prepare(&dest, &sources, &approvals, service::protect_install_path)?;
     if handle
         .query_status()
         .map_err(|_| {
@@ -494,9 +461,7 @@ fn upgrade(args: &[String]) -> Result<()> {
         .current_state
         != ServiceState::Stopped
     {
-        // An old wedged service may no longer accept control messages. The
-        // verified process recovery below still requires explicit UAC.
-        let _ = handle.stop();
+        handle.stop().map_err(|_| Error::new("ServiceStopFailed","service-upgrade","Windows не подтвердила запрос остановки службы; обновление отменено."))?;
     }
     let mut stopped = false;
     for _ in 0..100 {
@@ -510,68 +475,20 @@ fn upgrade(args: &[String]) -> Result<()> {
         std::thread::sleep(Duration::from_millis(100));
     }
     if !stopped {
-        // Only the explicit UAC upgrade can repair an unresponsive old service.
-        // Its protected path, registration and owner were checked above.
-        terminate_owned_service(&handle, &dest.join("NetPulseService.exe"))?;
-        for _ in 0..50 {
-            if handle
-                .query_status()
-                .is_ok_and(|s| s.current_state == ServiceState::Stopped)
-            {
-                stopped = true;
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(100));
-        }
-        if !stopped {
-            return Err(Error::new(
-                "ServiceStopTimeout",
-                "service-upgrade",
-                "Service termination was not confirmed; active files preserved",
-            ));
-        }
+        return Err(Error::new(
+            "ServiceStopTimeout", "service-upgrade",
+            "Служба не подтвердила остановку. Обновление отменено; принудительное завершение и замена файлов не выполнялись.",
+        ));
     }
     service::recover_routes()?;
-    let mut replaced = Vec::new();
-    let result = (|| {
-        for name in [
-            "NetPulseService.exe",
-            "sing-box.exe",
-            "libcronet.dll",
-            "xray.exe",
-        ] {
-            // Stage and previous files stay protected; registration and owner ACL do not change.
-            replaced.push(name);
-            std::fs::copy(stage.join(name), dest.join(name))
-                .map_err(|e| Error::io("service-upgrade-copy", e))?;
-            service::protect_install_path(&dest.join(name))?;
-        }
-        netpulse_core::core_releases::write_approvals(&dest, &approvals)?;
+    transaction.apply(service::protect_install_path, || {
+        service::validate_service_files(&dest)?;
+        netpulse_core::engine::verify_engine(&dest.join("sing-box.exe"))?;
+        netpulse_core::runtime::verify_xray(&dest.join("xray.exe"))?;
         Ok(())
-    })();
-    if result.is_err() {
-        for name in ["sing-box-release.json", "xray-release.json"] {
-            let previous = stage.join(format!("previous-{name}"));
-            if previous.is_file() {
-                std::fs::copy(previous, dest.join(name))
-                    .map_err(|e| Error::io("service-upgrade-rollback", e))?;
-            } else if dest.join(name).exists() {
-                std::fs::remove_file(dest.join(name))
-                    .map_err(|e| Error::io("service-upgrade-rollback", e))?;
-            }
-        }
-        for name in replaced {
-            let previous = stage.join(format!("previous-{name}"));
-            if previous.exists() {
-                std::fs::copy(previous, dest.join(name))
-                    .map_err(|e| Error::io("service-upgrade-rollback", e))?;
-            } else {
-                let _ = std::fs::remove_file(dest.join(name));
-            }
-        }
-    }
-    result
+    })
 }
+
 fn stop_installed(owner_sid: &str) -> Result<()> {
     use std::os::windows::fs::MetadataExt;
     use windows_service::{
@@ -602,13 +519,7 @@ fn stop_installed(owner_sid: &str) -> Result<()> {
         }
     };
     let dest = service::protected_directory()?;
-    let config = handle.query_config().map_err(|_| {
-        Error::new(
-            "ServiceIdentity",
-            "service-stop",
-            "Cannot verify service path",
-        )
-    })?;
+    let config = handle.query_config().map_err(service::service_configuration_error)?;
     let expected = dest.join("NetPulseService.exe");
     if !config
         .executable_path
@@ -656,94 +567,10 @@ fn stop_installed(owner_sid: &str) -> Result<()> {
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    terminate_owned_service(&handle, &expected)?;
-    for _ in 0..50 {
-        if handle
-            .query_status()
-            .is_ok_and(|s| s.current_state == ServiceState::Stopped)
-        {
-            return service::recover_routes();
-        }
-        std::thread::sleep(Duration::from_millis(100));
-    }
     Err(Error::new(
-        "ServiceStopTimeout",
-        "service-stop",
-        "Service stop unconfirmed; active files preserved",
+        "ServiceStopTimeout", "service-stop",
+        "Служба не подтвердила остановку. Закройте подключение NetPulse и повторите после перезапуска Windows; файлы сохранены.",
     ))
-}
-fn terminate_owned_service(
-    service: &windows_service::service::Service,
-    expected: &std::path::Path,
-) -> Result<()> {
-    use windows_sys::Win32::System::Threading::*;
-    let before = service.query_status().map_err(|_| {
-        Error::new(
-            "ServiceIdentity",
-            "service-recovery",
-            "Cannot read service process",
-        )
-    })?;
-    let pid = before
-        .process_id
-        .filter(|p| *p != 0 && *p != std::process::id())
-        .ok_or_else(|| {
-            Error::new(
-                "ServiceIdentity",
-                "service-recovery",
-                "No verifiable service process",
-            )
-        })?;
-    let process = service::Handle(unsafe {
-        OpenProcess(
-            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | PROCESS_SYNCHRONIZE,
-            0,
-            pid,
-        )
-    });
-    if process.0.is_null() {
-        return Err(Error::io(
-            "service-recovery",
-            std::io::Error::last_os_error(),
-        ));
-    }
-    let mut image = vec![0u16; 32768];
-    let mut len = image.len() as u32;
-    if unsafe { QueryFullProcessImageNameW(process.0, 0, image.as_mut_ptr(), &mut len) } == 0 {
-        return Err(Error::io(
-            "service-identity",
-            std::io::Error::last_os_error(),
-        ));
-    }
-    let actual = std::path::PathBuf::from(String::from_utf16_lossy(&image[..len as usize]));
-    let current = service.query_status().map_err(|_| {
-        Error::new(
-            "ServiceIdentity",
-            "service-recovery",
-            "Service process changed",
-        )
-    })?;
-    if !actual
-        .to_string_lossy()
-        .eq_ignore_ascii_case(&expected.to_string_lossy())
-        || current.process_id != Some(pid)
-    {
-        return Err(Error::new(
-            "ServiceIdentity",
-            "service-recovery",
-            "Process identity differs; nothing was terminated",
-        ));
-    }
-    if unsafe { TerminateProcess(process.0, 1) } == 0
-        || unsafe { WaitForSingleObject(process.0, 5000) } != 0
-    {
-        return Err(Error::new(
-            "ServiceStopTimeout",
-            "service-recovery",
-            "Owned service did not terminate",
-        ));
-    }
-    Ok(())
 }
 fn uninstall() -> Result<()> {
     use windows_service::{

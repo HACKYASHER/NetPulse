@@ -64,7 +64,10 @@ ApplicationWindow {
     property string smokeCaptured: ""
     property int smokeCoreRows: 0
     property bool smokePendingCore: false
-    property var smokeSequence: [{page:0,name:"overview"},{page:1,name:"servers"},{page:2,name:"routing"},{page:3,tab:0,name:"connection"},{page:3,tab:1,name:"dns"},{page:3,tab:2,name:"mtu"},{page:3,tab:3,name:"tls"},{page:3,tab:4,name:"transport"},{page:3,tab:5,name:"service"},{page:3,tab:6,name:"engines"},{page:3,tab:7,name:"sniffing"},{page:4,name:"diagnostics"},{page:5,name:"playground"},{page:6,name:"activity"},{page:6,category:1,name:"core-log"},{page:7,name:"settings"},{page:0,dialog:"server",name:"server-picker"},{page:0,dialog:"mode",name:"connection-mode"},{page:1,dialog:"import",name:"add-connection"},{page:4,dialog:"history",name:"measurement-history"}]
+    property string smokeError: ""
+    readonly property string displayError: backend.errorMessage || (smokeMode ? smokeError : "")
+    readonly property bool activityFitsViewport: page !== 6 || (!!pageLoader.item && pageLoader.item.consoleFitsViewport && Math.abs(bodyScroll.contentHeight-bodyScroll.availableHeight)<1)
+    property var smokeSequence: [{page:0,name:"overview"},{page:1,name:"servers"},{page:2,name:"routing"},{page:3,tab:0,name:"connection"},{page:3,tab:1,name:"dns"},{page:3,tab:2,name:"mtu"},{page:3,tab:3,name:"tls"},{page:3,tab:4,name:"transport"},{page:3,tab:5,name:"service"},{page:3,tab:6,name:"engines"},{page:3,tab:7,name:"sniffing"},{page:4,name:"diagnostics"},{page:5,name:"playground"},{page:6,name:"activity"},{page:6,category:1,name:"core-log"},{page:6,name:"activity-small-error",error:true,width:1000,height:700},{page:6,name:"activity-large-error",error:true,width:1920,height:1000},{page:7,name:"settings"},{page:0,dialog:"server",name:"server-picker"},{page:0,dialog:"mode",name:"connection-mode"},{page:1,dialog:"import",name:"add-connection"},{page:4,dialog:"history",name:"measurement-history"}]
     property bool smokeFinished: false
     property var pages: [overviewPage, serversPage, routingPage, networkPage, diagnosticsPage, playgroundPage, activityPage, settingsPage]
     color: bgColor
@@ -287,6 +290,8 @@ ApplicationWindow {
         smokeStep++
         if(smokeStep>=smokeSequence.length){stop();page=0;smokePages=8;smokeFinished=true;return}
         var step=smokeSequence[smokeStep];page=step.page
+        smokeError=step.error ? tr("Файлы службы недоступны. Проверьте отчёт антивируса; обновление остановлено.","Service components are unavailable. Check the antivirus report; maintenance stopped.") : ""
+        width=step.width||1220;height=step.height||840
         Qt.callLater(function(){
             if(step.tab!==undefined&&pageLoader.item)pageLoader.item.tab=step.tab
             if(step.dialog==="server"&&pageLoader.item)pageLoader.item.openServerPicker()
@@ -340,7 +345,7 @@ ApplicationWindow {
                     Layout.fillWidth: true; implicitHeight: 64
                     RowLayout { anchors.fill: parent; anchors.margins: 12; spacing: 9
                         Rectangle { width: 7; height: 7; radius: 4; color: modelData.engine_ready ? "#6bd9b0" : "#e0b86d" }
-                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.3 beta"; font.pixelSize: 10; color: mutedColor } }
+                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.4"; font.pixelSize: 10; color: mutedColor } }
                     }
                 }
             }
@@ -356,21 +361,26 @@ ApplicationWindow {
             }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: borderColor }
             Rectangle {
-                visible: backend.errorMessage.length > 0
+                visible: displayError.length > 0
                 Layout.fillWidth: true; Layout.leftMargin: 30; Layout.rightMargin: 30; Layout.topMargin: 18
                 implicitHeight: errorRow.implicitHeight + 24; radius: 10; color: light ? "#ffe6e9" : "#39232d"
                 RowLayout { id: errorRow; anchors.fill: parent; anchors.margins: 12
-                    Label { textFormat: Text.PlainText; text: backend.errorMessage; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: light ? "#9c3646" : "#ffb0bd"; font.pixelSize: 12 }
+                    Label { textFormat: Text.PlainText; text: displayError; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: light ? "#9c3646" : "#ffb0bd"; font.pixelSize: 12 }
                     ToolButton { text: "×"; onClicked: backend.clearError() }
                 }
             }
             ScrollView {
                 id: bodyScroll
                 Layout.fillWidth: true; Layout.fillHeight: true; Layout.margins: 30; Layout.topMargin: 24
-                contentWidth: availableWidth; clip: true; rightPadding: 14
+                contentWidth: availableWidth; contentHeight: page === 6 ? availableHeight : pageLoader.height; clip: true; rightPadding: 14
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 8; anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom }
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                Loader { id: pageLoader; width: bodyScroll.availableWidth; sourceComponent: pages[page] }
+                Loader {
+                    id: pageLoader
+                    width: bodyScroll.availableWidth
+                    height: page === 6 ? bodyScroll.availableHeight : implicitHeight
+                    sourceComponent: pages[page]
+                }
             }
         }
     }
@@ -525,6 +535,8 @@ ApplicationWindow {
                             SpinBox { id: proxyPort; from: 1024; to: 65535; value: prefs.proxy_port||2080; editable: true }
                         }
                         HelpText { text: tr("Порт локального прокси на этом компьютере. Меняйте его, если стандартный порт занят; это не порт VPN-сервера.","The local proxy port on this computer. Change it if the default port is busy; it is not the VPN server port.") }
+                        HelpText { text: tr("Системным прокси Windows управляет один клиент. Если другой VPN-клиент уже включил его, NetPulse покажет конфликт. Для двух клиентов нужны разные локальные порты; смена порта сама по себе не передаёт управление системным прокси.","One client controls the Windows system proxy. NetPulse reports a conflict if another VPN client already enabled it. Two clients need different local ports; changing a port alone does not transfer control of the system proxy.") }
+                        ActionButton { appWindow:win; text:tr("Параметры прокси Windows","Windows proxy settings"); onClicked:backend.openProxySettings() }
                         Label { text: tr("IPv6 в TUN","TUN IPv6"); color: mutedColor }
                         Choice { appWindow: win; objectName: "tunIpv6Mode"; Layout.fillWidth: true; model: [tr("Автоматически","Automatic"),tr("Только IPv4","IPv4 only"),tr("IPv4 и IPv6","IPv4 and IPv6")]; values: ["auto","ipv4_only","dual_stack"]; currentIndex: Math.max(0,values.indexOf(prefs.ipv6_mode||"auto")); enabled: !savingPreferences&&!busy("select_profile")&&!busy("quick_network"); onActivated: save({ipv6_mode:selectedValue}) }
                         HelpText { text: tr("В режиме только выбранных приложений Авто включает IPv6 в TUN, когда у физического подключения есть IPv6-маршрут. Это предотвращает ложный IPv6-доступ у остальных приложений. Для IPv6 через сервер можно явно выбрать IPv4 и IPv6; сервер должен его поддерживать. Весь трафик через VPN сохраняет IPv6 в режиме Авто.","In selected-app mode, Auto enables TUN IPv6 when the physical connection has an IPv6 route, preventing unusable IPv6 for other applications. Select IPv4 and IPv6 explicitly for server-side IPv6; the server must support it. Global VPN keeps IPv6 in Auto mode.") }
@@ -664,11 +676,12 @@ ApplicationWindow {
                 Card { visible: networkView.tab===5; Layout.fillWidth: true; implicitHeight: serviceForm.implicitHeight+40
                     ColumnLayout { id: serviceForm; anchors.fill: parent; anchors.margins: 20; spacing: 12
                         Label { textFormat: Text.PlainText; text: tr("Служба TUN","TUN service"); color: textColor; font.pixelSize: 16; font.bold: true }
-                        Label { textFormat: Text.PlainText; text: modelData.service?(modelData.service.installed?tr("Установлена","Installed"):tr("Не установлена","Not installed"))+(modelData.service.running?tr(" · работает"," · running"):""):"—"; color: mutedColor }
-                        Label { textFormat: Text.PlainText; text: tr("Установка службы требует подтверждения в стандартном окне Windows.","Service installation requires confirmation in the standard Windows dialog."); color: mutedColor; font.pixelSize: 12 }
+                        Label { textFormat: Text.PlainText; text: modelData.service?(modelData.service.error?tr("Требует внимания","Needs attention"):modelData.service.installed?tr("Установлена","Installed"):tr("Не установлена","Not installed"))+(modelData.service.running?tr(" · работает"," · running"):""):"—"; color: mutedColor }
+                        HelpText { visible:!!(modelData.service&&modelData.service.error); text:modelData.service&&modelData.service.error?modelData.service.error.message:"" }
+                        HelpText { text: tr("Установка требует подтверждения Windows. Обновление меняет только отличающиеся файлы после остановки службы. Если антивирус удалил компоненты, операция прерывается: сначала проверьте его отчёт и результат проверки выпуска.","Installation requires Windows confirmation. Updates replace only changed files after the service stops. If antivirus software removes components, maintenance stops: check its report and the release analysis before retrying.") }
                         RowLayout {
-                            ActionButton { appWindow: win; text: tr("Установить / восстановить","Install / repair"); enabled: !snapshot.engine_pid&&!busy("manage_service"); onClicked: call("manage_service",{install:true,upgrade:!!(modelData.service&&modelData.service.installed)}) }
-                            ActionButton { appWindow: win; text: tr("Удалить службу","Remove service"); enabled: !snapshot.engine_pid&&!busy("manage_service")&&!!(modelData.service&&modelData.service.installed); onClicked: call("manage_service",{install:false}) }
+                            ActionButton { appWindow: win; text: tr("Установить / восстановить","Install / repair"); enabled: !snapshot.engine_pid&&!busy("manage_service")&&!(modelData.service&&modelData.service.error&&["ServiceRegistrationDamaged","ServiceRestartRequired"].indexOf(modelData.service.error.code)>=0); onClicked: call("manage_service",{install:true,upgrade:!!(modelData.service&&modelData.service.installed)}) }
+                            ActionButton { appWindow: win; text: tr("Удалить службу","Remove service"); enabled: !snapshot.engine_pid&&!busy("manage_service")&&!!(modelData.service&&modelData.service.installed)&&!(modelData.service.error&&["ServiceRegistrationDamaged","ServiceRestartRequired"].indexOf(modelData.service.error.code)>=0); onClicked: call("manage_service",{install:false}) }
                         }
                     }
                 }
@@ -977,7 +990,7 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: aboutColumn.implicitHeight+40
                 ColumnLayout { id: aboutColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
                     Label { textFormat: Text.PlainText; text: tr("О клиенте","About NetPulse"); color: textColor; font.pixelSize: 17; font.bold: true }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.3 beta · Windows x64"; color: textColor }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.4 · Windows x64"; color: textColor }
                     Label { textFormat: Text.PlainText; text: "Qt Quick · Rust · sing-box "+(modelData.engine_version||"—")+" · Xray "+(modelData.xray_version||"—"); color: mutedColor; font.pixelSize: 12 }
                     ActionButton { appWindow: win; text: "GitHub · NetPulse ↗"; onClicked: Qt.openUrlExternally("https://github.com/HACKYASHER/NetPulse") }
                 }
@@ -1019,7 +1032,7 @@ ApplicationWindow {
                     }
                     HelpText { text: tr("Временные архивы ядер очищаются после установки и при следующем запуске. Незавершённые загрузки и установщики уже установленной версии тоже удаляются; предыдущий комплект ядер остаётся для отката.","Temporary engine archives are cleared after installation and on startup. Interrupted downloads and installers for the installed version are also removed; the previous engine bundle remains for rollback.") }
                     ActionButton { appWindow: win; text: tr("Редактор всех параметров…", "Edit all preferences…"); onClicked: editJson(tr("Параметры NetPulse", "NetPulse preferences"), JSON.stringify(prefs, null, 2), "save_preferences") }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.3 beta  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.4  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
                 }
             }
         }

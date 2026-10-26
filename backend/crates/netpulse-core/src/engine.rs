@@ -591,11 +591,15 @@ mod tests {
             loop {
                 match origin.accept() {
                     Ok((mut socket, _)) => {
+                        socket.set_nonblocking(false).unwrap();
                         socket
                             .set_read_timeout(Some(Duration::from_secs(2)))
                             .unwrap();
-                        let mut buf = [0; 4096];
-                        let _ = socket.read(&mut buf);
+                        let mut request=Vec::new();let mut buf=[0;1024];
+                        while request.len()<4096&&!request.windows(4).any(|s|s==b"\r\n\r\n") {
+                            let n=socket.read(&mut buf).unwrap();assert!(n>0);request.extend_from_slice(&buf[..n]);
+                        }
+                        assert!(request.windows(4).any(|s|s==b"\r\n\r\n"));
                         socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\nfixture").unwrap();
                         break;
                     }

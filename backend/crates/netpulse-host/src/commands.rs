@@ -1133,6 +1133,10 @@ async fn manage_service(
         })?
         .join("NetPulseService.exe");
     with_core(&state, "manage_service", move |c| {
+        if install {
+            let directory = c.engine_path.parent().ok_or_else(||Error::new("EngineMissing","service-install","Install the network engine first"))?;
+            netpulse_core::service::validate_install_source(&resource,directory)?;
+        }
         let recovery = install && upgrade.unwrap_or(false);
         if c.snapshot().engine_pid.is_some() && !recovery {
             return Err(Error::new(

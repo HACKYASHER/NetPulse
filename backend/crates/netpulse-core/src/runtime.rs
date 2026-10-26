@@ -112,6 +112,23 @@ impl Drop for RuntimePlan {
     }
 }
 impl RuntimePlan {
+    #[cfg(windows)]
+    pub fn tun_route_families(&self) -> crate::routes::RouteFamilies {
+        let mut families = crate::routes::RouteFamilies::default();
+        if let Some(inbounds) = self.config["inbounds"].as_array() {
+            for inbound in inbounds.iter().filter(|v| v["type"] == "tun") {
+                if let Some(addresses) = inbound["address"].as_array() {
+                    for address in addresses.iter().filter_map(Value::as_str) {
+                        if let Some(ip) = address.split('/').next().and_then(|s| s.parse::<std::net::IpAddr>().ok()) {
+                            families.ipv4 |= ip.is_ipv4();
+                            families.ipv6 |= ip.is_ipv6();
+                        }
+                    }
+                }
+            }
+        }
+        families
+    }
     pub fn new(
         engine_path: &Path,
         profile: &Profile,
@@ -506,6 +523,10 @@ mod tests {
             loop {
                 match origin.accept() {
                     Ok((mut socket, _)) => {
+                        // Accepted socket mode can be inherited from the
+                        // nonblocking listener on Windows. This echo fixture
+                        // requires blocking reads with the configured timeout.
+                        socket.set_nonblocking(false).unwrap();
                         socket
                             .set_read_timeout(Some(Duration::from_secs(2)))
                             .unwrap();
@@ -641,6 +662,10 @@ mod runtime_policy_tests {
             let mut c=config(&p);apply_ipv6_policy(&mut c,&p,physical);
             assert_eq!(c["inbounds"][1]["address"].as_array().unwrap().len()==1,only4,"{mode}: {physical:?}");
             assert_eq!(c["dns"]["strategy"]=="ipv4_only",only4);
+            #[cfg(windows)] {
+                let plan = RuntimePlan { config:c, bridge:None, probe_port:0, direct_probe_port:0, bridge_port:0, xray_path:PathBuf::new() };
+                assert_eq!(plan.tun_route_families(),crate::routes::RouteFamilies{ipv4:true,ipv6:!only4});
+            }
         }
         let mut p=Preferences{tun:true,ipv6_mode:"ipv4_only".into(),fake_ip:true,..Default::default()};
         let mut c=config(&p);apply_ipv6_policy(&mut c,&p,Some(false));

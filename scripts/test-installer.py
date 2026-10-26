@@ -25,7 +25,7 @@ def main():
     source=source.replace('  nsExec::ExecToStack \'"$INSTDIR\\netpulsed.exe" --installer-service-remove\'','  Push ""\n  Push 0')
     # The install hook remains unreachable with /NOSERVICE; also stub it as a
     # second barrier so a test cannot launch Windows elevation accidentally.
-    source=source.replace('  nsExec::ExecToStack \'"$INSTDIR\\netpulsed.exe" --installer-service-install\'','  Push ""\n  Push 0')
+    source=source.replace('  nsExec::ExecToStack \'"$INSTDIR\\netpulsed.exe" --installer-service-install\'','  ${GetOptions} $R0 "/STUBSERVICE=" $0\n  Push "simulated service result"\n  Push $0')
     assert '--installer-service-' not in source
     source=source.replace('SetCompressor /SOLID lzma\nSetCompressorDictSize 32','SetCompressor zlib')
     script=output/'installer.nsi'
@@ -48,6 +48,20 @@ def main():
     subprocess.run(command,check=True,timeout=180,creationflags=0x08000000)
     assert sentinel.read_text()=='keep'
     assert hashlib.sha256((install/'netpulsed.exe').read_bytes()).digest()==hashlib.sha256((ROOT/'release/NetPulse/netpulsed.exe').read_bytes()).digest()
+    failures=[]
+    for code,expected_exit in [(20,20),(21,21),(22,22),(23,23),(24,24),(1,1),("error",29),("timeout",29)]:
+        simulated=subprocess.run([str(output/'Setup.exe'),'/S','/STUBSERVICE='+str(code),'/D='+str(install)],timeout=180,creationflags=0x08000000)
+        assert simulated.returncode==expected_exit,(code,simulated.returncode)
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,key) as handle:
+            assert winreg.QueryValueEx(handle,'TunService')[0]=='not-installed'
+            assert winreg.QueryValueEx(handle,'TunServiceError')[0]==str(code)
+        assert sentinel.read_text()=='keep';failures.append(code)
+    simulated=subprocess.run([str(output/'Setup.exe'),'/S','/STUBSERVICE=0','/D='+str(install)],timeout=180,creationflags=0x08000000)
+    assert simulated.returncode==0
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER,key) as handle:
+        assert winreg.QueryValueEx(handle,'TunService')[0]=='installed'
+        try:winreg.QueryValueEx(handle,'TunServiceError');raise AssertionError('old failure was not cleared')
+        except FileNotFoundError:pass
     subprocess.run([str(install/'NetPulse.exe'),'--smoke-test',str(output/'smoke')],check=True,timeout=85,creationflags=0x08000000)
     result=json.loads((output/'smoke/result.json').read_text());assert result['qml_issues']==0
     subprocess.run([str(install/'Uninstall.exe'),'/S'],check=True,timeout=180,creationflags=0x08000000)
@@ -55,6 +69,6 @@ def main():
     while time.monotonic()<until and (exists(key) or (install/'NetPulse.exe').exists()):time.sleep(.25)
     assert not exists(key) and not exists(uninstall) and not (install/'NetPulse.exe').exists()
     assert sentinel.read_text()=='keep'
-    report={'result':'passed','install':True,'update_repair':True,'uninstall':True,'data_preserved':True,'registry_removed':True,'installed_ui':result,'tun_service_installed':False,'global_network_changed':False,'verification_namespace':token}
+    report={'result':'passed','install':True,'update_repair':True,'uninstall':True,'data_preserved':True,'registry_removed':True,'installed_ui':result,'simulated_service_failure_codes':failures,'simulated_success_clears_error':True,'tun_service_installed':False,'global_network_changed':False,'verification_namespace':token}
     (ROOT/'.build/installer-result.json').write_text(json.dumps(report,indent=2),encoding='utf-8');print(json.dumps(report,indent=2))
 if __name__=='__main__':main()

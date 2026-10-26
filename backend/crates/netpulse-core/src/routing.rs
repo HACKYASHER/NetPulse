@@ -218,19 +218,30 @@ mod tests {
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let server_stop = stop.clone();
         let server = std::thread::spawn(move || {
-            let mut requests = 0;
+            let mut requests = (0, 0);
             let end = std::time::Instant::now() + Duration::from_secs(10);
             while !server_stop.load(std::sync::atomic::Ordering::SeqCst)
                 && std::time::Instant::now() < end
             {
                 if let Ok((mut socket, _)) = origin.accept() {
+                    socket.set_nonblocking(false).unwrap();
                     socket
                         .set_read_timeout(Some(Duration::from_secs(2)))
                         .unwrap();
-                    let mut bytes = [0; 2048];
-                    let _ = socket.read(&mut bytes);
+                    let mut bytes = Vec::new();
+                    let mut block=[0;512];
+                    while bytes.len()<2048 && !bytes.windows(4).any(|s|s==b"\r\n\r\n") {
+                        match socket.read(&mut block) {
+                            Ok(0)=>break,
+                            Ok(n)=>bytes.extend_from_slice(&block[..n]),
+                            Err(_)=>break,
+                        }
+                    }
+                    if bytes.is_empty() {continue;}
+                    let request=String::from_utf8_lossy(&bytes);
+                    if request.contains("/owned-bypass") {requests.0+=1;}
+                    if request.contains("/must-use-proxy") {requests.1+=1;}
                     socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\nbypass").unwrap();
-                    requests += 1;
                 }
                 std::thread::sleep(Duration::from_millis(10));
             }
@@ -276,7 +287,7 @@ mod tests {
         let mut response = None;
         for _ in 0..20 {
             if let Ok(r) = client
-                .get(format!("http://localhost:{origin_port}/"))
+                .get(format!("http://localhost:{origin_port}/owned-bypass"))
                 .send()
                 && r.status().is_success()
             {
@@ -287,11 +298,15 @@ mod tests {
         }
         assert_eq!(response.unwrap().text().unwrap(), "bypass");
         let other = client
-            .get(format!("http://127.0.0.1:{origin_port}/"))
+            .get(format!("http://127.0.0.1:{origin_port}/must-use-proxy"))
             .send();
         assert!(other.is_err() || !other.unwrap().status().is_success());
         engine.stop().unwrap();
         stop.store(true, std::sync::atomic::Ordering::SeqCst);
-        assert_eq!(server.join().unwrap(), 1);
+        // Startup retries may produce more than one allowed request. The
+        // security property is that the other route never reaches this origin.
+        let (bypass,blocked)=server.join().unwrap();
+        assert!(bypass>=1);
+        assert_eq!(blocked,0);
     }
 }

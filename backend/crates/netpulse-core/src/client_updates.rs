@@ -275,6 +275,8 @@ mod tests {
         assert!(version("2.0.0") > version("2.0.0-rc.9"));
         assert!(version("../../x").is_none());
         assert!(version("1.0.0-beta").is_some());
+        assert!(version("1.0.4") > version("1.0.3-beta"));
+        assert!(version("v1.0.4") > version("1.0.4-beta"));
         assert!(parse(&serde_json::json!({"tag_name":"v3.0.4","assets":[]})).is_err());
         let mut r = Release {
             tag: "v2.0.0-alpha.7".into(),
@@ -296,6 +298,12 @@ mod tests {
         assert!(parse(&metadata).is_err());
         metadata["assets"].as_array_mut().unwrap().push(serde_json::json!({"name":"netpulse-qt-update-v1.json","state":"uploaded"}));
         assert!(parse(&metadata).is_ok());
+        metadata["tag_name"]=serde_json::json!("v1.0.4");
+        metadata["html_url"]=serde_json::json!(format!("https://github.com/{REPOSITORY}/releases/tag/v1.0.4"));
+        metadata["assets"][0]["browser_download_url"]=serde_json::json!(format!("https://github.com/{REPOSITORY}/releases/download/v1.0.4/NetPulse-Setup.exe"));
+        metadata["prerelease"]=serde_json::json!(false);
+        let stable=parse(&metadata).unwrap();
+        assert_eq!(stable.tag,"v1.0.4");assert!(!stable.prerelease);
         metadata["assets"][0]["digest"]=serde_json::json!(null);
         assert!(parse(&metadata).is_err());
     }

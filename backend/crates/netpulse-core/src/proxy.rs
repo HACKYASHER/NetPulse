@@ -18,6 +18,17 @@ fn loopback_state(port: u16) -> ProxyState {
         pac: String::new(),
     }
 }
+fn check_available(state: &ProxyState) -> Result<()> {
+    if state.flags & 6 == 0 { return Ok(()); }
+    let message=if state.flags & 4 != 0 {
+        "В Windows включён сценарий автоматической настройки прокси (PAC). NetPulse не заменяет его автоматически. Выберите, какой клиент должен управлять системным прокси, в параметрах прокси Windows."
+    } else {
+        "В Windows уже включён системный прокси. NetPulse не заменяет его автоматически. Если хотите использовать System Proxy в NetPulse, отключите этот режим в другом VPN-клиенте."
+    };
+    // Do not log a foreign PAC URL or proxy string: either can contain credentials.
+    let endpoint=state.server.parse::<std::net::SocketAddr>().ok().filter(|s|s.ip().is_loopback());
+    Err(Error::new("ProxyConflict","proxy-acquire",if let Some(endpoint)=endpoint {format!("{message} Текущий адрес: {endpoint}.")}else{message.into()}))
+}
 pub struct ProxyLease {
     pub before: ProxyState,
     pub applied: ProxyState,
@@ -175,24 +186,11 @@ impl ProxyLease {
         Ok(self.active && read()? == self.applied)
     }
     pub fn check_conflict() -> Result<()> {
-        if read()?.flags & 6 != 0 {
-            return Err(Error::new(
-                "ProxyConflict",
-                "proxy-acquire",
-                "Existing proxy or PAC is active; resolve the conflict in Windows first",
-            ));
-        }
-        Ok(())
+        check_available(&read()?)
     }
     pub fn acquire(port: u16, directory: &std::path::Path) -> Result<Self> {
         let before = read()?;
-        if before.flags & 6 != 0 {
-            return Err(Error::new(
-                "ProxyConflict",
-                "proxy-acquire",
-                "Existing proxy or PAC is active; resolve the conflict in Windows first",
-            ));
-        }
+        check_available(&before)?;
         let applied = loopback_state(port);
         let mut lease = Self {
             #[cfg(windows)]
@@ -272,6 +270,17 @@ impl Drop for ProxyLease {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+    #[test]
+    fn foreign_proxy_conflict_is_explained_without_disclosing_credentials() {
+        let mut state=loopback_state(2080);
+        let error=check_available(&state).unwrap_err();
+        assert_eq!(error.code,"ProxyConflict");assert!(error.message.contains("127.0.0.1:2080"));
+        state.server="http=private:secret@proxy.example:8080".into();
+        assert!(!check_available(&state).unwrap_err().message.contains("secret"));
+        state.flags=5;state.pac="https://private.invalid/private-token".into();
+        let error=check_available(&state).unwrap_err();assert!(error.message.contains("PAC"));assert!(!error.message.contains("private-token"));
+        for flags in [1,9] {state.flags=flags;check_available(&state).unwrap();}
+    }
     #[test]
     fn read_only_windows_state() {
         let s = read().unwrap();

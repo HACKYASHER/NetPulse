@@ -137,6 +137,7 @@ void Backend::clearError() { m_error.clear(); emit errorChanged(); }
 void Backend::copyText(const QString& text) { QApplication::clipboard()->setText(text); }
 QString Backend::clipboardText() const { return QApplication::clipboard()->text(); }
 void Backend::openDataDirectory() { QDesktopServices::openUrl(QUrl::fromLocalFile(m_directory)); }
+void Backend::openProxySettings() { QDesktopServices::openUrl(QUrl(QStringLiteral("ms-settings:network-proxy"))); }
 void Backend::confirmDelete(const QString& method, const QVariantMap& params, const QString& label) {
     static const QSet<QString> allowed{QStringLiteral("delete_profile"), QStringLiteral("delete_subscription"), QStringLiteral("clear_logs"), QStringLiteral("clear_file_logs"), QStringLiteral("delete_local_data")};
     if (!allowed.contains(method)) return;

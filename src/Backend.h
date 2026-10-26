@@ -28,6 +28,7 @@ public:
     Q_INVOKABLE void copyText(const QString& text);
     Q_INVOKABLE QString clipboardText() const;
     Q_INVOKABLE void openDataDirectory();
+    Q_INVOKABLE void openProxySettings();
     Q_INVOKABLE void confirmDelete(const QString& method, const QVariantMap& params, const QString& label);
     void start();
 signals:

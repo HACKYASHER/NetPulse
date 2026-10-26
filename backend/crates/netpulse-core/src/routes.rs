@@ -209,16 +209,26 @@ pub fn capture_owned() -> Result<NetworkView> {
     view.routes.retain(|r| luids.contains(&r.luid));
     Ok(view)
 }
-pub fn default_routes_present(view: &NetworkView) -> bool {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RouteFamilies {
+    pub ipv4: bool,
+    pub ipv6: bool,
+}
+pub fn default_routes_present(view: &NetworkView, families: RouteFamilies) -> bool {
+    if !families.ipv4 && !families.ipv6 {
+        return false;
+    }
+    view.interfaces.iter().filter(|i| i.up).any(|interface| {
     let present = |destination: &str, prefix: u8| {
         view.routes.iter().any(|r| {
             r.destination == destination
                 && r.prefix == prefix
-                && view.interfaces.iter().any(|i| i.up && i.luid == r.luid)
+                && r.luid == interface.luid
         })
     };
-    (present("0.0.0.0", 0) || (present("0.0.0.0", 1) && present("128.0.0.0", 1)))
-        && (present("::", 0) || (present("::", 1) && present("8000::", 1)))
+    (!families.ipv4 || present("0.0.0.0", 0) || (present("0.0.0.0", 1) && present("128.0.0.0", 1)))
+        && (!families.ipv6 || present("::", 0) || (present("::", 1) && present("8000::", 1)))
+    })
 }
 /// Bind diagnostic TCP to the best live default interface outside userspace TUN adapters.
 /// IP_UNICAST_IF uses network byte order; IPV6_UNICAST_IF uses host byte order.
@@ -395,6 +405,8 @@ mod tests {
     }
     #[test]
     fn readiness_requires_live_interface_and_both_ip_families() {
+        let dual_stack = RouteFamilies { ipv4: true, ipv6: true };
+        let ipv4_only = RouteFamilies { ipv4: true, ipv6: false };
         let interface = Interface {
             description: "Wintun Userspace Tunnel".into(),
             kind: 53,
@@ -417,13 +429,22 @@ mod tests {
             interfaces: vec![interface],
             routes: vec![route("172.31.255.0", 30)],
         };
-        assert!(!default_routes_present(&v));
+        assert!(!default_routes_present(&v, dual_stack));
+        assert!(!default_routes_present(&v, ipv4_only));
         v.routes = vec![route("0.0.0.0", 1), route("128.0.0.0", 1), route("::", 1)];
-        assert!(!default_routes_present(&v));
+        assert!(!default_routes_present(&v, dual_stack));
+        assert!(default_routes_present(&v, ipv4_only));
         v.routes.push(route("8000::", 1));
-        assert!(default_routes_present(&v));
+        assert!(default_routes_present(&v, dual_stack));
+        assert!(!default_routes_present(&v, RouteFamilies::default()));
+        v.routes[2].luid = 11;
+        v.routes[3].luid = 11;
+        let mut other = v.interfaces[0].clone(); other.luid = 11; v.interfaces.push(other);
+        assert!(!default_routes_present(&v, dual_stack));
+        v.routes[2].luid = 10; v.routes[3].luid = 10;
         v.interfaces[0].up = false;
-        assert!(!default_routes_present(&v));
+        assert!(!default_routes_present(&v, dual_stack));
+        assert!(!default_routes_present(&v, ipv4_only));
     }
     #[test]
     fn dormant_wintun_can_be_reused_but_live_or_foreign_adapters_cannot() {
