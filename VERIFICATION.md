@@ -1,34 +1,47 @@
-# Verification — NetPulse 1.0.5
+# Проверка NetPulse 1.0.6
 
-Regular Windows x64 release. Validation date: October 28, 2026.
+Обычный стабильный выпуск. Проверено 29 октября 2026 года.
+Подробные результаты доступны в [VERIFICATION.json](VERIFICATION.json),
+найденные проблемы — в [аудите](docs/SECURITY-AUDIT-1.0.6.ru.md),
+результаты сканеров — в [машиночитаемом отчёте](docs/AUDIT-SCANNERS-1.0.6.json).
 
-| Area | Result |
+| Проверка | Результат |
 |---|---|
-| Core checks | 126 passed; two IPv6 checks blocked by this machine |
-| Profile migration | Packaged controller, real synthetic database, encrypted profiles and settings preserved |
-| File security | Private profile ACLs inspected; reparse paths and unsafe installer manifests rejected |
-| Engine repair | Missing engine stays absent on startup; explicit offline restoration succeeds |
-| Official engine updates | Xray 26.10.17 → 26.10.21 and sing-box 1.14.4 installed, authenticated and rolled back in a temporary directory |
-| Missing companion | Explicit selected-core installation succeeds after the other core is removed |
-| Service file transactions | 8 passed |
-| Service self-test | Version 1.0.5; no system changes |
-| QML interactions | 15 passed with the application's Basic style |
-| Controller integration | 14 groups |
-| Packaged UI | 22 frames × RU/EN and dark/light; eight pages; no QML warnings |
-| Installer | Isolated install, repair/update, uninstall and eight simulated service failures |
-| Data during removal | Personal files under the installation's data directory preserved |
+| Основная библиотека Rust | 137 пройдено; 2 IPv6-сценария ограничены средой |
+| Контроллер и служба | 5 + 8 тестов пройдено |
+| TLS и gRPC | 2 интеграционных теста пройдено: SNI/сертификат и передача по 8 МиБ в обе стороны |
+| Команды готового клиента | 15 групп, включая сохранение 62 вариантов настроек, серверов и пинга, ошибки ввода и запрет системных действий в изолированном режиме |
+| Интерфейс | 15 проверок взаимодействия; RU/EN × светлая/тёмная тема, 8 страниц и 22 кадра на вариант, без ошибок QML |
+| Журнал | Основной и журнал ядра содержат строки; консоль помещается в проверенные размеры окна |
+| Загрузка ядер через готовый клиент | Xray 26.10.17 → 26.10.21 и sing-box 1.14.3 → официальная 1.14.4 при выбранном Hysteria2; ответы контроллера продолжаются, параллельный сброс блокируется, ZIP очищаются |
+| Восстановление комплекта | После теста восстановлена исправленная встроенная 1.14.4-netpulse.1 |
+| Папки и данные | Зашифрованный профиль и настройки перенесены; все данные внутри папки приложения; неизвестные файлы сохранены; пропавшее ядро возвращается только явным восстановлением |
+| Установщик в отдельном контуре | Установка, обновление/восстановление, удаление и повторная установка с сохранёнными данными; 8 имитированных ошибок службы |
+| RustSec | 215 зависимостей, 0 известных уязвимостей, 0 предупреждений; база от 28.10.2026, проверка отозванных публикаций не выполнялась |
+| Исправленная сборка sing-box | 1.14.4-netpulse.1, повторная сборка с идентичным SHA-256; точные исходники и 107 модулей в архиве исходников ядер |
 
-An independent IPv6 TCP loopback probe fails with Windows 10013 and Windows
-ping to ::1 fails. The strict IPv6 tests remain in source and are classified as
-environment-blocked, not passed. IPv4 loopback checks pass.
+В комплекте **официальный Xray 26.10.21** и отдельная сборка
+**sing-box 1.14.4-netpulse.1** на основе стабильной 1.14.4.
+SHA-256 исправленного sing-box:
+`d9165cec1cd167e589c40f3454e31c77c18066490e1ddd7117f83e929deeea5d`.
+[Происхождение и воспроизведение](docs/SING-BOX-NETPULSE-BUILD.md).
 
-The installer tests use a unique temporary namespace and stub the privileged
-service/layout hooks. Migration, ACL preparation and file repair are also tested
-separately against actual temporary files. Actual elevated installation, SCM
-relocation and TUN maintenance under antivirus protection were not exercised on
-the user's live service. Existing service files, protection, quarantine and global
-network settings were not changed. No new antivirus-vendor verdict or signing
-certificate was obtained; the earlier screenshot's scan does not cover this build.
+## Ограничения
 
-See [installation layout](docs/INSTALLATION.md), [release notes](RELEASE_NOTES.md)
-and the machine-readable VERIFICATION.json.
+Реальная установка/перенос службы с UAC, подключение TUN/системного прокси,
+работа нескольких реальных учётных записей и реакция Касперского здесь не
+проверены. В тестовом установщике действия над рабочей службой и защищённой
+папкой заменены тестовыми обработчиками; файловые проверки выполнялись
+отдельно на временных данных. Системная сеть, сертификаты, антивирус и
+карантин при проверках не менялись.
+
+Два IPv6-теста не выполняются в этой среде: независимый TCP к ::1 также
+возвращает Windows 10013, а ping -6 завершается ошибкой. IPv4 работает.
+Передача по локальной петле проверяет исправность транспорта, а не скорость
+Интернета. Интернет-замеры скорости и подбор MTU в этом прогоне не проводились.
+
+В Qt 6.8.3 остаются известные позднее исправленные проблемы. Сканер Go
+сохраняет общее предупреждение OpenPGP для исправленного sing-box, хотя
+соответствующие пакеты не собраны; у официального Xray остаются также
+предупреждения HTML. Оценка доступности этих путей и границы проверки
+описаны в аудите. Выпуск не объявляется гарантированно свободным от ошибок.

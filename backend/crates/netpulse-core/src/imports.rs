@@ -592,7 +592,11 @@ pub fn parse(raw: &str) -> Result<Parsed> {
                     "YAML aliases, anchors, merge keys and tags are unsupported",
                 ));
             }
-            serde_yaml_ng::from_str(&text).map_err(|_| error("Malformed YAML subscription"))?
+            let options=serde_saphyr::options!{budget:serde_saphyr::budget!{
+                max_depth:32,max_documents:1,max_events:200_000,max_nodes:100_000,
+                max_total_scalar_bytes:8*1024*1024,max_aliases:0,max_anchors:0,max_merge_keys:0,
+            }};
+            serde_saphyr::from_str_with_options(&text,options).map_err(|_| error("Malformed YAML subscription or parsing limit exceeded"))?
         } else {
             crate::strict_json::parse(&text)
                 .map_err(|_| error("Malformed JSON subscription or duplicate fields"))?
@@ -782,5 +786,13 @@ mod tests {
             .is_err()
         );
         assert!(parse("proxies:\n  - &a {name: test, type: socks5}\n  - *a").is_err());
+    }
+    #[test]
+    fn yaml_resource_limits_reject_deep_structures_and_alias_expansion() {
+        let deep=format!("proxies: {}0{}","[".repeat(1000),"]".repeat(1000));
+        assert!(parse(&deep).is_err());
+        for yaml in ["---\nproxies: [&a {type: socks5, name: x, server: localhost, port: 1080}, *a]", "---\nproxies: !include file.yaml", "---\nproxies: []\n---\nproxies: []"]{assert!(parse(yaml).is_err(),"unsupported YAML was accepted");}
+        let valid="proxies:\n  - name: Saved server\n    type: socks5\n    server: 127.0.0.1\n    port: 1080\n";
+        assert_eq!(parse(valid).unwrap().profiles.len(),1);
     }
 }

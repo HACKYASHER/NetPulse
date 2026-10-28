@@ -1,4 +1,4 @@
-> The installer keeps the client, engines, service and personal data under `C:\Program Files\NetPulse`. See [installation layout and profile migration](docs/INSTALLATION.md).
+> Choose the installation folder; the client, engines, service and personal data stay under `<installation folder>`. See [installation layout and profile migration](docs/INSTALLATION.md).
 
 # NetPulse
 
@@ -9,11 +9,11 @@ C++ / Qt Quick desktop interface with a separate Rust network controller,
 sing-box and Xray. Use System Proxy for proxy-aware applications or TUN for
 traffic capture through a virtual network adapter.
 
-**Current release: 1.0.5 · Windows x64**
+**Current release: 1.0.6 · Windows x64**
 
-[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.5/NetPulse-Setup.exe)
-· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.5/NetPulse-Portable.zip)
-· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.5)
+[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.6/NetPulse-Setup.exe)
+· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.6/NetPulse-Portable.zip)
+· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.6)
 · [Русская инструкция](README.ru.md)
 
 ![NetPulse desktop interface](docs/images/overview.png)
@@ -74,7 +74,7 @@ See [verification details](VERIFICATION.md).
 
 ## Data and previous versions
 
-The installer keeps the client and service in `C:\Program Files\NetPulse`.
+The installer keeps the client and service in the selected folder: `<installation folder>`.
 Personal data lives in `data\<Windows SID>` under that root. The previous Qt
 profile in `%LOCALAPPDATA%\NetPulseQt` is verified and migrated on first launch.
 The service identity remains `NetPulseCoreQt`. The original 3.0.4 database is
@@ -115,7 +115,7 @@ See [architecture](ARCHITECTURE.md) for process and privilege boundaries.
 ## Building
 
 Requirements: Windows x64, Qt 6.8.3 MSVC x64, Visual Studio 2022 C++ tools and
-Windows SDK, Rust 1.88+, Python, CMake and Ninja. NSIS 3 builds the installer.
+Windows SDK, Rust 1.89+, Python, CMake and Ninja. NSIS 3 builds the installer.
 Runtime executables are release assets rather than Git source files.
 
 Run from a **Developer PowerShell for Visual Studio**:
@@ -155,3 +155,8 @@ open-source terms. Compatible DLLs can be replaced, and the client rebuilt from
 the supplied sources. See [third-party components](THIRD-PARTY.md) and `licenses/`.
 
 Developed by **HACKYASHER**, with assistance from OpenAI Codex.
+
+
+Bundled engines: official Xray **26.10.21**, patched sing-box **1.14.4-netpulse.1** (a separately marked NetPulse build based on stable 1.14.4). Building that engine requires Go **1.27.3**; `NETPULSE_GO_EXE` can point to it. For source builds, run `scripts/fetch-cores.py` and `scripts/fetch-engine-sources.py` before building and packaging.
+
+[NetPulse 1.0.6 audit and limits](docs/SECURITY-AUDIT-1.0.6.ru.md) · [Patched engine provenance](docs/SING-BOX-NETPULSE-BUILD.md).

@@ -345,7 +345,7 @@ ApplicationWindow {
                     Layout.fillWidth: true; implicitHeight: 64
                     RowLayout { anchors.fill: parent; anchors.margins: 12; spacing: 9
                         Rectangle { width: 7; height: 7; radius: 4; color: modelData.engine_ready ? "#6bd9b0" : "#e0b86d" }
-                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.5"; font.pixelSize: 10; color: mutedColor } }
+                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.6"; font.pixelSize: 10; color: mutedColor } }
                     }
                 }
             }
@@ -990,7 +990,7 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: aboutColumn.implicitHeight+40
                 ColumnLayout { id: aboutColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
                     Label { textFormat: Text.PlainText; text: tr("О клиенте","About NetPulse"); color: textColor; font.pixelSize: 17; font.bold: true }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.5 · Windows x64"; color: textColor }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.6 · Windows x64"; color: textColor }
                     Label { textFormat: Text.PlainText; text: "Qt Quick · Rust · sing-box "+(modelData.engine_version||"—")+" · Xray "+(modelData.xray_version||"—"); color: mutedColor; font.pixelSize: 12 }
                     ActionButton { appWindow: win; text: "GitHub · NetPulse ↗"; onClicked: Qt.openUrlExternally("https://github.com/HACKYASHER/NetPulse") }
                 }
@@ -1023,7 +1023,7 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: dataForm.implicitHeight + 40
                 ColumnLayout { id: dataForm; anchors.fill: parent; anchors.margins: 20; spacing: 14
                     Label { textFormat: Text.PlainText; text: tr("Данные и резервные копии", "Data and backups"); color: textColor; font.pixelSize: 16; font.weight: Font.DemiBold }
-                    Label { textFormat: Text.PlainText; text: tr("Приложение, ядра, служба и личные данные находятся в общей папке NetPulse. У каждой учётной записи Windows свой защищённый профиль в подпапке data. Обновление и удаление сохраняют личные данные.", "The application, engines, service and personal data share the NetPulse folder. Each Windows account has a private profile in the data subfolder. Updates and uninstall preserve personal data."); Layout.fillWidth: true; wrapMode: Text.WordWrap; color: mutedColor; font.pixelSize: 12 }
+                    Label { textFormat: Text.PlainText; text: tr("Приложение, ядра, служба и личные данные находятся в выбранной при установке папке NetPulse. У каждой учётной записи Windows свой защищённый профиль в подпапке data. Обновление и удаление сохраняют личные данные.", "The application, engines, service and personal data share the folder selected during installation. Each Windows account has a private profile in the data subfolder. Updates and uninstall preserve personal data."); Layout.fillWidth: true; wrapMode: Text.WordWrap; color: mutedColor; font.pixelSize: 12 }
                     Label { textFormat: Text.PlainText; text: tr("Приложение: ", "Application: ")+backend.installationDirectory+"\n"+tr("Личные данные: ", "Personal data: ")+backend.dataDirectory; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; color: mutedColor; font.pixelSize: 12 }
                     ActionButton { appWindow: win; text: tr("Папка NetPulse", "NetPulse folder"); onClicked: backend.openInstallationDirectory() }
                     RowLayout {
@@ -1034,7 +1034,7 @@ ApplicationWindow {
                     }
                     HelpText { text: tr("Временные архивы ядер очищаются после установки и при следующем запуске. Незавершённые загрузки и установщики уже установленной версии тоже удаляются; предыдущий комплект ядер остаётся для отката.","Temporary engine archives are cleared after installation and on startup. Interrupted downloads and installers for the installed version are also removed; the previous engine bundle remains for rollback.") }
                     ActionButton { appWindow: win; text: tr("Редактор всех параметров…", "Edit all preferences…"); onClicked: editJson(tr("Параметры NetPulse", "NetPulse preferences"), JSON.stringify(prefs, null, 2), "save_preferences") }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.5  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.6  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
                 }
             }
         }
@@ -1047,11 +1047,12 @@ ApplicationWindow {
             property string engine: "xray"
             property var releases: []
             readonly property var release: releasePicker.currentIndex>=0&&releasePicker.currentIndex<releases.length?releases[releasePicker.currentIndex]:null
-            function load() { var name=engine;call("list_core_releases",{engine:name},function(items){if(engine===name){releases=items;releasePicker.currentIndex=items.length?0:-1}}) }
+            function load() { backend.clearError();var name=engine;call("list_core_releases",{engine:name},function(items){if(engine===name){releases=items;releasePicker.currentIndex=items.length?0:-1}}) }
             spacing: 18
             Card { Layout.fillWidth: true; implicitHeight: coreForm.implicitHeight+40
                 ColumnLayout { id: coreForm; anchors.fill: parent; anchors.margins: 20; spacing: 14
                     Label { textFormat: Text.PlainText; text: tr("Ядра и обновления","Engines and updates"); color: textColor; font.pixelSize: 17; font.bold: true }
+                    HelpText { text: tr("В комплект входит sing-box 1.14.4-netpulse.1: отдельная сборка NetPulse на основе 1.14.4 с исправленными зависимостями. Xray 26.10.21 — официальный выпуск. Восстановление встроенных ядер возвращает этот комплект.","The bundle includes sing-box 1.14.4-netpulse.1, a separate NetPulse build based on 1.14.4 with patched dependencies. Xray 26.10.21 is the official release. Restoring bundled engines restores this set.") }
                     RowLayout {
                         ActionButton { appWindow: win; text: "Xray · "+(win.modelData.xray_version||"—"); primary: engineView.engine==="xray"; onClicked: {engineView.engine="xray";engineView.releases=[]} }
                         ActionButton { appWindow: win; text: "sing-box · "+(win.modelData.engine_version||"—"); primary: engineView.engine==="sing-box"; onClicked: {engineView.engine="sing-box";engineView.releases=[]} }
@@ -1063,15 +1064,19 @@ ApplicationWindow {
                         ActionButton { appWindow: win; text: "GitHub · SagerNet/sing-box ↗"; onClicked: Qt.openUrlExternally("https://github.com/SagerNet/sing-box/releases") }
                     }
                     Label { textFormat: Text.PlainText; text: tr("Показаны стабильные и предварительные выпуски. Перед заменой проверяются официальный SHA-256 и конфигурация; предыдущий комплект сохраняется.","Stable and prerelease versions are included. Official SHA-256 and configuration are checked before replacing an engine; the previous bundle is retained."); Layout.fillWidth: true; wrapMode: Text.WordWrap; color: mutedColor; font.pixelSize: 12 }
-                    BusyIndicator { visible: busy("list_core_releases")||busy("update_core"); running: visible; implicitHeight: 28 }
+                    RowLayout {
+                        BusyIndicator { visible: busy("list_core_releases")||busy("update_core"); running: visible; implicitHeight: 28 }
+                        Label { visible: busy("list_core_releases")||busy("update_core"); text: busy("update_core")?tr("Загрузка и проверка ядра…","Downloading and validating engine…"):tr("Проверка GitHub, до 12 секунд…","Checking GitHub, up to 12 seconds…"); color: mutedColor; font.pixelSize: 12 }
+                    }
                     Choice { appWindow: win; id: releasePicker; visible: engineView.releases.length>0; Layout.fillWidth: true; model: engineView.releases.map(function(r){return r.tag+(r.prerelease?" · pre-release":" · stable")}) }
                     Card { visible: !!engineView.release; Layout.fillWidth: true; implicitHeight: releaseDetails.implicitHeight+28
                         ColumnLayout { id: releaseDetails; anchors.fill: parent; anchors.margins: 14; spacing: 12
                             Label { textFormat: Text.PlainText; text: engineView.release?engineView.release.asset:""; color: textColor }
+                            HelpText { visible: engineView.engine==="sing-box"&&engineView.release&&engineView.release.tag==="v1.14.4"; text: tr("Официальный sing-box 1.14.4 не содержит дополнительных исправлений сборки NetPulse. Рекомендуется оставить встроенную 1.14.4-netpulse.1.","Official sing-box 1.14.4 does not contain the additional NetPulse fixes. Keeping the bundled 1.14.4-netpulse.1 is recommended.") }
                             Label { textFormat: Text.PlainText; text: "SHA-256: "+(engineView.release?engineView.release.archive_sha256:""); color: mutedColor; font.family: "Consolas"; font.pixelSize: 11; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
                             RowLayout {
                                 ActionButton { appWindow: win; text: tr("Страница выпуска ↗","Release page ↗"); onClicked: if(engineView.release)call("open_core_page",{url:engineView.release.page}) }
-                                ActionButton { appWindow: win; text: tr("Скачать и установить","Download and install"); primary: true; enabled: !snapshot.engine_pid&&!busy("update_core"); onClicked: if(engineView.release)call("update_core",{release:engineView.release}) }
+                                ActionButton { appWindow: win; text: tr("Скачать и установить","Download and install"); primary: true; enabled: !snapshot.engine_pid&&!busy("update_core"); onClicked: if(engineView.release){backend.clearError();call("update_core",{release:engineView.release},function(r){toast(tr("Установлено: ","Installed: ")+r.engine+" "+r.installed)})} }
                             }
                         }
                     }
@@ -1160,7 +1165,7 @@ ApplicationWindow {
         id: updateDialog; anchors.centerIn: parent; width: 600; modal: true; title: tr("Обновление NetPulse","NetPulse update")
         ColumnLayout { anchors.fill: parent; spacing: 16
             Label { textFormat: Text.PlainText; text: clientUpdate?tr("Доступна версия ","Available version ")+clientUpdate.tag:updateStatus; color: textColor; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-            Label { textFormat: Text.PlainText; text: tr("Установщик проверяется по SHA-256 из официального выпуска. Установка отключит VPN и завершит клиент.","The installer is checked against the official release SHA-256. Installation disconnects VPN and closes the client."); color: mutedColor; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 12 }
+            Label { textFormat: Text.PlainText; text: tr("Установщик проверяется по SHA-256 официального выпуска. После подтверждения Windows защищённый помощник повторно загрузит и проверит его. Установка отключит VPN и завершит клиент.","The installer is checked against the official release SHA-256. After Windows confirmation, the protected helper downloads and verifies it again. Installation disconnects VPN and closes the client."); color: mutedColor; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 12 }
             BusyIndicator { visible: busy("download_client_update")||busy("install_client_update"); running: visible; implicitHeight: 30 }
             RowLayout { Layout.fillWidth: true
                 ActionButton { appWindow: win; text: tr("Страница выпуска ↗","Release page ↗"); enabled: !!clientUpdate; onClicked: if(clientUpdate)Qt.openUrlExternally(clientUpdate.page) }

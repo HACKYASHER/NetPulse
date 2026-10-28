@@ -19,7 +19,7 @@ pub fn check() -> Vec<CoreVersion> {
     .into_iter()
     .map(|(name, installed, repo)| {
         let result = (|| {
-            let response = crate::network::client(Duration::from_secs(10))?
+            let response = crate::network::update_client(Duration::from_secs(10))?
                 .get(format!(
                     "https://api.github.com/repos/{repo}/releases/latest"
                 ))
@@ -91,7 +91,10 @@ pub fn ensure_bundled(resources: &Path, data: &Path) -> Result<()> {
         engine::verify_engine(&target.join("sing-box.exe"))?;
         runtime::verify_xray(&target.join("xray.exe"))?;
     }
+    let sing_hash=if target.exists(){crate::core_releases::hash(&target.join("sing-box.exe"))?}else{String::new()};
     if target.exists()
+        && !["8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9","5c19bb3f8c12d4e85b3d47fe63123a7624b314b58dd7a8e32f51004f1c4d2faf"].contains(&sing_hash.as_str())
+        && (crate::core_releases::approval(&target,"sing-box")?.is_some() || sing_hash==engine::ENGINE_SHA256)
         && (crate::core_releases::approval(&target, "xray")?.is_some()
             || crate::core_releases::hash(&target.join("xray.exe"))? == runtime::XRAY_SHA256)
     {

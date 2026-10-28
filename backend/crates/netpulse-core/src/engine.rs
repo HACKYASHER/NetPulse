@@ -55,8 +55,8 @@ fn sensitive(v: &Value, key: &str, out: &mut Vec<String>) {
     }
 }
 
-pub const ENGINE_VERSION: &str = "1.14.3";
-pub const ENGINE_SHA256: &str = "5c19bb3f8c12d4e85b3d47fe63123a7624b314b58dd7a8e32f51004f1c4d2faf";
+pub const ENGINE_VERSION: &str = "1.14.4-netpulse.1";
+pub const ENGINE_SHA256: &str = "d9165cec1cd167e589c40f3454e31c77c18066490e1ddd7117f83e929deeea5d";
 pub const CRONET_SHA256: &str = "3217c6260fbca5f16072e0b79735742f40109a63bb0ff88fd6b96dd6b54a2928";
 
 pub fn verify_engine(path: &Path) -> Result<()> {
@@ -81,17 +81,13 @@ pub fn verify_engine(path: &Path) -> Result<()> {
             }
             digest.update(&block[..n]);
         }
-        if digest
-            .finalize()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect::<String>()
-            != expected
-        {
+        let actual=digest.finalize().iter().map(|b|format!("{b:02x}")).collect::<String>();
+        let previous=p==path && ["5c19bb3f8c12d4e85b3d47fe63123a7624b314b58dd7a8e32f51004f1c4d2faf","8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9"].contains(&actual.as_str());
+        if actual!=expected && !previous {
             return Err(Error::new(
                 "EngineHashMismatch",
                 "engine-verify",
-                "Engine component differs from pinned official release",
+                "Engine component differs from the pinned NetPulse runtime",
             ));
         }
     }
@@ -462,90 +458,8 @@ pub fn installed_engine(data_dir: &Path) -> PathBuf {
 }
 
 pub fn install(data_dir: &Path) -> Result<()> {
-    let dest = data_dir.join("engine");
-    std::fs::create_dir_all(&dest).map_err(|e| Error::io("engine-directory", e))?;
-    let url = "https://github.com/SagerNet/sing-box/releases/download/v1.14.3/sing-box-1.14.3-windows-amd64.zip";
-    let response = crate::network::client(Duration::from_secs(120))?
-        .get(url)
-        .send()
-        .map_err(|_| {
-            Error::new(
-                "EngineDownloadFailed",
-                "engine-download",
-                "Official engine download failed",
-            )
-        })?;
-    if !response.status().is_success() {
-        return Err(Error::new(
-            "EngineDownloadFailed",
-            "engine-download",
-            format!(
-                "Official download returned HTTP {}",
-                response.status().as_u16()
-            ),
-        ));
-    }
-    let mut bytes = Vec::new();
-    response
-        .take(150 * 1024 * 1024 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| Error::io("engine-download", e))?;
-    if bytes.len() > 150 * 1024 * 1024 {
-        return Err(Error::new(
-            "EngineSizeLimit",
-            "engine-download",
-            "Engine archive exceeds 150 MiB",
-        ));
-    }
-    let hash = Sha256::digest(&bytes)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect::<String>();
-    if hash != "d8b86ef58936dba9230ec6a57ffa4243933f3c14ef4809828b6c553440ed1518" {
-        return Err(Error::new(
-            "EngineHashMismatch",
-            "engine-download",
-            "Official archive SHA-256 does not match the pinned release",
-        ));
-    }
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|_| {
-        Error::new(
-            "EngineArchiveInvalid",
-            "engine-extract",
-            "Invalid engine ZIP",
-        )
-    })?;
-    let staging = dest.join(format!("staging-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir(&staging).map_err(|e| Error::io("engine-staging", e))?;
-    let result = (|| {
-        for name in ["sing-box.exe", "libcronet.dll"] {
-            let entry = format!("sing-box-1.14.3-windows-amd64/{name}");
-            let file = archive.by_name(&entry).map_err(|_| {
-                Error::new(
-                    "EngineArchiveInvalid",
-                    "engine-extract",
-                    "Engine component missing from archive",
-                )
-            })?;
-            let mut out = std::fs::File::create(staging.join(name))
-                .map_err(|e| Error::io("engine-extract", e))?;
-            std::io::copy(&mut file.take(120 * 1024 * 1024 + 1), &mut out)
-                .map_err(|e| Error::io("engine-extract", e))?;
-            out.sync_all().map_err(|e| Error::io("engine-extract", e))?;
-        }
-        verify_engine(&staging.join("sing-box.exe"))?;
-        for name in ["sing-box.exe", "libcronet.dll"] {
-            std::fs::rename(staging.join(name), dest.join(name))
-                .map_err(|e| Error::io("engine-install", e))?;
-        }
-        Ok(())
-    })();
-    // Only this newly-created UUID directory and its two known files are removed.
-    for name in ["sing-box.exe", "libcronet.dll"] {
-        let _ = std::fs::remove_file(staging.join(name));
-    }
-    let _ = std::fs::remove_dir(staging);
-    result
+    let executable=std::env::current_exe().map_err(|e|Error::io("engine-install",e))?;
+    crate::core_updates::activate_bundled(executable.parent().ok_or_else(||Error::new("ResourceMissing","engine-install","Bundled runtimes missing"))?,data_dir)
 }
 
 #[cfg(test)]
@@ -636,7 +550,7 @@ mod tests {
                 .build()
                 .unwrap()
         };
-        let response = client(public).get(&url).send().unwrap();
+        let response = client(public).get(&url).send().unwrap_or_else(|error|panic!("Public proxy {public}, private {diag}, alive {:?}: {error}; {}",engine.alive(),engine.diagnostic(&config)));
         assert_eq!(response.status(), 200);
         assert_eq!(response.text().unwrap(), "fixture");
         assert_eq!(client(diag).get(&url).send().unwrap().status(), 407);

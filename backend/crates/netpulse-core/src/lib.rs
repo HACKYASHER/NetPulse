@@ -8,6 +8,8 @@ mod icmp;
 pub mod imports;
 pub mod inventory;
 pub mod layout;
+pub mod install_paths;
+pub mod installer_cache;
 pub mod model;
 pub mod network;
 pub mod proxy;

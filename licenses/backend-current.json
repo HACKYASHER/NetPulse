@@ -1,0 +1,1274 @@
+[
+  {
+    "name": "adler2",
+    "version": "2.0.1",
+    "checksum": "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa",
+    "notices": "licenses\\retained-backend\\adler2-2.0.1"
+  },
+  {
+    "name": "annotate-snippets",
+    "version": "0.12.17",
+    "checksum": "b2a5b0a5ab8561c603f16c3b78c24a386b1f70e7fc1b1b1e8c15738828e4a176",
+    "notices": "licenses\\retained-backend\\annotate-snippets-0.12.17"
+  },
+  {
+    "name": "anstyle",
+    "version": "1.0.14",
+    "checksum": "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000",
+    "notices": "licenses\\retained-backend\\anstyle-1.0.14"
+  },
+  {
+    "name": "arraydeque",
+    "version": "0.5.1",
+    "checksum": "7d902e3d592a523def97af8f317b08ce16b7ab854c1985a0c671e6f15cebc236",
+    "notices": "licenses\\retained-backend\\arraydeque-0.5.1"
+  },
+  {
+    "name": "async-compression",
+    "version": "0.4.51",
+    "checksum": "9d5755640120b24961f8231e05892e4a4f7e0d04e8aeca161508c9c397946970",
+    "notices": "licenses\\retained-backend\\async-compression-0.4.51"
+  },
+  {
+    "name": "atomic-waker",
+    "version": "1.1.2",
+    "checksum": "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0",
+    "notices": "licenses\\retained-backend\\atomic-waker-1.1.2"
+  },
+  {
+    "name": "autocfg",
+    "version": "1.5.1",
+    "checksum": "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53",
+    "notices": "licenses\\retained-backend\\autocfg-1.5.1"
+  },
+  {
+    "name": "base64",
+    "version": "0.23.1",
+    "checksum": "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5",
+    "notices": "licenses\\retained-backend\\base64-0.23.1"
+  },
+  {
+    "name": "bitflags",
+    "version": "2.13.2",
+    "checksum": "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06",
+    "notices": "licenses\\retained-backend\\bitflags-2.13.2"
+  },
+  {
+    "name": "block-buffer",
+    "version": "0.12.1",
+    "checksum": "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa",
+    "notices": "licenses\\retained-backend\\block-buffer-0.12.1"
+  },
+  {
+    "name": "block2",
+    "version": "0.6.2",
+    "checksum": "cdeb9d870516001442e364c5220d3574d2da8dc765554b4a617230d33fa58ef5",
+    "notices": null
+  },
+  {
+    "name": "bumpalo",
+    "version": "3.20.3",
+    "checksum": "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649",
+    "notices": "licenses\\retained-backend\\bumpalo-3.20.3"
+  },
+  {
+    "name": "bytemuck",
+    "version": "1.25.2",
+    "checksum": "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797",
+    "notices": "licenses\\retained-backend\\bytemuck-1.25.2"
+  },
+  {
+    "name": "byteorder-lite",
+    "version": "0.1.0",
+    "checksum": "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495",
+    "notices": "licenses\\retained-backend\\byteorder-lite-0.1.0"
+  },
+  {
+    "name": "bytes",
+    "version": "1.12.1",
+    "checksum": "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04",
+    "notices": "licenses\\retained-backend\\bytes-1.12.1"
+  },
+  {
+    "name": "cc",
+    "version": "1.8.0",
+    "checksum": "6651c9ed80effdc7db0ff72512157f901af5e3549e341e24b1dd4887d836d838",
+    "notices": "licenses\\retained-backend\\cc-1.8.0"
+  },
+  {
+    "name": "cfg-if",
+    "version": "1.0.5",
+    "checksum": "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600",
+    "notices": "licenses\\retained-backend\\cfg-if-1.0.5"
+  },
+  {
+    "name": "cfg_aliases",
+    "version": "0.2.2",
+    "checksum": "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527",
+    "notices": "licenses\\retained-backend\\cfg_aliases-0.2.2"
+  },
+  {
+    "name": "compression-codecs",
+    "version": "0.4.46",
+    "checksum": "cae36683101b2899f48bd31f8db9839437356188e3b1ff23096e73dab09ba8fe",
+    "notices": "licenses\\retained-backend\\compression-codecs-0.4.46"
+  },
+  {
+    "name": "compression-core",
+    "version": "0.4.34",
+    "checksum": "2ebdda89edc534bf8d5dd2857562633b6495557e5846552ade994b99ed13c36a",
+    "notices": "licenses\\retained-backend\\compression-core-0.4.34"
+  },
+  {
+    "name": "const-oid",
+    "version": "0.10.2",
+    "checksum": "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c",
+    "notices": "licenses\\retained-backend\\const-oid-0.10.2"
+  },
+  {
+    "name": "core-foundation",
+    "version": "0.10.1",
+    "checksum": "b2a6cd9ae233e7f62ba4e9353e81a88df7fc8a5987b8d445b4d90c879bd156f6",
+    "notices": "licenses\\retained-backend\\core-foundation-0.10.1"
+  },
+  {
+    "name": "core-foundation-sys",
+    "version": "0.8.7",
+    "checksum": "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b",
+    "notices": "licenses\\retained-backend\\core-foundation-sys-0.8.7"
+  },
+  {
+    "name": "core_detect",
+    "version": "1.0.0",
+    "checksum": "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48",
+    "notices": "licenses\\retained-backend\\core_detect-1.0.0"
+  },
+  {
+    "name": "cpufeatures",
+    "version": "0.3.1",
+    "checksum": "5ca28b0ae3115b884660db4118d803791fd6756b6e88f39c0f3f7859060d7566",
+    "notices": "licenses\\retained-backend\\cpufeatures-0.3.1"
+  },
+  {
+    "name": "crc32fast",
+    "version": "1.5.2",
+    "checksum": "01a7799fd6b852db0e61728dde9a204c423b44d689dbd432522543614b490e78",
+    "notices": "licenses\\retained-backend\\crc32fast-1.5.2"
+  },
+  {
+    "name": "crypto-common",
+    "version": "0.2.2",
+    "checksum": "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453",
+    "notices": "licenses\\retained-backend\\crypto-common-0.2.2"
+  },
+  {
+    "name": "digest",
+    "version": "0.11.3",
+    "checksum": "f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2",
+    "notices": "licenses\\retained-backend\\digest-0.11.3"
+  },
+  {
+    "name": "dispatch2",
+    "version": "0.3.1",
+    "checksum": "1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38",
+    "notices": null
+  },
+  {
+    "name": "displaydoc",
+    "version": "0.2.7",
+    "checksum": "c6232dd377dcc64799954cbd3a9bb882e9cdc1308ccd87b1c098f1fb2eaf82a8",
+    "notices": "licenses\\retained-backend\\displaydoc-0.2.7"
+  },
+  {
+    "name": "dlib",
+    "version": "0.5.3",
+    "checksum": "ab8ecd87370524b461f8557c119c405552c396ed91fc0a8eec68679eab26f94a",
+    "notices": null
+  },
+  {
+    "name": "downcast-rs",
+    "version": "1.2.1",
+    "checksum": "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2",
+    "notices": null
+  },
+  {
+    "name": "encoding_rs",
+    "version": "0.8.42",
+    "checksum": "8e985e0451871ad22fb8d2b6b076e2028a502a0d3950998c2c5c0a4f9b5d9679",
+    "notices": "licenses\\retained-backend\\encoding_rs-0.8.42"
+  },
+  {
+    "name": "encoding_rs_io",
+    "version": "0.1.8",
+    "checksum": "fba3fe847045ecff794b9c138293a80db914678c453ad63fbf0c6a9eb6e00b22",
+    "notices": "licenses\\retained-backend\\encoding_rs_io-0.1.8"
+  },
+  {
+    "name": "equivalent",
+    "version": "1.0.3",
+    "checksum": "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826",
+    "notices": "licenses\\retained-backend\\equivalent-1.0.3"
+  },
+  {
+    "name": "errno",
+    "version": "0.3.14",
+    "checksum": "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb",
+    "notices": "licenses\\retained-backend\\errno-0.3.14"
+  },
+  {
+    "name": "fallible-iterator",
+    "version": "0.3.0",
+    "checksum": "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649",
+    "notices": "licenses\\retained-backend\\fallible-iterator-0.3.0"
+  },
+  {
+    "name": "fallible-streaming-iterator",
+    "version": "0.1.9",
+    "checksum": "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a",
+    "notices": "licenses\\retained-backend\\fallible-streaming-iterator-0.1.9"
+  },
+  {
+    "name": "fastrand",
+    "version": "2.5.0",
+    "checksum": "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223",
+    "notices": "licenses\\retained-backend\\fastrand-2.5.0"
+  },
+  {
+    "name": "fdeflate",
+    "version": "0.3.7",
+    "checksum": "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c",
+    "notices": "licenses\\retained-backend\\fdeflate-0.3.7"
+  },
+  {
+    "name": "find-msvc-tools",
+    "version": "0.1.14",
+    "checksum": "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484",
+    "notices": "licenses\\retained-backend\\find-msvc-tools-0.1.14"
+  },
+  {
+    "name": "flate2",
+    "version": "1.1.10",
+    "checksum": "6e634e2e0ebac1ee034020da1ca582e17ffe4e0f5e985823721e168928136dcb",
+    "notices": "licenses\\retained-backend\\flate2-1.1.10"
+  },
+  {
+    "name": "foldhash",
+    "version": "0.2.0",
+    "checksum": "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb",
+    "notices": "licenses\\retained-backend\\foldhash-0.2.0"
+  },
+  {
+    "name": "foreign-types",
+    "version": "0.3.2",
+    "checksum": "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1",
+    "notices": null
+  },
+  {
+    "name": "foreign-types-shared",
+    "version": "0.1.1",
+    "checksum": "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b",
+    "notices": null
+  },
+  {
+    "name": "form_urlencoded",
+    "version": "1.2.2",
+    "checksum": "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf",
+    "notices": "licenses\\retained-backend\\form_urlencoded-1.2.2"
+  },
+  {
+    "name": "futures-channel",
+    "version": "0.3.34",
+    "checksum": "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4",
+    "notices": "licenses\\retained-backend\\futures-channel-0.3.34"
+  },
+  {
+    "name": "futures-core",
+    "version": "0.3.34",
+    "checksum": "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e",
+    "notices": "licenses\\retained-backend\\futures-core-0.3.34"
+  },
+  {
+    "name": "futures-io",
+    "version": "0.3.34",
+    "checksum": "53c0fa8157de1303bfffdaa1cc2a673bfffb60102f76b0ef4441659124373fed",
+    "notices": "licenses\\retained-backend\\futures-io-0.3.34"
+  },
+  {
+    "name": "futures-sink",
+    "version": "0.3.34",
+    "checksum": "1944426bf7d03f1d14f708785e4b33efd750b36d48a157b836b3efc15ede8e1d",
+    "notices": "licenses\\retained-backend\\futures-sink-0.3.34"
+  },
+  {
+    "name": "futures-task",
+    "version": "0.3.34",
+    "checksum": "cd417de3d1d015fc3bfd2b1ea46dfc7bab72ef86f1cc7cc9c78e728b34a6d1fd",
+    "notices": "licenses\\retained-backend\\futures-task-0.3.34"
+  },
+  {
+    "name": "futures-util",
+    "version": "0.3.34",
+    "checksum": "0d50a92467f8ba5dd6e3ee5d4bd04d73ab2e4e1c44474a0674821dfce14b79bc",
+    "notices": "licenses\\retained-backend\\futures-util-0.3.34"
+  },
+  {
+    "name": "g2gen",
+    "version": "1.2.2",
+    "checksum": "c5a7e0eb46f83a20260b850117d204366674e85d3a908d90865c78df9a6b1dfc",
+    "notices": "licenses\\retained-backend\\g2gen-1.2.2"
+  },
+  {
+    "name": "g2p",
+    "version": "1.2.2",
+    "checksum": "539e2644c030d3bf4cd208cb842d2ce2f80e82e6e8472390bcef83ceba0d80ad",
+    "notices": "licenses\\retained-backend\\g2p-1.2.2"
+  },
+  {
+    "name": "g2poly",
+    "version": "1.2.2",
+    "checksum": "312d2295c7302019c395cfb90dacd00a82a2eabd700429bba9c7a3f38dbbe11b",
+    "notices": "licenses\\retained-backend\\g2poly-1.2.2"
+  },
+  {
+    "name": "getrandom",
+    "version": "0.4.3",
+    "checksum": "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099",
+    "notices": "licenses\\retained-backend\\getrandom-0.4.3"
+  },
+  {
+    "name": "granit-parser",
+    "version": "2.0.0",
+    "checksum": "da55feca5d1625466bae068f9fd4b87892caeae70c3fe671ddb0f50d41aebf37",
+    "notices": "licenses\\retained-backend\\granit-parser-2.0.0"
+  },
+  {
+    "name": "hashbrown",
+    "version": "0.16.1",
+    "checksum": "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100",
+    "notices": "licenses\\retained-backend\\hashbrown-0.16.1"
+  },
+  {
+    "name": "hashbrown",
+    "version": "0.17.1",
+    "checksum": "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a",
+    "notices": "licenses\\retained-backend\\hashbrown-0.17.1"
+  },
+  {
+    "name": "hashlink",
+    "version": "0.12.2",
+    "checksum": "a596f1b20ed2cc5ecac41a164aaebc7258057060f06c0cf7a2ba3991ee7990fb",
+    "notices": "licenses\\retained-backend\\hashlink-0.12.2"
+  },
+  {
+    "name": "http",
+    "version": "1.5.0",
+    "checksum": "918d3568bebf352712bc2ef3d46a8bcf1a75b373be6539de198e9105cbbf9ce0",
+    "notices": "licenses\\retained-backend\\http-1.5.0"
+  },
+  {
+    "name": "http-body",
+    "version": "1.1.0",
+    "checksum": "ca2a8f2913ee65f60facd6a5905613afaa448497a0230cc41ce022d93290bc2c",
+    "notices": "licenses\\retained-backend\\http-body-1.1.0"
+  },
+  {
+    "name": "http-body-util",
+    "version": "0.1.5",
+    "checksum": "23169fe34a5fbcdd3f3862e78fb9b6fccd5f02a6dc6f732547005d45631ce71c",
+    "notices": "licenses\\retained-backend\\http-body-util-0.1.5"
+  },
+  {
+    "name": "httparse",
+    "version": "1.10.1",
+    "checksum": "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87",
+    "notices": "licenses\\retained-backend\\httparse-1.10.1"
+  },
+  {
+    "name": "hybrid-array",
+    "version": "0.4.15",
+    "checksum": "27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17",
+    "notices": "licenses\\retained-backend\\hybrid-array-0.4.15"
+  },
+  {
+    "name": "hyper",
+    "version": "1.12.0",
+    "checksum": "2c3e324da4c95177d6291d4c8730197c0d1822f8a9766814a4a44fa5ab797c9c",
+    "notices": "licenses\\retained-backend\\hyper-1.12.0"
+  },
+  {
+    "name": "hyper-tls",
+    "version": "0.6.0",
+    "checksum": "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0",
+    "notices": "licenses\\retained-backend\\hyper-tls-0.6.0"
+  },
+  {
+    "name": "hyper-util",
+    "version": "0.1.21",
+    "checksum": "ddc03d96684f9226b8a787cdb71488417b53ab5ea8fdb1dac946cb9431cc8bff",
+    "notices": "licenses\\retained-backend\\hyper-util-0.1.21"
+  },
+  {
+    "name": "icu_collections",
+    "version": "2.3.0",
+    "checksum": "fa68d21081c4a05d5a901a1c62add574c77048b6a1c67be3b50ce0b60d4ca513",
+    "notices": "licenses\\retained-backend\\icu_collections-2.3.0"
+  },
+  {
+    "name": "icu_locale_core",
+    "version": "2.3.0",
+    "checksum": "d56e28588da92eee5c3201a6eff33fabdd49b62269c8938d4ff050ce4d900deb",
+    "notices": "licenses\\retained-backend\\icu_locale_core-2.3.0"
+  },
+  {
+    "name": "icu_normalizer",
+    "version": "2.3.0",
+    "checksum": "12f9cf5f235641ed274641dd81c3f28d870e276763d0797aeeab72317b1c646f",
+    "notices": "licenses\\retained-backend\\icu_normalizer-2.3.0"
+  },
+  {
+    "name": "icu_normalizer_data",
+    "version": "2.3.0",
+    "checksum": "1563da1ed3e0b3bf3d74c9b85917ac9c56464d2f57242270c09c9e752f8021a0",
+    "notices": "licenses\\retained-backend\\icu_normalizer_data-2.3.0"
+  },
+  {
+    "name": "icu_properties",
+    "version": "2.3.0",
+    "checksum": "7e7ca276ad3145661a65914e6daf131ca5120cd3dcee8f8f3214b8875184a148",
+    "notices": "licenses\\retained-backend\\icu_properties-2.3.0"
+  },
+  {
+    "name": "icu_properties_data",
+    "version": "2.3.0",
+    "checksum": "e590f038c1464a96894fd6d10127e90a8be4509f56ff7ecef851b15cee0b7caa",
+    "notices": "licenses\\retained-backend\\icu_properties_data-2.3.0"
+  },
+  {
+    "name": "icu_provider",
+    "version": "2.3.1",
+    "checksum": "d27bbb9d3abbefac45d55f647c9de1d44aafcd1186eb91879afef17c396c3e73",
+    "notices": "licenses\\retained-backend\\icu_provider-2.3.1"
+  },
+  {
+    "name": "idna",
+    "version": "1.1.0",
+    "checksum": "3b0875f23caa03898994f6ddc501886a45c7d3d62d04d2d90788d47be1b1e4de",
+    "notices": "licenses\\retained-backend\\idna-1.1.0"
+  },
+  {
+    "name": "idna_adapter",
+    "version": "1.2.2",
+    "checksum": "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714",
+    "notices": "licenses\\retained-backend\\idna_adapter-1.2.2"
+  },
+  {
+    "name": "image",
+    "version": "0.25.10",
+    "checksum": "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104",
+    "notices": "licenses\\retained-backend\\image-0.25.10"
+  },
+  {
+    "name": "image-webp",
+    "version": "0.2.4",
+    "checksum": "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3",
+    "notices": "licenses\\retained-backend\\image-webp-0.2.4"
+  },
+  {
+    "name": "indexmap",
+    "version": "2.14.2",
+    "checksum": "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855",
+    "notices": "licenses\\retained-backend\\indexmap-2.14.2"
+  },
+  {
+    "name": "ipnet",
+    "version": "2.12.2",
+    "checksum": "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0",
+    "notices": "licenses\\retained-backend\\ipnet-2.12.2"
+  },
+  {
+    "name": "itoa",
+    "version": "1.0.18",
+    "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682",
+    "notices": "licenses\\retained-backend\\itoa-1.0.18"
+  },
+  {
+    "name": "js-sys",
+    "version": "0.3.106",
+    "checksum": "7883d941dae510fb2d978fc3fe018c71c9e2892fd38854de3e8b92c2e5ad9cc5",
+    "notices": "licenses\\retained-backend\\js-sys-0.3.106"
+  },
+  {
+    "name": "libc",
+    "version": "0.2.190",
+    "checksum": "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78",
+    "notices": "licenses\\retained-backend\\libc-0.2.190"
+  },
+  {
+    "name": "libloading",
+    "version": "0.7.4",
+    "checksum": "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f",
+    "notices": "licenses\\retained-backend\\libloading-0.7.4"
+  },
+  {
+    "name": "libsqlite3-sys",
+    "version": "0.38.2",
+    "checksum": "f1d20bef17f513b9b3004532233187769cd072d790971f4e4da0e346eb6401e8",
+    "notices": "licenses\\retained-backend\\libsqlite3-sys-0.38.2"
+  },
+  {
+    "name": "linux-raw-sys",
+    "version": "0.12.1",
+    "checksum": "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53",
+    "notices": "licenses\\retained-backend\\linux-raw-sys-0.12.1"
+  },
+  {
+    "name": "litemap",
+    "version": "0.8.3",
+    "checksum": "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae",
+    "notices": "licenses\\retained-backend\\litemap-0.8.3"
+  },
+  {
+    "name": "log",
+    "version": "0.4.34",
+    "checksum": "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6",
+    "notices": "licenses\\retained-backend\\log-0.4.34"
+  },
+  {
+    "name": "lru",
+    "version": "0.18.5",
+    "checksum": "ef9ac18847474e638e3702b76c65d4eb93428471a74778ef0f1be711717f89b5",
+    "notices": "licenses\\retained-backend\\lru-0.18.5"
+  },
+  {
+    "name": "memchr",
+    "version": "2.8.3",
+    "checksum": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98",
+    "notices": "licenses\\retained-backend\\memchr-2.8.3"
+  },
+  {
+    "name": "miniz_oxide",
+    "version": "0.8.9",
+    "checksum": "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316",
+    "notices": "licenses\\retained-backend\\miniz_oxide-0.8.9"
+  },
+  {
+    "name": "miniz_oxide",
+    "version": "0.9.1",
+    "checksum": "b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c",
+    "notices": "licenses\\retained-backend\\miniz_oxide-0.9.1"
+  },
+  {
+    "name": "mio",
+    "version": "1.2.4",
+    "checksum": "1788edb87fdc09c7e26304471e2f5be8cdefb1b6930d6e3985fc02ff53bf86ee",
+    "notices": "licenses\\retained-backend\\mio-1.2.4"
+  },
+  {
+    "name": "moxcms",
+    "version": "0.8.1",
+    "checksum": "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b",
+    "notices": "licenses\\retained-backend\\moxcms-0.8.1"
+  },
+  {
+    "name": "multiversion_no_op",
+    "version": "1.0.0",
+    "checksum": "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d",
+    "notices": "licenses\\retained-backend\\multiversion_no_op-1.0.0"
+  },
+  {
+    "name": "native-tls",
+    "version": "0.2.18",
+    "checksum": "465500e14ea162429d264d44189adc38b199b62b1c21eea9f69e4b73cb03bbf2",
+    "notices": "licenses\\retained-backend\\native-tls-0.2.18"
+  },
+  {
+    "name": "nix",
+    "version": "0.31.3",
+    "checksum": "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d",
+    "notices": null
+  },
+  {
+    "name": "num-traits",
+    "version": "0.2.19",
+    "checksum": "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841",
+    "notices": "licenses\\retained-backend\\num-traits-0.2.19"
+  },
+  {
+    "name": "objc2",
+    "version": "0.6.5",
+    "checksum": "08849bbd4767dfae9457696856ae1c84fe4e0281bbe4a7abff2d0e06fb7981f8",
+    "notices": null
+  },
+  {
+    "name": "objc2-app-kit",
+    "version": "0.3.2",
+    "checksum": "d49e936b501e5c5bf01fda3a9452ff86dc3ea98ad5f283e1455153142d97518c",
+    "notices": null
+  },
+  {
+    "name": "objc2-core-foundation",
+    "version": "0.3.2",
+    "checksum": "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536",
+    "notices": null
+  },
+  {
+    "name": "objc2-encode",
+    "version": "4.1.0",
+    "checksum": "ef25abbcd74fb2609453eb695bd2f860d389e457f67dc17cafc8b8cbc89d0c33",
+    "notices": null
+  },
+  {
+    "name": "objc2-foundation",
+    "version": "0.3.2",
+    "checksum": "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272",
+    "notices": "licenses\\retained-backend\\objc2-foundation-0.3.2"
+  },
+  {
+    "name": "once_cell",
+    "version": "1.21.4",
+    "checksum": "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50",
+    "notices": "licenses\\retained-backend\\once_cell-1.21.4"
+  },
+  {
+    "name": "openssl",
+    "version": "0.10.81",
+    "checksum": "77823a27f0babb03091cb9ed9ef80af3b39dbc82f97e8fa530374b7dafd87a45",
+    "notices": null
+  },
+  {
+    "name": "openssl-macros",
+    "version": "0.1.1",
+    "checksum": "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c",
+    "notices": null
+  },
+  {
+    "name": "openssl-probe",
+    "version": "0.2.1",
+    "checksum": "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe",
+    "notices": "licenses\\retained-backend\\openssl-probe-0.2.1"
+  },
+  {
+    "name": "openssl-sys",
+    "version": "0.9.117",
+    "checksum": "b47e7e6bb2c38cd930d25a23b40fa52e068c10e85f3e03a7f5ba5aaca5713695",
+    "notices": null
+  },
+  {
+    "name": "percent-encoding",
+    "version": "2.3.2",
+    "checksum": "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220",
+    "notices": "licenses\\retained-backend\\percent-encoding-2.3.2"
+  },
+  {
+    "name": "pin-project-lite",
+    "version": "0.2.17",
+    "checksum": "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd",
+    "notices": "licenses\\retained-backend\\pin-project-lite-0.2.17"
+  },
+  {
+    "name": "pkg-config",
+    "version": "0.3.34",
+    "checksum": "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548",
+    "notices": "licenses\\retained-backend\\pkg-config-0.3.34"
+  },
+  {
+    "name": "png",
+    "version": "0.18.1",
+    "checksum": "60769b8b31b2a9f263dae2776c37b1b28ae246943cf719eb6946a1db05128a61",
+    "notices": "licenses\\retained-backend\\png-0.18.1"
+  },
+  {
+    "name": "pollster",
+    "version": "0.4.0",
+    "checksum": "2f3a9f18d041e6d0e102a0a46750538147e5e8992d3b4873aaafee2520b00ce3",
+    "notices": null
+  },
+  {
+    "name": "potential_utf",
+    "version": "0.1.6",
+    "checksum": "d83eb9bc6d8e5cf568e7a1101d60ee05e81ed50ea106026f3d18deeb046d7661",
+    "notices": "licenses\\retained-backend\\potential_utf-0.1.6"
+  },
+  {
+    "name": "proc-macro2",
+    "version": "1.0.107",
+    "checksum": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9",
+    "notices": "licenses\\retained-backend\\proc-macro2-1.0.107"
+  },
+  {
+    "name": "pxfm",
+    "version": "0.1.30",
+    "checksum": "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea",
+    "notices": "licenses\\retained-backend\\pxfm-0.1.30"
+  },
+  {
+    "name": "quick-error",
+    "version": "2.0.1",
+    "checksum": "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3",
+    "notices": "licenses\\retained-backend\\quick-error-2.0.1"
+  },
+  {
+    "name": "quick-xml",
+    "version": "0.41.0",
+    "checksum": "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1",
+    "notices": null
+  },
+  {
+    "name": "quote",
+    "version": "1.0.47",
+    "checksum": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001",
+    "notices": "licenses\\retained-backend\\quote-1.0.47"
+  },
+  {
+    "name": "r-efi",
+    "version": "6.0.0",
+    "checksum": "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf",
+    "notices": null
+  },
+  {
+    "name": "raw-window-handle",
+    "version": "0.6.2",
+    "checksum": "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539",
+    "notices": "licenses\\retained-backend\\raw-window-handle-0.6.2"
+  },
+  {
+    "name": "reqwest",
+    "version": "0.13.5",
+    "checksum": "16a1cfa75cc186dd73d5818e510e042e40927bccc9c236b061cea97e1eb08029",
+    "notices": "licenses\\retained-backend\\reqwest-0.13.5"
+  },
+  {
+    "name": "rfd",
+    "version": "0.17.2",
+    "checksum": "20dafead71c16a34e1ff357ddefc8afc11e7d51d6d2b9fbd07eaa48e3e540220",
+    "notices": "licenses\\retained-backend\\rfd-0.17.2"
+  },
+  {
+    "name": "rqrr",
+    "version": "0.11.0",
+    "checksum": "8d084c50c5cfa397a081850da329566c8667b0b6c4e81da16abff1fef27de93b",
+    "notices": "licenses\\retained-backend\\rqrr-0.11.0"
+  },
+  {
+    "name": "rsqlite-vfs",
+    "version": "0.1.1",
+    "checksum": "c51c9ae4df8a7fba42103df5c621fa3c37eccf3a3c650879e90fc48b11cc192c",
+    "notices": null
+  },
+  {
+    "name": "rusqlite",
+    "version": "0.40.2",
+    "checksum": "23f2a97da3e3873c73cb2a2e71b35c40ff95e0b1eefa8d72d8499a6928c3b5b3",
+    "notices": "licenses\\retained-backend\\rusqlite-0.40.2"
+  },
+  {
+    "name": "rustix",
+    "version": "1.1.5",
+    "checksum": "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d",
+    "notices": "licenses\\retained-backend\\rustix-1.1.5"
+  },
+  {
+    "name": "rustls-pki-types",
+    "version": "1.15.1",
+    "checksum": "2f4925028c7eb5d1fcdaf196971378ed9d2c1c4efc7dc5d011256f76c99c0a96",
+    "notices": "licenses\\retained-backend\\rustls-pki-types-1.15.1"
+  },
+  {
+    "name": "rustversion",
+    "version": "1.0.23",
+    "checksum": "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f",
+    "notices": "licenses\\retained-backend\\rustversion-1.0.23"
+  },
+  {
+    "name": "schannel",
+    "version": "0.1.29",
+    "checksum": "91c1b7e4904c873ef0710c1f407dde2e6287de2bebc1bbbf7d430bb7cbffd939",
+    "notices": "licenses\\retained-backend\\schannel-0.1.29"
+  },
+  {
+    "name": "scoped-tls",
+    "version": "1.0.1",
+    "checksum": "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294",
+    "notices": null
+  },
+  {
+    "name": "scopeguard",
+    "version": "1.2.0",
+    "checksum": "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49",
+    "notices": "licenses\\retained-backend\\scopeguard-1.2.0"
+  },
+  {
+    "name": "security-framework",
+    "version": "3.7.0",
+    "checksum": "b7f4bc775c73d9a02cde8bf7b2ec4c9d12743edf609006c7facc23998404cd1d",
+    "notices": "licenses\\retained-backend\\security-framework-3.7.0"
+  },
+  {
+    "name": "security-framework-sys",
+    "version": "2.17.0",
+    "checksum": "6ce2691df843ecc5d231c0b14ece2acc3efb62c0a398c7e1d875f3983ce020e3",
+    "notices": "licenses\\retained-backend\\security-framework-sys-2.17.0"
+  },
+  {
+    "name": "serde",
+    "version": "1.0.229",
+    "checksum": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba",
+    "notices": "licenses\\retained-backend\\serde-1.0.229"
+  },
+  {
+    "name": "serde-saphyr",
+    "version": "2.0.0",
+    "checksum": "a253edfdea34032da21af84e16fcc94f4c7a6ba237f9f3bc2dbf43cea8535c44",
+    "notices": "licenses\\retained-backend\\serde-saphyr-2.0.0"
+  },
+  {
+    "name": "serde_core",
+    "version": "1.0.229",
+    "checksum": "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48",
+    "notices": "licenses\\retained-backend\\serde_core-1.0.229"
+  },
+  {
+    "name": "serde_derive",
+    "version": "1.0.229",
+    "checksum": "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348",
+    "notices": "licenses\\retained-backend\\serde_derive-1.0.229"
+  },
+  {
+    "name": "serde_json",
+    "version": "1.0.154",
+    "checksum": "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6",
+    "notices": "licenses\\retained-backend\\serde_json-1.0.154"
+  },
+  {
+    "name": "sha2",
+    "version": "0.11.1",
+    "checksum": "47d7069beb7d6ac7b9acd1039986e73443f24234f41074da099d6f994ac9ad19",
+    "notices": "licenses\\retained-backend\\sha2-0.11.1"
+  },
+  {
+    "name": "shlex",
+    "version": "2.0.1",
+    "checksum": "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba",
+    "notices": "licenses\\retained-backend\\shlex-2.0.1"
+  },
+  {
+    "name": "simd-adler32",
+    "version": "0.3.10",
+    "checksum": "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea",
+    "notices": "licenses\\retained-backend\\simd-adler32-0.3.10"
+  },
+  {
+    "name": "simdutf8",
+    "version": "0.1.5",
+    "checksum": "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e",
+    "notices": "licenses\\retained-backend\\simdutf8-0.1.5"
+  },
+  {
+    "name": "slab",
+    "version": "0.4.12",
+    "checksum": "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5",
+    "notices": "licenses\\retained-backend\\slab-0.4.12"
+  },
+  {
+    "name": "smallvec",
+    "version": "1.16.3",
+    "checksum": "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b",
+    "notices": "licenses\\retained-backend\\smallvec-1.16.3"
+  },
+  {
+    "name": "socket2",
+    "version": "0.6.5",
+    "checksum": "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4",
+    "notices": "licenses\\retained-backend\\socket2-0.6.5"
+  },
+  {
+    "name": "sqlite-wasm-rs",
+    "version": "0.5.5",
+    "checksum": "dc3efc0da82635d7e1ced0053bbbfa8c7ab9645d0bf36ceb4f7127bb85315d75",
+    "notices": "licenses\\retained-backend\\sqlite-wasm-rs-0.5.5"
+  },
+  {
+    "name": "stable_deref_trait",
+    "version": "1.2.1",
+    "checksum": "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596",
+    "notices": "licenses\\retained-backend\\stable_deref_trait-1.2.1"
+  },
+  {
+    "name": "syn",
+    "version": "2.0.119",
+    "checksum": "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297",
+    "notices": "licenses\\retained-backend\\syn-2.0.119"
+  },
+  {
+    "name": "syn",
+    "version": "3.0.9",
+    "checksum": "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b",
+    "notices": "licenses\\retained-backend\\syn-3.0.9"
+  },
+  {
+    "name": "sync_wrapper",
+    "version": "1.0.2",
+    "checksum": "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263",
+    "notices": "licenses\\retained-backend\\sync_wrapper-1.0.2"
+  },
+  {
+    "name": "synstructure",
+    "version": "0.14.0",
+    "checksum": "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02",
+    "notices": "licenses\\retained-backend\\synstructure-0.14.0"
+  },
+  {
+    "name": "tempfile",
+    "version": "3.27.0",
+    "checksum": "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd",
+    "notices": "licenses\\retained-backend\\tempfile-3.27.0"
+  },
+  {
+    "name": "thiserror",
+    "version": "2.0.21",
+    "checksum": "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e",
+    "notices": "licenses\\retained-backend\\thiserror-2.0.21"
+  },
+  {
+    "name": "thiserror-impl",
+    "version": "2.0.21",
+    "checksum": "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524",
+    "notices": "licenses\\retained-backend\\thiserror-impl-2.0.21"
+  },
+  {
+    "name": "tinystr",
+    "version": "0.8.4",
+    "checksum": "b1e27c91459209c2986af3dcf603a5a74a4368754ce37414f59acc971167f643",
+    "notices": "licenses\\retained-backend\\tinystr-0.8.4"
+  },
+  {
+    "name": "tokio",
+    "version": "1.53.3",
+    "checksum": "ce3335fa71841cda333a58d7615b03901380ecf09d59b3296d21f8bbac0dde4e",
+    "notices": "licenses\\retained-backend\\tokio-1.53.3"
+  },
+  {
+    "name": "tokio-macros",
+    "version": "2.7.2",
+    "checksum": "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e",
+    "notices": "licenses\\retained-backend\\tokio-macros-2.7.2"
+  },
+  {
+    "name": "tokio-native-tls",
+    "version": "0.3.1",
+    "checksum": "bbae76ab933c85776efabc971569dd6119c580d8f5d448769dec1764bf796ef2",
+    "notices": "licenses\\retained-backend\\tokio-native-tls-0.3.1"
+  },
+  {
+    "name": "tokio-util",
+    "version": "0.7.20",
+    "checksum": "e464cf451ba96ebfc6f9b6542f17ee8b8956e33f1e40d9690624e59d7a7f8a4b",
+    "notices": "licenses\\retained-backend\\tokio-util-0.7.20"
+  },
+  {
+    "name": "tower",
+    "version": "0.5.3",
+    "checksum": "ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4",
+    "notices": "licenses\\retained-backend\\tower-0.5.3"
+  },
+  {
+    "name": "tower-http",
+    "version": "0.6.11",
+    "checksum": "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840",
+    "notices": "licenses\\retained-backend\\tower-http-0.6.11"
+  },
+  {
+    "name": "tower-layer",
+    "version": "0.3.3",
+    "checksum": "121c2a6cda46980bb0fcd1647ffaf6cd3fc79a013de288782836f6df9c48780e",
+    "notices": "licenses\\retained-backend\\tower-layer-0.3.3"
+  },
+  {
+    "name": "tower-service",
+    "version": "0.3.3",
+    "checksum": "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3",
+    "notices": "licenses\\retained-backend\\tower-service-0.3.3"
+  },
+  {
+    "name": "tracing",
+    "version": "0.1.44",
+    "checksum": "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100",
+    "notices": "licenses\\retained-backend\\tracing-0.1.44"
+  },
+  {
+    "name": "tracing-core",
+    "version": "0.1.36",
+    "checksum": "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a",
+    "notices": "licenses\\retained-backend\\tracing-core-0.1.36"
+  },
+  {
+    "name": "try-lock",
+    "version": "0.2.5",
+    "checksum": "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b",
+    "notices": "licenses\\retained-backend\\try-lock-0.2.5"
+  },
+  {
+    "name": "typed-path",
+    "version": "0.12.3",
+    "checksum": "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e",
+    "notices": "licenses\\retained-backend\\typed-path-0.12.3"
+  },
+  {
+    "name": "typenum",
+    "version": "1.20.1",
+    "checksum": "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20",
+    "notices": "licenses\\retained-backend\\typenum-1.20.1"
+  },
+  {
+    "name": "unicode-ident",
+    "version": "1.0.27",
+    "checksum": "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563",
+    "notices": "licenses\\retained-backend\\unicode-ident-1.0.27"
+  },
+  {
+    "name": "unicode-width",
+    "version": "0.2.3",
+    "checksum": "ca718471876992059f251e33aafc334346ada08042b7661dd1fe313a9bced557",
+    "notices": "licenses\\retained-backend\\unicode-width-0.2.3"
+  },
+  {
+    "name": "url",
+    "version": "2.5.8",
+    "checksum": "ff67a8a4397373c3ef660812acab3268222035010ab8680ec4215f38ba3d0eed",
+    "notices": "licenses\\retained-backend\\url-2.5.8"
+  },
+  {
+    "name": "utf8_iter",
+    "version": "1.0.4",
+    "checksum": "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be",
+    "notices": "licenses\\retained-backend\\utf8_iter-1.0.4"
+  },
+  {
+    "name": "uuid",
+    "version": "1.28.0",
+    "checksum": "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606",
+    "notices": "licenses\\retained-backend\\uuid-1.28.0"
+  },
+  {
+    "name": "vcpkg",
+    "version": "0.2.15",
+    "checksum": "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426",
+    "notices": "licenses\\retained-backend\\vcpkg-0.2.15"
+  },
+  {
+    "name": "want",
+    "version": "0.3.2",
+    "checksum": "ec4cdd0dd910afe868b7ef477227d8d538b46b3075031afee8a9f2acb0a2ed0b",
+    "notices": "licenses\\retained-backend\\want-0.3.2"
+  },
+  {
+    "name": "wasi",
+    "version": "0.11.1+wasi-snapshot-preview1",
+    "checksum": "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b",
+    "notices": "licenses\\retained-backend\\wasi-0.11.1+wasi-snapshot-preview1"
+  },
+  {
+    "name": "wasm-bindgen",
+    "version": "0.2.129",
+    "checksum": "9bb54f33acc68fd454578d9820b0bde1a1a3d17aa17bb7b6595806d02886d409",
+    "notices": "licenses\\retained-backend\\wasm-bindgen-0.2.129"
+  },
+  {
+    "name": "wasm-bindgen-futures",
+    "version": "0.4.79",
+    "checksum": "3cbab34de2d982e9b48e18d216d04c4a6f641066ff19ffb699980f591ee3610e",
+    "notices": "licenses\\retained-backend\\wasm-bindgen-futures-0.4.79"
+  },
+  {
+    "name": "wasm-bindgen-macro",
+    "version": "0.2.129",
+    "checksum": "2e29d0c35b16e224a7eeb5cd2d25e3e1968fbd65604117b44d3b789d00ee8535",
+    "notices": "licenses\\retained-backend\\wasm-bindgen-macro-0.2.129"
+  },
+  {
+    "name": "wasm-bindgen-macro-support",
+    "version": "0.2.129",
+    "checksum": "6f501a8bc3719dba86ef8ae4728879c08001bea749eb1333ac5b91e040e2a6b7",
+    "notices": "licenses\\retained-backend\\wasm-bindgen-macro-support-0.2.129"
+  },
+  {
+    "name": "wasm-bindgen-shared",
+    "version": "0.2.129",
+    "checksum": "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6",
+    "notices": "licenses\\retained-backend\\wasm-bindgen-shared-0.2.129"
+  },
+  {
+    "name": "wayland-backend",
+    "version": "0.3.17",
+    "checksum": "38a91b4eaddff87b1cd1074985e3713da4af2c49742d1b356b2c01670a67a078",
+    "notices": null
+  },
+  {
+    "name": "wayland-client",
+    "version": "0.31.15",
+    "checksum": "e3c36a0f861ad76d0901f2800b46321410d9f73f2ea88aac0650d86c32688073",
+    "notices": null
+  },
+  {
+    "name": "wayland-protocols",
+    "version": "0.32.13",
+    "checksum": "23d0c813de3daa2ed6520af85a3bd49b0e722a3078506899aa9686fea58dc4b6",
+    "notices": null
+  },
+  {
+    "name": "wayland-scanner",
+    "version": "0.31.11",
+    "checksum": "338e30461b3a2b67d70eb30a6d89f8e0c93a833e07d2ae89085cd070c4a00ac0",
+    "notices": null
+  },
+  {
+    "name": "wayland-sys",
+    "version": "0.31.11",
+    "checksum": "d8eab23fefc9e41f8e841df4a9c707e8a8c4ed26e944ef69297184de2785e3be",
+    "notices": null
+  },
+  {
+    "name": "web-sys",
+    "version": "0.3.106",
+    "checksum": "88261b9deccee56594c11a3460c462c41f58d148598fe70ad77070126a68aba4",
+    "notices": "licenses\\retained-backend\\web-sys-0.3.106"
+  },
+  {
+    "name": "widestring",
+    "version": "1.2.1",
+    "checksum": "72069c3113ab32ab29e5584db3c6ec55d416895e60715417b5b883a357c3e471",
+    "notices": "licenses\\retained-backend\\widestring-1.2.1"
+  },
+  {
+    "name": "winapi",
+    "version": "0.3.9",
+    "checksum": "5c839a674fcd7a98952e593242ea400abe93992746761e38641405d28b00f419",
+    "notices": "licenses\\retained-backend\\winapi-0.3.9"
+  },
+  {
+    "name": "winapi-i686-pc-windows-gnu",
+    "version": "0.4.0",
+    "checksum": "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6",
+    "notices": null
+  },
+  {
+    "name": "winapi-x86_64-pc-windows-gnu",
+    "version": "0.4.0",
+    "checksum": "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f",
+    "notices": null
+  },
+  {
+    "name": "windows-link",
+    "version": "0.2.1",
+    "checksum": "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5",
+    "notices": "licenses\\retained-backend\\windows-link-0.2.1"
+  },
+  {
+    "name": "windows-service",
+    "version": "0.8.1",
+    "checksum": "857224b3b211c6f3616921f081ee54721ee3ad2ace2fac6a6337e032f7b4dcf2",
+    "notices": "licenses\\retained-backend\\windows-service-0.8.1"
+  },
+  {
+    "name": "windows-sys",
+    "version": "0.61.2",
+    "checksum": "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc",
+    "notices": "licenses\\retained-backend\\windows-sys-0.61.2"
+  },
+  {
+    "name": "winreg",
+    "version": "0.56.0",
+    "checksum": "7d6f32a0ff4a9f6f01231eb2059cc85479330739333e0e58cadf03b6af2cca10",
+    "notices": "licenses\\retained-backend\\winreg-0.56.0"
+  },
+  {
+    "name": "writeable",
+    "version": "0.6.4",
+    "checksum": "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc",
+    "notices": "licenses\\retained-backend\\writeable-0.6.4"
+  },
+  {
+    "name": "yoke",
+    "version": "0.8.3",
+    "checksum": "709fe23a0424b6a435d82152b1bd3fdfb0833487d5fa90d05d42762a9891fef5",
+    "notices": "licenses\\retained-backend\\yoke-0.8.3"
+  },
+  {
+    "name": "yoke-derive",
+    "version": "0.8.4",
+    "checksum": "ec8ebde2db3681e8c9980cc27822030e68752690ddfa9473e739aeb4dbde6d71",
+    "notices": "licenses\\retained-backend\\yoke-derive-0.8.4"
+  },
+  {
+    "name": "zerofrom",
+    "version": "0.1.8",
+    "checksum": "0ec05a11813ea801ff6d75110ad09cd0824ddba17dfe17128ea0d5f68e6c5272",
+    "notices": "licenses\\retained-backend\\zerofrom-0.1.8"
+  },
+  {
+    "name": "zerofrom-derive",
+    "version": "0.1.8",
+    "checksum": "f75b4683f6c7f45248d4d64056a24298c6281e0993356d7d1b4a1a962ef10d4a",
+    "notices": "licenses\\retained-backend\\zerofrom-derive-0.1.8"
+  },
+  {
+    "name": "zeroize",
+    "version": "1.9.1",
+    "checksum": "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879",
+    "notices": "licenses\\retained-backend\\zeroize-1.9.1"
+  },
+  {
+    "name": "zeroize_derive",
+    "version": "1.5.0",
+    "checksum": "3c50655cbb0fe3fc43170059e702f1ce5e19b84cec58dc87b037a09935c2f328",
+    "notices": "licenses\\retained-backend\\zeroize_derive-1.5.0"
+  },
+  {
+    "name": "zerotrie",
+    "version": "0.2.5",
+    "checksum": "4ea269c3bd32f0a32c321907a2ae912ba6f4649bb0fc764a15627e99a7095a3f",
+    "notices": "licenses\\retained-backend\\zerotrie-0.2.5"
+  },
+  {
+    "name": "zerovec",
+    "version": "0.11.8",
+    "checksum": "bb0464e17806c1d976d5cba29399c7f08e516e279e2ba493f63123b5fca67dd8",
+    "notices": "licenses\\retained-backend\\zerovec-0.11.8"
+  },
+  {
+    "name": "zerovec-derive",
+    "version": "0.11.6",
+    "checksum": "34df6fc39dbd26ddc9c10e6a2984476e13acce22e64e4487636ef494369225da",
+    "notices": "licenses\\retained-backend\\zerovec-derive-0.11.6"
+  },
+  {
+    "name": "zip",
+    "version": "9.0.4",
+    "checksum": "a954114b47a54df49f83d2722814e86b23d4bb1b54a1b90fb7d92b41619ddc22",
+    "notices": "licenses\\retained-backend\\zip-9.0.4"
+  },
+  {
+    "name": "zlib-rs",
+    "version": "0.6.8",
+    "checksum": "b268e58e7c693d7c271f93ffc4ba3b380412554231c85bf61ca7af91042a4112",
+    "notices": "licenses\\retained-backend\\zlib-rs-0.6.8"
+  },
+  {
+    "name": "zmij",
+    "version": "1.0.23",
+    "checksum": "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b",
+    "notices": "licenses\\retained-backend\\zmij-1.0.23"
+  },
+  {
+    "name": "zune-core",
+    "version": "0.5.3",
+    "checksum": "d56377fd46368984a170bc5aac5567e52ca5da874caa60bea39fcbca78fb658b",
+    "notices": "licenses\\retained-backend\\zune-core-0.5.3"
+  },
+  {
+    "name": "zune-jpeg",
+    "version": "0.5.15",
+    "checksum": "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296",
+    "notices": "licenses\\retained-backend\\zune-jpeg-0.5.15"
+  }
+]

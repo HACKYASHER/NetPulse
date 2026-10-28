@@ -5,6 +5,11 @@ ROOT=Path(__file__).resolve().parents[1]
 RELEASE=ROOT/'release';PAYLOAD=RELEASE/'NetPulse'
 
 def quote(value):return str(value).replace('$','$$').replace('"','$\\"')
+def validate_payload(directory):
+    for path in directory.rglob('*'):
+        relative=path.relative_to(directory)
+        if relative.parts[0].lower()=='data' or path.name.lower()=='client.lock' or path.name.lower().endswith(('.db','.db-wal','.db-shm')):
+            raise RuntimeError('Personal data must never be packaged: '+relative.as_posix())
 
 def main():
     parser=argparse.ArgumentParser()
@@ -12,6 +17,7 @@ def main():
     parser.add_argument('--archives-only',action='store_true',help='Refresh archives and hashes without recompressing the installer')
     parser.add_argument('--installer-only',action='store_true',help='Build the installer for maintenance tests before final archiving')
     options=parser.parse_args()
+    validate_payload(PAYLOAD)
     # The Qt build keeps the QML sources embedded in the executable. Refuse a
     # stale payload if an interface file was edited after that build.
     for source in list((ROOT/'qml').glob('*.qml'))+list((ROOT/'qml').glob('*.js')):
@@ -48,11 +54,11 @@ Var ExistingDirectory
 Var ExistingVersion
 Name "NetPulse"
 Caption "NetPulse"
-VIProductVersion "1.0.5.0"
+VIProductVersion "1.0.6.0"
 VIAddVersionKey "ProductName" "NetPulse"
 VIAddVersionKey "FileDescription" "NetPulse VPN client installer"
-VIAddVersionKey "ProductVersion" "1.0.5"
-VIAddVersionKey "FileVersion" "1.0.5"
+VIAddVersionKey "ProductVersion" "1.0.6"
+VIAddVersionKey "FileVersion" "1.0.6"
 VIAddVersionKey "LegalCopyright" "NetPulse contributors, GPL-3.0-or-later"
 OutFile "@OUTPUT@"
 InstallDir "$PROGRAMFILES64\NetPulse"
@@ -66,7 +72,8 @@ SetCompressorDictSize 32
 !insertmacro MUI_PAGE_WELCOME
 Page custom MaintenanceCreate MaintenanceLeave
 !insertmacro MUI_PAGE_LICENSE "@LICENSE@"
-; Fixed protected root: application, service and data must stay together.
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE InstallDirectoryLeave
+!insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -128,9 +135,19 @@ Function MaintenanceLeave
     SetErrorLevel $1
     Quit
   ${EndIf}
-  StrCpy $INSTDIR "$PROGRAMFILES64\NetPulse"
+  StrCpy $INSTDIR $ExistingDirectory
 FunctionEnd
 
+
+Function InstallDirectoryLeave
+  nsExec::ExecToStack '"$PLUGINSDIR\netpulsed.exe" --installer-check-location "$INSTDIR"'
+  Pop $0
+  Pop $1
+  StrCmp $0 0 location_valid
+  MessageBox MB_OK|MB_ICONEXCLAMATION "Не удалось использовать выбранную папку / The selected folder cannot be used.$\r$\n$1"
+  Abort
+  location_valid:
+FunctionEnd
 
 Function .onInit
   SetRegView 64
@@ -181,15 +198,16 @@ Section "NetPulse"
   SetOutPath "$INSTDIR"
   File /r "@PAYLOAD@\*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM "Software\NetPulseQt" "InstallDir" "$INSTDIR"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayName" "NetPulse"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.5"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "Publisher" "NetPulse"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "UninstallString" '"$INSTDIR\Uninstall.exe"'
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayIcon" "$INSTDIR\NetPulse.exe"
   StrCmp $EXEPATH "$INSTDIR\NetPulse-Maintenance.exe" maintenance_copied
-  CopyFiles /SILENT "$EXEPATH" "$INSTDIR\NetPulse-Maintenance.exe"
+  nsExec::ExecToStack '"$PLUGINSDIR\netpulsed.exe" --installer-cache "$INSTDIR" "$EXEPATH"'
+  Pop $0
+  Pop $1
+  StrCmp $0 0 maintenance_copied
+  IfSilent cache_abort
+  MessageBox MB_OK|MB_ICONSTOP "Не удалось сохранить установщик NetPulse / Could not preserve the installer.$\r$\n$1"
+  cache_abort:
+  SetErrorLevel 12
+  Abort
   maintenance_copied:
   nsExec::ExecToStack '"$PLUGINSDIR\netpulsed.exe" --installer-finalize-layout "$INSTDIR"'
   Pop $0
@@ -201,6 +219,12 @@ Section "NetPulse"
   SetErrorLevel 12
   Abort
   files_protected:
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayName" "NetPulse"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.6"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "Publisher" "NetPulse"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayIcon" "$INSTDIR\NetPulse.exe"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "ModifyPath" '"$INSTDIR\NetPulse-Maintenance.exe"'
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "NoModify" 0
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "NoRepair" 1
@@ -259,6 +283,13 @@ Section "NetPulse"
   DeleteRegValue HKLM "Software\NetPulseQt" "TunServiceError"
   DetailPrint "$(ServiceInstalled)"
   service_done:
+  StrCmp $ServiceResult 0 cleanup_previous cleanup_finished
+  cleanup_previous:
+  nsExec::ExecToStack '"$INSTDIR\netpulsed.exe" --installer-cleanup-previous'
+  Pop $0
+  Pop $1
+  DetailPrint "$1"
+  cleanup_finished:
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt"
   DeleteRegKey HKCU "Software\NetPulseQt"
 SectionEnd
@@ -285,7 +316,8 @@ Section "Uninstall"
   service_removed:
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "NetPulseQt"
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt"
-  DeleteRegKey HKLM "Software\NetPulseQt"
+  ; Keep the protected profile-location identity for reinstall/migration.
+  ; The Apps & Features entry above is removed normally.
   Delete "$DESKTOP\NetPulse.lnk"
   Delete "$SMPROGRAMS\NetPulse\NetPulse.lnk"
   RMDir "$SMPROGRAMS\NetPulse"
@@ -319,9 +351,12 @@ SectionEnd
                 file=Path(directory)/name;relative=file.relative_to(ROOT)
                 if file.suffix.lower() in {'.exe','.dll','.pdb','.obj','.pyc'}:continue
                 archive.write(file,relative.as_posix())
-    source_archive=ROOT.parent/'ONE/release-v2/NetPulse-Engine-Sources.zip'
-    if source_archive.is_file():shutil.copy2(source_archive,RELEASE/source_archive.name)
-    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.5','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
+    source_archive=RELEASE/'NetPulse-Engine-Sources.zip'
+    if not source_archive.is_file():raise RuntimeError('Run scripts/fetch-engine-sources.py before packaging')
+    with zipfile.ZipFile(source_archive) as source_zip:
+        source_manifest=json.loads(source_zip.read('manifest.json'))
+        if {(r['name'],r['tag']) for r in source_manifest['roots']}!={('sing-box','v1.14.4-netpulse.1'),('xray','v26.10.21')}:raise RuntimeError('Engine sources do not match the bundled versions')
+    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.6','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
     (RELEASE/'netpulse-qt-update-v1.json').write_text(json.dumps(marker,indent=2)+'\n',encoding='utf-8')
     outputs=[RELEASE/'netpulse-qt-update-v1.json',RELEASE/'NetPulse-Setup.exe',RELEASE/'NetPulse-Portable.zip',RELEASE/'NetPulse-Source.zip',PAYLOAD/'NetPulse.exe',PAYLOAD/'netpulsed.exe',PAYLOAD/'NetPulseService.exe']
     outputs += [p for p in [RELEASE/'NetPulse-Engine-Sources.zip',RELEASE/'VERIFICATION.json'] if p.is_file()]

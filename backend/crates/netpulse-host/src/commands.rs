@@ -26,6 +26,33 @@ struct AppState {
     runtime_preparing: Arc<std::sync::atomic::AtomicBool>,
     startup_smoke: bool,
 }
+fn blocked_during_runtime_change(operation:&str)->bool {
+    if matches!(operation,"install_client_update"|"start_best_server"|"start_mtu_tuning"|"start_mtu"|"mtu-tuning"){return true;}
+    matches!(operation,"connect"|"install_engine"|"activate_core_bundle"|"update_core"|"install_compatibility_runtime"|"manage_service"|"restore_data"|"delete_local_data"|"client-update"|"save_preferences"|"quick_network"|"select_profile"|"save_profile_transport"|"save_profile_json"|"import_text"|"import_clipboard"|"import_file"|"delete_profile"|"add_subscription"|"save_subscription"|"update_subscription"|"delete_subscription"|"start_latency"|"active_latency"|"start_speed")
+}
+struct RuntimeOperation(Arc<std::sync::atomic::AtomicBool>);
+impl RuntimeOperation {
+    fn acquire(flag:&Arc<std::sync::atomic::AtomicBool>)->Result<Self>{
+        use std::sync::atomic::Ordering;
+        flag.compare_exchange(false,true,Ordering::AcqRel,Ordering::Acquire).map_err(|_|Error::new("RuntimePreparing","runtime-operation","Другая операция с ядрами или обновлением ещё выполняется."))?;
+        Ok(Self(flag.clone()))
+    }
+}
+impl Drop for RuntimeOperation {fn drop(&mut self){self.0.store(false,std::sync::atomic::Ordering::Release);let _=host::AppHandle.emit("runtime-prepared",serde_json::Value::Null);}}
+#[cfg(test)]
+mod runtime_operation_tests {
+    use super::*;
+    #[test] fn runtime_transaction_is_exclusive_and_releases_on_failure() {
+        use std::sync::atomic::{AtomicBool,Ordering};
+        let flag=Arc::new(AtomicBool::new(false));
+        {let _first=RuntimeOperation::acquire(&flag).unwrap();assert!(RuntimeOperation::acquire(&flag).is_err());assert!(flag.load(Ordering::Acquire));}
+        assert!(!flag.load(Ordering::Acquire));assert!(RuntimeOperation::acquire(&flag).is_ok());
+    }
+    #[test] fn runtime_mutations_and_diagnostic_launches_are_blocked_while_reads_remain_available() {
+        for method in ["connect","delete_local_data","restore_data","client-update","manage_service","save_preferences","select_profile","start_latency","active_latency","start_speed"]{assert!(blocked_during_runtime_change(method),"{method}");}
+        for method in ["bootstrap","snapshot","logs","disconnect","quit_application"]{assert!(!blocked_during_runtime_change(method),"{method}");}
+    }
+}
 async fn with_core<T: Send + 'static>(
     s: &host::State<'_, AppState>,
     operation: &'static str,
@@ -33,15 +60,7 @@ async fn with_core<T: Send + 'static>(
 ) -> Result<T> {
     if s.runtime_preparing
         .load(std::sync::atomic::Ordering::Acquire)
-        && [
-            "connect",
-            "install_engine",
-            "activate_core_bundle",
-            "update_core",
-            "install_compatibility_runtime",
-            "manage_service",
-        ]
-        .contains(&operation)
+        && blocked_during_runtime_change(operation)
     {
         return Err(Error::new(
             "RuntimePreparing",
@@ -49,6 +68,7 @@ async fn with_core<T: Send + 'static>(
             "Ядра ещё проверяются. Дождитесь завершения проверки.",
         ));
     }
+    let preparing=s.runtime_preparing.clone();
     let core = s.core.clone();
     host::async_runtime::spawn_blocking(move || {
         let mut core = core.lock().map_err(|_| {
@@ -58,6 +78,7 @@ async fn with_core<T: Send + 'static>(
                 "Native application core is unavailable",
             )
         })?;
+        if preparing.load(std::sync::atomic::Ordering::Acquire) && blocked_during_runtime_change(operation) {return Err(Error::new("RuntimePreparing","startup","Дождитесь завершения операции с ядрами."));}
         let result = core.guarded(f);
         if let Err(e) = &result {
             let _ = core
@@ -157,6 +178,7 @@ async fn bootstrap(state: host::State<'_, AppState>) -> Result<Bootstrap> {
 }
 async fn connect(state: host::State<'_, AppState>, id: String) -> Result<Snapshot> {
     state.diagnostics.cancel_all();
+    let isolated=state.startup_smoke;
     with_core(&state, "connect", move |c| {
         let p = c.store.preferences()?;
         if !p.tun && !p.system_proxy {
@@ -166,6 +188,7 @@ async fn connect(state: host::State<'_, AppState>, id: String) -> Result<Snapsho
                 "Включите TUN и/или System Proxy перед подключением",
             ));
         }
+        if isolated{return Err(Error::new("VerificationOnly","verification","TUN and System Proxy are disabled in verification sessions"));}
         c.connect(&id)
     })
     .await
@@ -456,6 +479,7 @@ fn decode_qr(bytes: &[u8]) -> Result<Zeroizing<String>> {
                 "Could not decode image within resource limits",
             )
         })?
+        .thumbnail(2048,2048)
         .to_luma8();
     let (width, height) = image.dimensions();
     // Dark-mode coloured QR codes have the opposite polarity to printed codes.
@@ -491,6 +515,21 @@ fn decode_qr(bytes: &[u8]) -> Result<Zeroizing<String>> {
         "qr-read",
         "QR-код не распознан. Выберите исходное изображение, сохранив поля вокруг кода.",
     ))
+}
+#[cfg(test)]
+mod qr_audit_tests {
+    use super::*;
+    #[test] fn updated_decoder_reads_owned_qr_in_both_polarities() {
+        let bytes=include_bytes!("../tests/fixtures/import-qr.png");
+        let expected="socks5://127.0.0.1:1080#Owned QR";
+        assert_eq!(decode_qr(bytes).unwrap().as_str(),expected);
+        let mut image=image::load_from_memory(bytes).unwrap();image.invert();
+        let mut dark=std::io::Cursor::new(Vec::new());image.write_to(&mut dark,image::ImageFormat::Png).unwrap();
+        assert_eq!(decode_qr(dark.get_ref()).unwrap().as_str(),expected);
+    }
+    #[test] fn malformed_qr_images_fail_without_panicking() {
+        for bytes in [b"".as_slice(),b"not an image",b"\x89PNG\r\n\x1a\n",b"RIFF\x00\x00\x00\x00WEBP"]{assert!(decode_qr(bytes).is_err());}
+    }
 }
 fn copy_log_text(text: String) -> Result<()> {
     if text.len() > 1024 * 1024 {
@@ -819,8 +858,11 @@ async fn check_core_updates() -> Result<Vec<netpulse_core::core_updates::CoreVer
 }
 
 async fn list_core_releases(engine: String) -> Result<Vec<netpulse_core::core_releases::Release>> {
-    host::async_runtime::spawn_blocking(move || netpulse_core::core_releases::list(&engine))
-        .await
+    let task=host::async_runtime::spawn_blocking(move || netpulse_core::core_releases::list(&engine));
+    release_lookup_deadline(task,std::time::Duration::from_secs(12)).await
+}
+async fn release_lookup_deadline(task:tokio::task::JoinHandle<Result<Vec<netpulse_core::core_releases::Release>>>,limit:std::time::Duration)->Result<Vec<netpulse_core::core_releases::Release>> {
+    tokio::time::timeout(limit,task).await.map_err(|_|Error::new("CoreUpdateUnavailable","core-release","GitHub не ответил за 12 секунд. Встроенные ядра доступны без загрузки; повторите проверку позже."))?
         .map_err(|_| {
             Error::new(
                 "CoreUpdateFailed",
@@ -829,35 +871,42 @@ async fn list_core_releases(engine: String) -> Result<Vec<netpulse_core::core_re
             )
         })?
 }
+#[cfg(test)]
+mod release_deadline_tests {
+    use super::*;
+    #[tokio::test]
+    async fn blocked_os_work_cannot_delay_the_ui_release_response() {
+        let task=tokio::task::spawn_blocking(||{std::thread::sleep(std::time::Duration::from_millis(200));Ok(Vec::new())});
+        let before=std::time::Instant::now();
+        assert_eq!(release_lookup_deadline(task,std::time::Duration::from_millis(20)).await.unwrap_err().code,"CoreUpdateUnavailable");
+        assert!(before.elapsed()<std::time::Duration::from_millis(150));
+    }
+}
 async fn update_core(
     state: host::State<'_, AppState>,
     release: netpulse_core::core_releases::Release,
 ) -> Result<serde_json::Value> {
+    let guard=RuntimeOperation::acquire(&state.runtime_preparing)?;
     state.diagnostics.cancel_all();
-    let data = state.data_dir.clone();
-    with_core(&state, "update_core", move |c| {
-        if c.snapshot().engine_pid.is_some() {
-            return Err(Error::new(
-                "ConnectionInUse",
-                "core-update",
-                "Отключите VPN перед обновлением ядра",
-            ));
-        }
-        let profiles = c
-            .store
-            .profiles()?
-            .iter()
-            .map(|p| c.store.profile(&p.id))
-            .collect::<Result<Vec<_>>>()?;
-        let engine = release.engine.clone();
-        let previous = netpulse_core::core_releases::version(&data.join("engine"), &engine);
-        let exe=std::env::current_exe().map_err(|e|Error::io("core-bundle",e))?;
-        netpulse_core::core_releases::install_with_bundle(release, &data, &profiles, &c.store.preferences()?,Some(&exe.parent().unwrap().join("cores")))?;
-        let installed = netpulse_core::core_releases::executable_version(&data.join("engine").join(if engine == "xray" {"xray.exe"} else {"sing-box.exe"}), &engine)?;
-        c.store.log("INFO", "Update", "core-installed", "Verified", &format!("{engine}: {previous} -> {installed}; executable version and SHA-256 verified"))?;
-        Ok(serde_json::json!({"engine":engine,"previous":previous,"installed":installed,"cache_clean": !std::fs::read_dir(data.join("core-downloads")).is_ok_and(|mut i| i.next().is_some())}))
-    })
-    .await
+    let data=state.data_dir.clone();let core=state.core.clone();
+    host::async_runtime::spawn_blocking(move || {
+        let _guard=guard;
+        let result=(|| {
+            let (profiles,prefs)={
+                let mut c=core.lock().map_err(|_|Error::new("CoreUnavailable","core-update","Network core unavailable"))?;
+                if c.snapshot().engine_pid.is_some(){return Err(Error::new("ConnectionInUse","core-update","Отключите VPN перед обновлением ядра"));}
+                (c.store.profiles()?.iter().map(|p|c.store.profile(&p.id)).collect::<Result<Vec<_>>>()?,c.store.preferences()?)
+            };
+            let engine=release.engine.clone();let previous=netpulse_core::core_releases::version(&data.join("engine"),&engine);
+            let exe=std::env::current_exe().map_err(|e|Error::io("core-bundle",e))?;
+            netpulse_core::core_releases::install_with_bundle(release,&data,&profiles,&prefs,Some(&exe.parent().unwrap().join("cores")))?;
+            let installed=netpulse_core::core_releases::executable_version(&data.join("engine").join(if engine=="xray" {"xray.exe"}else{"sing-box.exe"}),&engine)?;
+            if let Ok(c)=core.lock(){c.store.log("INFO","Update","core-installed","Verified",&format!("{engine}: {previous} -> {installed}; executable version and SHA-256 verified"))?;}
+            Ok(serde_json::json!({"engine":engine,"previous":previous,"installed":installed,"cache_clean":!std::fs::read_dir(data.join("core-downloads")).is_ok_and(|mut i|i.next().is_some())}))
+        })();
+        if let Err(e)=&result {if let Ok(c)=core.lock(){let _=c.store.log("ERROR","Update",&e.stage,&e.code,&e.message);}}
+        result
+    }).await.map_err(|_|Error::new("CoreTaskFailed","core-update","Core update task failed"))?
 }
 fn open_core_page(url: String) -> Result<()> {
     if ![
@@ -1117,22 +1166,12 @@ async fn install_compatibility_runtime(state: host::State<'_, AppState>) -> Resu
     .await
 }
 async fn manage_service(
-    app: host::AppHandle,
+    _app: host::AppHandle,
     state: host::State<'_, AppState>,
     install: bool,
     upgrade: Option<bool>,
 ) -> Result<()> {
-    let resource = app
-        .path()
-        .resource_dir()
-        .map_err(|_| {
-            Error::new(
-                "ResourceMissing",
-                "service-install",
-                "Service installer resource is missing",
-            )
-        })?
-        .join("NetPulseService.exe");
+    let resource=netpulse_core::service::installer_executable()?;
     with_core(&state, "manage_service", move |c| {
         if install {
             let directory = c.engine_path.parent().ok_or_else(||Error::new("EngineMissing","service-install","Install the network engine first"))?;
@@ -1370,15 +1409,17 @@ async fn download_client_update(state:host::State<'_,AppState>, release:netpulse
         .map_err(|_|Error::new("UpdateTaskFailed","client-update","Download task failed"))?
 }
 async fn install_client_update(state:host::State<'_,AppState>, release:netpulse_core::client_updates::Release)->Result<()> {
-    let directory=state.data_dir.clone();
-    let path=host::async_runtime::spawn_blocking(move || {
+    if state.startup_smoke{return Err(Error::new("VerificationOnly","client-update","Установка обновления отключена в проверочном сеансе."));}
+    let guard=RuntimeOperation::acquire(&state.runtime_preparing)?;
+    state.diagnostics.cancel_all();
+    let directory=state.data_dir.clone();let core=state.core.clone();
+    host::async_runtime::spawn_blocking(move || {
+        let _guard=guard;
         netpulse_core::client_updates::revalidate(&release)?;
-        netpulse_core::client_updates::verify_download(&directory,&release)
-    }).await.map_err(|_|Error::new("UpdateTaskFailed","client-update","Verification failed"))??;
-    with_core(&state,"client-update",|c|c.disconnect().map(|_|())).await?;
-    let mut command=std::process::Command::new(path);
-    command.arg("/WAITFORCLIENT");
-    #[cfg(windows)] { use std::os::windows::process::CommandExt; command.creation_flags(0x08000000); }
-    command.spawn().map_err(|e|Error::io("client-update-install",e))?;
-    Ok(())
+        netpulse_core::client_updates::verify_download(&directory,&release)?;
+        netpulse_core::service::elevated_client_update(&release.tag)?;
+        // The installer waits for this client to exit. Keep an existing TUN
+        // available during its protected download, then disconnect normally.
+        let mut c=core.lock().map_err(|_|Error::new("CoreUnavailable","client-update","Network core unavailable"))?;c.disconnect().map(|_|())
+    }).await.map_err(|_|Error::new("UpdateTaskFailed","client-update","Installation task failed"))?
 }

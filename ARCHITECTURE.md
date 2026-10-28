@@ -44,9 +44,9 @@ engine hash validation. Separate identities prevent replacing the old service:
 
 - Service: `NetPulseCoreQt`.
 - Pipe: `NetPulse.CoreQt.<SID>`.
-- Installation root: `Program Files/NetPulse` (administrator-owned payload).
-- Protected service files: `Program Files/NetPulse/service`.
-- User data: `Program Files/NetPulse/data/<Windows SID>` (private writable profile).
+- Installation root: user-selected local directory (administrator-owned payload).
+- Protected service files: `<installation>/service`.
+- User data: `<installation>/data/<Windows SID>` (private writable profile).
 - Legacy paths are accepted only for validated migration; see [installation layout](docs/INSTALLATION.md).
 
 ## Engines and data

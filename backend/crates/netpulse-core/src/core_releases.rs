@@ -79,16 +79,16 @@ fn validate(release: &Release) -> Result<()> {
     Ok(())
 }
 fn metadata(url: &str) -> Result<serde_json::Value> {
-    let response = crate::network::client(Duration::from_secs(20))?
+    let response = crate::network::update_client(Duration::from_secs(12))?
         .get(url)
         .header("User-Agent", "NetPulse/2.0")
         .header("Accept", "application/vnd.github+json")
         .send()
-        .map_err(|_| {
+        .map_err(|error| {
             Error::new(
                 "CoreUpdateUnavailable",
                 "core-release",
-                "Official GitHub request failed",
+                if error.is_timeout(){"GitHub не ответил за 12 секунд. Встроенные стабильные ядра уже доступны; проверку выпусков можно повторить позже."}else{"Не удалось соединиться с GitHub для проверки выпусков. Проверьте подключение и повторите проверку."},
             )
         })?;
     if !response.status().is_success() {
@@ -147,17 +147,34 @@ fn parse(engine: &str, value: &serde_json::Value) -> Result<Release> {
     Ok(release)
 }
 pub fn list(engine: &str) -> Result<Vec<Release>> {
-    let values = metadata(&format!(
-        "https://api.github.com/repos/{}/releases?per_page=20",
-        repo(engine)?
-    ))?;
-    Ok(values
-        .as_array()
-        .ok_or_else(invalid)?
-        .iter()
-        .filter(|v| v["draft"] != true)
-        .filter_map(|v| parse(engine, v).ok())
-        .collect())
+    use std::{collections::HashMap,sync::{Mutex,OnceLock},time::Instant};
+    static CACHE: OnceLock<Mutex<HashMap<String,(Instant,Vec<Release>)>>>=OnceLock::new();
+    repo(engine)?;
+    let cache=CACHE.get_or_init(||Mutex::new(HashMap::new()));
+    if let Ok(saved)=cache.lock() {if let Some((at,items))=saved.get(engine) {if at.elapsed()<Duration::from_secs(300) {return Ok(items.clone());}}}
+    let _lookup=release_lookup(engine)?;
+    // GitHub embeds every platform's assets in every release. A small recent
+    // page plus the stable fallback avoids downloading megabytes of unused data.
+    let values=metadata(&format!("https://api.github.com/repos/{}/releases?per_page=4",repo(engine)?))?;
+    let mut items=values.as_array().ok_or_else(invalid)?.iter().filter(|v|v["draft"]!=true).filter_map(|v|parse(engine,v).ok()).collect::<Vec<_>>();
+    if !items.iter().any(|r|!r.prerelease){
+        if let Ok(stable)=metadata(&format!("https://api.github.com/repos/{}/releases/latest",repo(engine)?)).and_then(|v|parse(engine,&v)){
+            if !items.iter().any(|r|r.tag==stable.tag){items.push(stable);}
+        }
+    }
+    items.sort_by_key(|r|r.prerelease);
+    if items.is_empty() {return Err(Error::new("CoreReleasesUnavailable","core-release","GitHub не вернул выпуски Windows x64 с официальной контрольной суммой. Встроенные стабильные ядра доступны без загрузки."));}
+    if let Ok(mut saved)=cache.lock(){saved.insert(engine.into(),(Instant::now(),items.clone()));}
+    Ok(items)
+}
+struct ReleaseLookup(&'static std::sync::atomic::AtomicBool);
+impl Drop for ReleaseLookup {fn drop(&mut self){self.0.store(false,std::sync::atomic::Ordering::Release);}}
+fn release_lookup(engine:&str)->Result<ReleaseLookup> {
+    use std::sync::atomic::{AtomicBool,Ordering};
+    static XRAY:AtomicBool=AtomicBool::new(false);static SING:AtomicBool=AtomicBool::new(false);
+    let flag=if engine=="xray"{&XRAY}else if engine=="sing-box"{&SING}else{return Err(invalid());};
+    flag.compare_exchange(false,true,Ordering::AcqRel,Ordering::Acquire).map_err(|_|Error::new("CoreUpdateBusy","core-release","Проверка этого ядра ещё завершается. Дождитесь результата перед повторной попыткой."))?;
+    Ok(ReleaseLookup(flag))
 }
 fn authenticate(release: &Release) -> Result<()> {
     validate(release)?;
@@ -179,7 +196,7 @@ fn authenticate(release: &Release) -> Result<()> {
     Ok(())
 }
 pub fn hash(path: &Path) -> Result<String> {
-    let mut file = std::fs::File::open(path).map_err(|e| Error::io("core-hash", e))?;
+    let mut file = std::fs::File::open(path).map_err(|e| crate::engine::component_access_error(&path.to_string_lossy(), e))?;
     let mut sha = Sha256::new();
     let mut bytes = [0u8; 65536];
     loop {
@@ -203,14 +220,14 @@ fn archive(release: &Release, cache: Option<&Path>) -> Result<Vec<u8>> {
     {
         return Ok(bytes);
     }
-    let response = crate::network::client(Duration::from_secs(120))?
+    let response = crate::network::update_client(Duration::from_secs(120))?
         .get(&release.url)
         .send()
-        .map_err(|_| {
+        .map_err(|error| {
             Error::new(
                 "CoreDownloadFailed",
                 "core-download",
-                "Official engine download failed",
+                format!("Не удалось скачать {} {}: {}. Встроенный стабильный комплект можно восстановить без интернета.",release.engine,release.tag,if error.is_timeout(){"сервер не ответил вовремя"}else{"ошибка подключения к официальному серверу"}),
             )
         })?;
     if !response.status().is_success() {
@@ -316,24 +333,11 @@ pub fn verify_custom(path: &Path, engine: &str) -> Result<bool> {
     Ok(true)
 }
 pub fn version(directory: &Path, engine: &str) -> String {
-    if engine == "xray"
-        && approval(directory, engine).ok().flatten().is_none()
-        && hash(&directory.join("xray.exe"))
-            .is_ok_and(|h| h == "15c2d007954ac53ba69b80ec91242786b3c0b71d52649165b4ca1d5cc96ef8f1")
-    {
-        return "26.3.27".into();
-    }
-    approval(directory, engine)
-        .ok()
-        .flatten()
-        .map(|a| a.release.tag.trim_start_matches('v').into())
-        .unwrap_or_else(|| {
-            if engine == "xray" {
-                crate::runtime::XRAY_VERSION.into()
-            } else {
-                crate::engine::ENGINE_VERSION.into()
-            }
-        })
+    if let Ok(Some(record))=approval(directory,engine) {return record.release.tag.trim_start_matches('v').into();}
+    let path=directory.join(if engine=="xray" {"xray.exe"} else {"sing-box.exe"});
+    let Ok(digest)=hash(&path) else {return "—".into();};
+    let known=if engine=="xray" {vec![(crate::runtime::XRAY_SHA256,crate::runtime::XRAY_VERSION),("a743b8c2ce49cb33d6c1cf764c780bf1a475d746ad7485e7c3fcfe6458511c92","26.10.17"),("15c2d007954ac53ba69b80ec91242786b3c0b71d52649165b4ca1d5cc96ef8f1","26.3.27")]} else {vec![(crate::engine::ENGINE_SHA256,crate::engine::ENGINE_VERSION),("8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9","1.14.4"),("5c19bb3f8c12d4e85b3d47fe63123a7624b314b58dd7a8e32f51004f1c4d2faf","1.14.3")]};
+    known.iter().find(|(sha,_)|*sha==digest).map(|(_,v)|v.to_string()).unwrap_or_else(||"—".into())
 }
 pub fn authenticated_approvals(directory: &Path) -> Result<Vec<Approval>> {
     let mut result = Vec::new();
@@ -424,7 +428,7 @@ pub fn install_with_bundle(
         ] {
             if target.join(name).is_file() {
                 std::fs::copy(target.join(name), stage.join(name))
-                    .map_err(|e| Error::io("core-stage", e))?;
+                    .map_err(|e| crate::engine::component_access_error(&target.join(name).to_string_lossy(),e))?;
             }
         }
         // This explicit update may follow a failed/missing runtime installation.
@@ -482,6 +486,10 @@ pub fn install_with_bundle(
         for (index, profile) in candidates.iter().take(201).enumerate() {
             for choice in ["auto", "xray"] {
                 checked.transport_engine = choice.into();
+                // A Hysteria2 profile belongs to sing-box. Keeping it in a
+                // subscription must not prevent an independent Xray update.
+                let resolved=profile.resolved_with(&checked)?;
+                if crate::transport_options::use_xray(&resolved,&checked).is_err() {continue;}
                 crate::runtime::RuntimePlan::new(
                     &stage.join("sing-box.exe"),
                     profile,
@@ -538,11 +546,13 @@ pub fn install_with_bundle(
     result
 }
 pub fn cleanup_stages(data:&Path)->Result<usize> {
+ crate::layout::normal_directory(data)?;
  let mut count=0;
  for item in std::fs::read_dir(data).map_err(|e|Error::io("core-stage-clean",e))? {
   let item=item.map_err(|e|Error::io("core-stage-clean",e))?;
   let name=item.file_name().to_string_lossy().into_owned();
   if !item.file_type().is_ok_and(|t|t.is_dir()) || !name.strip_prefix("core-stage-").is_some_and(|s|uuid::Uuid::parse_str(s).is_ok()){continue}
+  if crate::layout::normal_directory(&item.path()).is_err(){continue;}
   for name in ["sing-box.exe","libcronet.dll","xray.exe","sing-box-release.json","xray-release.json"] {
    let path=item.path().join(name);
    if path.symlink_metadata().is_ok_and(|m|m.file_type().is_file()){std::fs::remove_file(path).map_err(|e|Error::io("core-stage-clean",e))?;count+=1}
@@ -552,6 +562,7 @@ pub fn cleanup_stages(data:&Path)->Result<usize> {
  Ok(count)
 }
 pub fn cleanup_downloads(directory: &Path) -> Result<usize> {
+    crate::layout::normal_directory(directory)?;
     if !directory.exists() {
         return Ok(0);
     }
@@ -627,6 +638,24 @@ pub fn executable_version(path: &Path, engine: &str) -> Result<String> {
 }
 #[cfg(test)]
 mod tests {
+    #[test] fn only_one_release_lookup_per_engine_can_remain_in_flight() {
+        let first=super::release_lookup("sing-box").unwrap();assert!(super::release_lookup("sing-box").is_err());
+        let other=super::release_lookup("xray").unwrap();drop(first);assert!(super::release_lookup("sing-box").is_ok());drop(other);
+    }
+    #[test] fn cleanup_cannot_follow_junctions_outside_its_cache() {
+        use std::os::windows::process::CommandExt;
+        let d=tempfile::tempdir().unwrap();let target=d.path().join("outside");std::fs::create_dir(&target).unwrap();
+        let zip=target.join(format!("{}.zip","a".repeat(64)));std::fs::write(&zip,b"preserve").unwrap();
+        std::fs::write(target.join("sing-box.exe"),b"preserve").unwrap();
+        let data=d.path().join("data");std::fs::create_dir(&data).unwrap();
+        let stage=data.join(format!("core-stage-{}",uuid::Uuid::new_v4()));
+        for link in [&stage,&data.join("updates")] {
+            let made=std::process::Command::new("cmd.exe").args(["/c","mklink","/J"]).arg(link).arg(&target).creation_flags(0x08000000).output().unwrap();assert!(made.status.success());
+        }
+        assert!(super::cleanup_downloads(&stage).is_err());assert_eq!(super::cleanup_stages(&data).unwrap(),0);assert_eq!(crate::client_updates::cleanup(&data,"1.0.6").unwrap(),0);
+        assert_eq!(std::fs::read(zip).unwrap(),b"preserve");assert_eq!(std::fs::read(target.join("sing-box.exe")).unwrap(),b"preserve");
+        std::fs::remove_dir(stage).unwrap();std::fs::remove_dir(data.join("updates")).unwrap();
+    }
     #[test]
     #[ignore = "Pinned local runtime fixtures only; no downloads or system changes"]
     fn explicit_install_fills_missing_companion_without_overwriting_existing_files() {

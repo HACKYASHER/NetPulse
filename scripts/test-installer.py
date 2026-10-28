@@ -3,7 +3,7 @@ The generated installer script is used with faster test compression, scoped regi
 names, isolated lock checks and disabled service hooks. No live service changes.
 """
 from pathlib import Path
-import argparse,hashlib,json,os,subprocess,time,uuid,winreg
+import argparse,hashlib,json,os,shutil,subprocess,time,uuid,winreg
 ROOT=Path(__file__).resolve().parents[1]
 def exists(key):
     try:
@@ -17,10 +17,19 @@ def main():
     assert token.startswith('NetPulseInstallTest') and len(token)==51
     output=(options.prepared_test or ROOT/'.build'/token).resolve()
     assert output.resolve().is_relative_to((ROOT/'.build').resolve())
-    output.mkdir(exist_ok=bool(options.prepared_test));install=output/'app';data=output/'data';data.mkdir(exist_ok=bool(options.prepared_test))
+    output.mkdir(exist_ok=bool(options.prepared_test));install=output/'Выбранная папка NetPulse';data=output/'data';data.mkdir(exist_ok=bool(options.prepared_test))
+    payload=output/'payload'
+    if not payload.exists():shutil.copytree(ROOT/'release/NetPulse',payload)
     source=(ROOT/'.build/installer.nsi').read_text(encoding='utf-8-sig')
+    escaped_install=str(install).replace('$','$$').replace('"','$\\"')
+    escaped_default=str(output/'unselected-default').replace('$','$$').replace('"','$\\"')
+    source=source.replace('InstallDir "$PROGRAMFILES64\\NetPulse"','InstallDir "'+escaped_default+'"')
+    # Two barriers: even a malformed /D can only select a scoped default, and
+    # .onInit aborts unless /D selected the exact expected test directory.
+    source=source.replace('Function .onInit\n','Function .onInit\n  StrCmp $INSTDIR "'+escaped_install+'" test_directory_ok\n  SetErrorLevel 98\n  Abort\n  test_directory_ok:\n')
     source=source.replace('NetPulseQt',token).replace('NetPulse Qt',token).replace('$DESKTOP\\NetPulse.lnk','$DESKTOP\\'+token+'.lnk').replace('$SMPROGRAMS\\NetPulse\\','$SMPROGRAMS\\'+token+'\\').replace('$SMPROGRAMS\\NetPulse"','$SMPROGRAMS\\'+token+'"')
     source=source.replace('OutFile "'+str(ROOT/'release/NetPulse-Setup.exe')+'"','OutFile "'+str(output/'Setup.exe')+'"')
+    source=source.replace(str(ROOT/'release/NetPulse'),str(payload))
     source=source.replace("--installer-check'", '--installer-check --data-dir "'+str(data)+'"'+"'")
     source=source.replace('  nsExec::ExecToStack \'"$INSTDIR\\netpulsed.exe" --installer-service-remove\'','  Push ""\n  Push 0')
     # The install hook remains unreachable with /NOSERVICE; also stub it as a
@@ -29,11 +38,18 @@ def main():
     source=source.replace('  nsExec::ExecToStack \'"$PLUGINSDIR\\netpulsed.exe" --installer-check-client\'', '  Push ""\n  Push 0')
     assert '--installer-check-client' not in source
     assert '--installer-service-' not in source
+    source=source.replace('  nsExec::ExecToStack \'"$INSTDIR\\netpulsed.exe" --installer-cleanup-previous\'', '  Push ""\n  Push 0')
+    assert '--installer-cleanup-previous' not in source
     source=source.replace('RequestExecutionLevel admin','RequestExecutionLevel user').replace('HKLM','HKCU')
     source=source.replace('  nsExec::ExecToStack \'"$PLUGINSDIR\\netpulsed.exe" --installer-prepare-layout "$INSTDIR"\'', '  Push ""\n  Push 0')
     assert '--installer-prepare-layout' not in source
     source=source.replace('  nsExec::ExecToStack \'"$PLUGINSDIR\\netpulsed.exe" --installer-finalize-layout "$INSTDIR"\'', '  Push ""\n  Push 0')
     assert '--installer-finalize-layout' not in source
+    source=source.replace('  nsExec::ExecToStack \'"$PLUGINSDIR\\netpulsed.exe" --installer-cache "$INSTDIR" "$EXEPATH"\'', '  CopyFiles /SILENT "$EXEPATH" "$INSTDIR\\NetPulse-Maintenance.exe"\n  Push ""\n  Push 0')
+    assert '--installer-cache' not in source
+    source=source.replace('  nsExec::ExecToStack \'"$PLUGINSDIR\\netpulsed.exe" --installer-check-location "$INSTDIR"\'', '  Push ""\n  Push 0')
+    source=source.replace('  files_protected:\n','  files_protected:\n  WriteRegStr HKCU "Software\\'+token+'" "InstallDir" "$INSTDIR"\n')
+    assert '--installer-check-location' not in source
     source=source.replace('  DeleteRegKey HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\'+token+'"\n  DeleteRegKey HKCU "Software\\'+token+'"\nSectionEnd', 'SectionEnd')
     source=source.replace('SetCompressor /SOLID lzma\nSetCompressorDictSize 32','SetCompressor zlib')
     script=output/'installer.nsi'
@@ -44,10 +60,14 @@ def main():
         subprocess.run([os.environ.get('NSIS_EXE',str(ROOT.parent/'ONE/.local/tools/nsis-3.13/makensis.exe')),'/V2',str(script)],check=True,timeout=600)
     key='Software\\'+token;uninstall='Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\'+token
     assert not exists(key) and not exists(uninstall)
-    command=[str(output/'Setup.exe'),'/S','/NOSERVICE','/D='+str(install)]
+    # NSIS /D must be last and unquoted, including paths with spaces:
+    # https://nsis.sourceforge.io/Docs/Chapter3.html#installerusage
+    def install_command(*flags):
+        return subprocess.list2cmdline([str(output/'Setup.exe'),*flags])+' /D='+str(install)
+    command=install_command('/S','/NOSERVICE')
     subprocess.run(command,check=True,timeout=180,creationflags=0x08000000)
     for name in ['NetPulse.exe','netpulsed.exe','NetPulseService.exe','cores/sing-box.exe','cores/xray.exe']:
-        assert hashlib.sha256((install/name).read_bytes()).digest()==hashlib.sha256((ROOT/'release/NetPulse'/name).read_bytes()).digest()
+        assert hashlib.sha256((install/name).read_bytes()).digest()==hashlib.sha256((payload/name).read_bytes()).digest()
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER,uninstall) as handle:
         assert winreg.QueryValueEx(handle,'DisplayName')[0]=='NetPulse'
         assert winreg.QueryValueEx(handle,'ModifyPath')[0]=='"'+str(install/'NetPulse-Maintenance.exe')+'"'
@@ -55,16 +75,16 @@ def main():
     (install/'netpulsed.exe').write_bytes(b'damaged test controller')
     subprocess.run(command,check=True,timeout=180,creationflags=0x08000000)
     assert sentinel.read_text()=='keep'
-    assert hashlib.sha256((install/'netpulsed.exe').read_bytes()).digest()==hashlib.sha256((ROOT/'release/NetPulse/netpulsed.exe').read_bytes()).digest()
+    assert hashlib.sha256((install/'netpulsed.exe').read_bytes()).digest()==hashlib.sha256((payload/'netpulsed.exe').read_bytes()).digest()
     failures=[]
     for code,expected_exit in [(20,20),(21,21),(22,22),(23,23),(24,24),(1,1),("error",29),("timeout",29)]:
-        simulated=subprocess.run([str(output/'Setup.exe'),'/S','/STUBSERVICE='+str(code),'/D='+str(install)],timeout=180,creationflags=0x08000000)
+        simulated=subprocess.run(install_command('/S','/STUBSERVICE='+str(code)),timeout=180,creationflags=0x08000000)
         assert simulated.returncode==expected_exit,(code,simulated.returncode)
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER,key) as handle:
             assert winreg.QueryValueEx(handle,'TunService')[0]=='not-installed'
             assert winreg.QueryValueEx(handle,'TunServiceError')[0]==str(code)
         assert sentinel.read_text()=='keep';failures.append(code)
-    simulated=subprocess.run([str(output/'Setup.exe'),'/S','/STUBSERVICE=0','/D='+str(install)],timeout=180,creationflags=0x08000000)
+    simulated=subprocess.run(install_command('/S','/STUBSERVICE=0'),timeout=180,creationflags=0x08000000)
     assert simulated.returncode==0
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER,key) as handle:
         assert winreg.QueryValueEx(handle,'TunService')[0]=='installed'
@@ -74,9 +94,18 @@ def main():
     result=json.loads((output/'smoke/result.json').read_text());assert result['qml_issues']==0
     subprocess.run([str(install/'Uninstall.exe'),'/S'],check=True,timeout=180,creationflags=0x08000000)
     until=time.monotonic()+45
-    while time.monotonic()<until and (exists(key) or (install/'NetPulse.exe').exists()):time.sleep(.25)
-    assert not exists(key) and not exists(uninstall) and not (install/'NetPulse.exe').exists()
+    while time.monotonic()<until and (exists(uninstall) or (install/'NetPulse.exe').exists()):time.sleep(.25)
+    assert exists(key) and not exists(uninstall) and not (install/'NetPulse.exe').exists()
     assert sentinel.read_text()=='keep' and inside_sentinel.read_text()=='preserve personal data'
-    report={'result':'passed','install':True,'update_repair':True,'uninstall':True,'data_preserved':True,'in_root_data_preserved':True,'layout_helper_stubbed':True,'registry_removed':True,'installed_ui':result,'simulated_service_failure_codes':failures,'simulated_success_clears_error':True,'tun_service_installed':False,'global_network_changed':False,'verification_namespace':token}
+    subprocess.run(command,check=True,timeout=180,creationflags=0x08000000)
+    assert (install/'NetPulse.exe').is_file() and inside_sentinel.read_text()=='preserve personal data'
+    subprocess.run([str(install/'Uninstall.exe'),'/S'],check=True,timeout=180,creationflags=0x08000000)
+    until=time.monotonic()+45
+    while time.monotonic()<until and (exists(uninstall) or (install/'NetPulse.exe').exists()):time.sleep(.25)
+    assert exists(key) and not exists(uninstall) and not (install/'NetPulse.exe').exists()
+    assert inside_sentinel.read_text()=='preserve personal data'
+    # Remove only this test's retained identity; production uninstall retains it.
+    winreg.DeleteKey(winreg.HKEY_CURRENT_USER,key)
+    report={'result':'passed','install':True,'update_repair':True,'uninstall':True,'reinstall_with_retained_data':True,'data_preserved':True,'in_root_data_preserved':True,'layout_helper_stubbed':True,'uninstall_entry_removed':True,'profile_identity_retained':True,'test_registry_cleaned':True,'installed_ui':result,'simulated_service_failure_codes':failures,'simulated_success_clears_error':True,'tun_service_installed':False,'global_network_changed':False,'verification_namespace':token}
     (ROOT/'.build/installer-result.json').write_text(json.dumps(report,indent=2),encoding='utf-8');print(json.dumps(report,indent=2))
 if __name__=='__main__':main()

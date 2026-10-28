@@ -5,12 +5,7 @@ pub fn read(path: &str) -> Result<Option<String>> {
         UI::{Shell::*, WindowsAndMessaging::*},
     };
     let file = std::path::Path::new(path);
-    if !file.is_absolute()
-        || !file.is_file()
-        || file
-            .extension()
-            .is_none_or(|v| !v.eq_ignore_ascii_case("exe"))
-    {
+    if !netpulse_core::layout::local_executable(file) {
         return Ok(None);
     }
     let wide: Vec<_> = path.encode_utf16().chain(Some(0)).collect();

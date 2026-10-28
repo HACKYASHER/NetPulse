@@ -196,6 +196,7 @@ fn endpoint(url: &str) -> Result<url::Url> {
 }
 fn http(port: Option<u16>, secret: &str, timeout: Duration) -> Result<reqwest::blocking::Client> {
     let mut builder = reqwest::blocking::Client::builder()
+        .no_gzip() // Speed measures transferred payload, never decompressed size.
         .no_proxy()
         .timeout(timeout)
         .redirect(reqwest::redirect::Policy::none());

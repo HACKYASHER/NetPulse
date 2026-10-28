@@ -1,6 +1,6 @@
 """Run isolated packaged UI checks; no VPN or global proxy is enabled."""
 from pathlib import Path
-import importlib.util,json,os,shutil,subprocess,uuid
+import importlib.util,json,os,shutil,subprocess,time,uuid
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('ipc',ROOT/'scripts/test-ipc.py')
 ipc=importlib.util.module_from_spec(spec);spec.loader.exec_module(ipc)
@@ -20,6 +20,9 @@ def main():
         else:directory.mkdir(parents=True)
         host=ipc.Host(directory)
         try:
+            ready=time.monotonic()+45
+            while host.call('bootstrap')['runtime_preparing']:
+                assert time.monotonic()<ready;time.sleep(.1)
             preferences=host.call('bootstrap')['preferences']
             preferences.update(language=language,theme=theme)
             host.call('save_preferences',preferences=preferences)
@@ -28,7 +31,7 @@ def main():
                            capture_output=True,env=clean,timeout=85,creationflags=0x08000000)
         assert run.returncode==0,(run.returncode,run.stderr.decode(errors='replace'))
         result=json.loads((output/'result.json').read_text())
-        assert result['result']=='passed' and result['version']=='1.0.5'
+        assert result['result']=='passed' and result['version']=='1.0.6'
         assert result['pages']==8 and result['qml_issues']==0 and result['frames']==22 and result['activity_viewports_fit'] and result['core_log_rows']>0
         assert all((output/f'page-{i}.png').is_file() for i in range(8))
         results.append(dict(language=language,theme=theme,**result))
@@ -36,7 +39,7 @@ def main():
             target=ROOT/'docs/images';target.mkdir(exist_ok=True,parents=True)
             shutil.copy2(output/'frame-overview.png',target/'overview.png')
         print(language+'/'+theme+': eight pages rendered, no QML issues',flush=True)
-    report={'result':'passed','version':'1.0.5','ui':results,'system_network_changed':False,'output_directory':str(suite)}
+    report={'result':'passed','version':'1.0.6','ui':results,'system_network_changed':False,'output_directory':str(suite)}
     (ROOT/'.build/ui-result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     print('Packaged UI verification passed.',flush=True)
 

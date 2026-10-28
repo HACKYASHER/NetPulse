@@ -51,6 +51,9 @@ def run(directory):
         host.process.stdin.write(b'{invalid JSON}\n');host.process.stdin.flush()
         assert host.call('snapshot')['state']=='disconnected'
         checks.append('unknown and malformed requests rejected; channel remains usable')
+        for method in ['manage_service','install_client_update']:
+            assert host.wait(host.send(method))['error']['code']=='VerificationOnly'
+        checks.append('isolated sessions reject service maintenance and client installation before argument handling')
         secret='85d01a47-8957-4f0a-afb2-c7896d30792b'
         report=host.call('import_text',text=f'vless://{secret}@127.0.0.1:443?security=tls&sni=fixture.invalid#Local%20QA')
         assert report['imported']==1

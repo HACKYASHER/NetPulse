@@ -52,8 +52,9 @@ struct Catalog {
 }
 pub fn read_catalog(directory: &std::path::Path) -> Result<Option<Vec<Application>>> {
     let path = directory.join("applications.json");
-    let bytes = match std::fs::read(&path) {
-        Ok(bytes) => bytes,
+    use std::io::Read;
+    let bytes = match std::fs::File::open(&path) {
+        Ok(file) => {let mut bytes=Vec::new();file.take(2_000_001).read_to_end(&mut bytes).map_err(|e|Error::io("applications-read",e))?;bytes},
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(Error::io("applications-read", e)),
     };
@@ -183,11 +184,7 @@ pub fn scan() -> Result<Vec<Application>> {
     ) {
         let path = path.trim().trim_matches('"');
         let candidate = std::path::Path::new(path);
-        if candidate.is_absolute()
-            && candidate.is_file()
-            && candidate
-                .extension()
-                .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+        if crate::layout::local_executable(candidate)
             && let Ok(canonical) = std::fs::canonicalize(candidate)
         {
             let path = canonical

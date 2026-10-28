@@ -5,7 +5,10 @@ use sha2::{Digest, Sha256};
 
 pub fn normal_directory(path: &Path) -> Result<()> {
     use std::os::windows::fs::MetadataExt;
-    for part in path.ancestors() {
+    // Inspect ancestors from the volume down: querying a descendant first can
+    // already follow a parent's junction (including one pointing to a share).
+    let mut parts=path.ancestors().collect::<Vec<_>>();parts.reverse();
+    for part in parts {
         match std::fs::symlink_metadata(part) {
             Ok(m) if !m.is_dir() || m.file_attributes() & 0x400 != 0 =>
                 return Err(Error::new("UnsafeDataDirectory", "layout", "Папка NetPulse не должна содержать ссылки или точки перенаправления.")),
@@ -15,6 +18,13 @@ pub fn normal_directory(path: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+pub fn local_directory(path:&Path)->Result<()> {
+    let text=path.to_string_lossy();let bytes=text.as_bytes();
+    if bytes.len()<3 || !bytes[0].is_ascii_alphabetic() || bytes[1]!=b':' || !matches!(bytes[2],b'\\'|b'/') || unsafe{windows_sys::Win32::Storage::FileSystem::GetDriveTypeW(crate::service::wide(&format!("{}:\\",bytes[0] as char)).as_ptr())}!=3 {
+        return Err(Error::new("UnsafeDataDirectory","layout","Используйте папку на локальном диске без ссылок и сетевых путей."));
+    }
+    normal_directory(path)
 }
 
 fn permissions(path: &Path, sddl: &str) -> Result<()> {
@@ -49,12 +59,19 @@ pub fn client_running() -> Result<bool> {
 /// Run by the elevated installer, before extracting files. Users can create their
 /// own profile directory, but cannot write the parent or another user's profile.
 pub fn prepare_install_root(root: &Path) -> Result<()> {
-    normal_directory(root)?;
-    std::fs::create_dir_all(root).map_err(|e|Error::io("install-directory",e))?;
-    crate::service::protect_install_path(root)?;
+    crate::install_paths::validate_root(root)?;
+    // Removing an empty, pre-existing directory also revokes previously opened
+    // handles. Recreate it atomically with the final protected descriptor.
+    if root.exists() && std::fs::read_dir(root).map_err(|e|Error::io("install-directory",e))?.next().is_none(){std::fs::remove_dir(root).map_err(|e|Error::io("install-directory",e))?;}
+    let mut missing=root.ancestors().take_while(|p|!p.exists()).map(PathBuf::from).collect::<Vec<_>>();missing.reverse();
+    for directory in missing {crate::install_paths::create_protected_directory(&directory)?;}
     let data=root.join("data");normal_directory(&data)?;
-    std::fs::create_dir_all(&data).map_err(|e|Error::io("profile-directory",e))?;
-    permissions(&data,"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;FRFX;;;BU)(A;;0x00000004;;;BU)(A;OICIIO;FA;;;CO)")
+    if !data.exists(){crate::install_paths::create_protected_directory(&data)?;}
+    crate::service::protect_install_path(&data)?;
+    permissions(&data,"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;FRFX;;;BU)(A;;0x00000004;;;BU)(A;OICIIO;FA;;;CO)")?;
+    // An interrupted first installation can resume only the machine-recorded,
+    // already protected root; a file marker in an arbitrary folder is insufficient.
+    crate::install_paths::record_pending_root(root)
 }
 
 /// Explicitly protect each installed file's owner as well as its inherited ACL.
@@ -80,9 +97,37 @@ pub fn finalize_install_root(root: &Path) -> Result<()> {
 }
 
 fn private_profile(path: &Path, sid: &str) -> Result<()> {
+    use windows_sys::Win32::{Foundation::*,Security::{*,Authorization::*},Storage::FileSystem::*};
     crate::service::validate_sid(sid)?;normal_directory(path)?;
     std::fs::create_dir_all(path).map_err(|e|Error::io("profile-directory",e))?;
-    permissions(path,&format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;{sid})"))
+    // No delete sharing: the checked directory cannot be replaced while its
+    // ownership and private ACL are inspected/applied through this same handle.
+    let handle=crate::service::Handle(unsafe{CreateFileW(crate::service::wide(&path.to_string_lossy()).as_ptr(),READ_CONTROL|WRITE_DAC,FILE_SHARE_READ|FILE_SHARE_WRITE,std::ptr::null(),OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS|FILE_FLAG_OPEN_REPARSE_POINT,std::ptr::null_mut())});
+    if handle.0==INVALID_HANDLE_VALUE{return Err(Error::io("profile-security",std::io::Error::last_os_error()));}
+    let mut info:BY_HANDLE_FILE_INFORMATION=unsafe{std::mem::zeroed()};
+    if unsafe{GetFileInformationByHandle(handle.0,&mut info)}==0{return Err(Error::io("profile-security",std::io::Error::last_os_error()));}
+    if info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT!=0{return Err(Error::new("UnsafeDataDirectory","profile-security","Папка профиля не должна быть ссылкой."));}
+    let (mut owner,mut previous)=(std::ptr::null_mut(),std::ptr::null_mut());
+    let code=unsafe{GetSecurityInfo(handle.0,SE_FILE_OBJECT,OWNER_SECURITY_INFORMATION,&mut owner,std::ptr::null_mut(),std::ptr::null_mut(),std::ptr::null_mut(),&mut previous)};
+    if code!=ERROR_SUCCESS{return Err(Error::io("profile-security",std::io::Error::from_raw_os_error(code as i32)));}
+    let allowed=crate::install_paths::sid_text(owner).is_some_and(|value|profile_owner_allowed(&value,sid));unsafe{LocalFree(previous as _);}
+    if !allowed{return Err(Error::new("ProfileOwnerMismatch","profile-security","Владелец папки профиля отличается от текущего пользователя. Используйте свою папку профиля; чужие данные не изменены."));}
+    let sd=crate::service::security_descriptor(&format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;{sid})"))?;
+    let (mut dacl,mut present,mut defaulted)=(std::ptr::null_mut(),0,0);
+    if unsafe{GetSecurityDescriptorDacl(sd.pointer(),&mut present,&mut dacl,&mut defaulted)}==0 || present==0{return Err(Error::io("profile-security",std::io::Error::last_os_error()));}
+    let code=unsafe{SetSecurityInfo(handle.0,SE_FILE_OBJECT,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,std::ptr::null_mut(),std::ptr::null_mut(),dacl,std::ptr::null_mut())};
+    if code!=ERROR_SUCCESS{return Err(Error::io("profile-security",std::io::Error::from_raw_os_error(code as i32)));}Ok(())
+}
+fn profile_owner_allowed(owner:&str,sid:&str)->bool {owner==sid || matches!(owner,"S-1-5-18"|"S-1-5-32-544")}
+/// Icons must never contact SMB shares or follow reparse points from imported
+/// application paths. Routing can still store a process name without reading it.
+pub fn local_executable(path:&Path)->bool {
+    use std::os::windows::fs::MetadataExt;
+    let text=path.to_string_lossy();let bytes=text.as_bytes();
+    bytes.len()>3 && bytes[0].is_ascii_alphabetic() && bytes[1]==b':' && matches!(bytes[2],b'\\'|b'/')
+        && !text[2..].contains(':') && path.extension().is_some_and(|v|v.eq_ignore_ascii_case("exe"))
+        && path.parent().is_some_and(|p|normal_directory(p).is_ok())
+        && path.symlink_metadata().is_ok_and(|m|m.is_file()&&m.file_attributes() & 0x400==0)
 }
 
 fn hash(path: &Path) -> Result<String> {
@@ -177,6 +222,13 @@ pub fn cleanup_legacy_application(root: &Path, programs: &Path) -> Result<usize>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn foreign_profile_owners_and_remote_icon_paths_are_rejected() {
+        let sid="S-1-5-21-1-2-3-1001";
+        assert!(profile_owner_allowed(sid,sid));assert!(profile_owner_allowed("S-1-5-18",sid));assert!(profile_owner_allowed("S-1-5-32-544",sid));
+        assert!(!profile_owner_allowed("S-1-5-21-1-2-3-1002",sid));assert!(!profile_owner_allowed("S-1-1-0",sid));
+        for path in [r"\\server\share\app.exe",r"\\?\UNC\server\share\app.exe",r"C:\app.exe:stream.exe",r"relative.exe"]{assert!(!local_executable(Path::new(path)));}
+        for path in [r"\\server\share",r"\\?\UNC\server\share",r"relative"]{assert!(local_directory(Path::new(path)).is_err());}
+    }
     #[test] fn installer_manifest_cannot_protect_or_touch_files_outside_payload() {
         let d=tempfile::tempdir().unwrap();let app=d.path().join("app");std::fs::create_dir(&app).unwrap();let outside=d.path().join("outside.txt");std::fs::write(&outside,b"preserve").unwrap();
         for name in ["../outside.txt","data/settings.json",r"C:\Windows\system.ini"] {

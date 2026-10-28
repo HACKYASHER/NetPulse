@@ -24,6 +24,13 @@
 #include <QTimer>
 #include <QProcess>
 #include <memory>
+#include <vector>
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 class ApplicationIcons final : public QQuickImageProvider {
 public:
@@ -32,6 +39,14 @@ public:
   const QString path=QUrl::fromPercentEncoding(id.toUtf8());
   const QSize target=requested.isValid()?requested:QSize(32,32);
   if(size)*size=target;
+  // Imported process paths must not make the icon provider contact SMB shares
+  // or traverse directory junctions before the user takes any action.
+  if(path.size()<4 || !((path[0]>=QChar(u'A')&&path[0]<=QChar(u'Z'))||(path[0]>=QChar(u'a')&&path[0]<=QChar(u'z'))) || path[1]!=QChar(u':') || (path[2]!=QChar(u'\\')&&path[2]!=QChar(u'/')) || path.mid(2).contains(QChar(u':')))return {};
+#ifdef Q_OS_WIN
+  const auto parts=QDir::fromNativeSeparators(path).split(QChar(u'/'),Qt::SkipEmptyParts);
+  QString checked=parts.first()+QStringLiteral("/");
+  for(qsizetype index=1;index<parts.size();++index){checked+=parts[index];const DWORD attributes=GetFileAttributesW(reinterpret_cast<const wchar_t*>(checked.utf16()));if(attributes==INVALID_FILE_ATTRIBUTES || (attributes&FILE_ATTRIBUTE_REPARSE_POINT))return {};checked+=QChar(u'/');}
+#endif
   if(auto* cached=cache.object(path))return cached->scaled(target,Qt::KeepAspectRatio,Qt::SmoothTransformation);
   QFileInfo file(path); if(!file.isAbsolute() || file.suffix().compare(QStringLiteral("exe"),Qt::CaseInsensitive)!=0)return {};
   QPixmap pixmap=provider.icon(file).pixmap(32,32); if(pixmap.isNull())pixmap=provider.icon(QFileIconProvider::File).pixmap(32,32); cache.insert(path,new QPixmap(pixmap)); return pixmap;
@@ -42,7 +57,7 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("NetPulse"));
     QCoreApplication::setOrganizationName(QStringLiteral("NetPulse"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.5"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.6"));
     QApplication::setFont(QFont(QStringLiteral("Segoe UI"), 10));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QCommandLineParser parser;
@@ -57,15 +72,24 @@ int main(int argc, char** argv) {
     QString dataDirectory = parser.value(QStringLiteral("data-dir"));
     if (smoke) dataDirectory = QDir(parser.value(QStringLiteral("smoke-test"))).absoluteFilePath(QStringLiteral("data"));
 
-    std::unique_ptr<QLockFile> legacyLock;
+    std::vector<std::unique_ptr<QLockFile>> legacyLocks;
     if (dataDirectory.isEmpty()) {
-        const QString legacy=qEnvironmentVariable("LOCALAPPDATA")+QStringLiteral("/NetPulseQt");
-        if (QFileInfo::exists(legacy+QStringLiteral("/netpulse.db"))) {
-            legacyLock=std::make_unique<QLockFile>(legacy+QStringLiteral("/client.lock"));
-            if (!legacyLock->tryLock(100)) {
+        QStringList sources{qEnvironmentVariable("LOCALAPPDATA")+QStringLiteral("/NetPulseQt")};
+        if (!parser.isSet(QStringLiteral("installer-check"))) {
+            QProcess paths;paths.setProgram(QCoreApplication::applicationDirPath()+QStringLiteral("/netpulsed.exe"));paths.setArguments({QStringLiteral("--profile-paths")});
+#ifdef Q_OS_WIN
+            paths.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* a){a->flags|=0x08000000;});
+#endif
+            paths.start();if(!paths.waitForStarted(10000)||!paths.waitForFinished(10000)||paths.exitCode()!=0){QMessageBox::critical(nullptr,QStringLiteral("NetPulse"),QStringLiteral("Не удалось определить прежнюю папку данных NetPulse."));return 12;}
+            sources.clear();for(const auto& source:QJsonDocument::fromJson(paths.readAllStandardOutput()).object().value(QStringLiteral("sources")).toArray())sources.append(source.toString());
+        }
+        for (const auto& legacy:sources) if (QFileInfo::exists(legacy+QStringLiteral("/netpulse.db"))) {
+            auto sourceLock=std::make_unique<QLockFile>(legacy+QStringLiteral("/client.lock"));
+            if (!sourceLock->tryLock(100)) {
                 if (!parser.isSet(QStringLiteral("installer-check"))) QMessageBox::information(nullptr,QStringLiteral("NetPulse"),QStringLiteral("Закройте прежний NetPulse через значок в трее перед переносом данных."));
                 return 10;
             }
+            legacyLocks.push_back(std::move(sourceLock));
         }
         // Checking a closed installation must not migrate data while elevated.
         if (parser.isSet(QStringLiteral("installer-check"))) {

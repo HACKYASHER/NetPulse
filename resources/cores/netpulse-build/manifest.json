@@ -1,0 +1,15 @@
+{
+  "upstream": "SagerNet/sing-box",
+  "base_tag": "v1.14.4",
+  "version": "1.14.4-netpulse.1",
+  "go": "go1.27.3",
+  "source_url": "https://codeload.github.com/SagerNet/sing-box/tar.gz/refs/tags/v1.14.4",
+  "source_sha256": "0958ccd23b1ea9a141d715d15478b1e040fd04bcca19d8ff5529636b1b753e18",
+  "sha256": "d9165cec1cd167e589c40f3454e31c77c18066490e1ddd7117f83e929deeea5d",
+  "tags": "with_gvisor,with_quic,with_utls,with_clash_api,badlinkname,tfogo_checklinkname0",
+  "ldflags": "-X github.com/sagernet/sing-box/constant.Version=1.14.4-netpulse.1 -checklinkname=0 -s -w -buildid=",
+  "patches": {
+    "go.mod": "cbcf4b85329156959d5d6efbc2ded23a13589e84b738a9aa7dc86ff4295596ee",
+    "go.sum": "685038beff09202f0311a4cb103a0a538ac63b355f5799f2df097c5b0398a9bc"
+  }
+}

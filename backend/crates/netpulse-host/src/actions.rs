@@ -2,13 +2,14 @@ use super::*;
 use netpulse_core::{diagnostics, selection};
 use std::sync::atomic::Ordering;
 
-pub fn subscription_monitor(app: host::AppHandle, core: Arc<Mutex<NetworkCore>>) {
+pub fn subscription_monitor(app: host::AppHandle, core: Arc<Mutex<NetworkCore>>, preparing:Arc<std::sync::atomic::AtomicBool>) {
     std::thread::spawn(move || {
         let mut attempts = std::collections::HashMap::<String, std::time::Instant>::new();
         let mut first = true;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(if first { 100 } else { 60_000 }));
             let due = {
+                if preparing.load(Ordering::Acquire){continue;}
                 let Ok(c) = core.try_lock() else {
                     continue;
                 };
@@ -41,6 +42,7 @@ pub fn subscription_monitor(app: host::AppHandle, core: Arc<Mutex<NetworkCore>>)
                 let Ok(mut c) = core.lock() else {
                     break;
                 };
+                if preparing.load(Ordering::Acquire){continue;}
                 // Discard responses made obsolete by deletion, manual refresh
                 // or an interval change while the request was in flight.
                 let current = c
@@ -230,6 +232,7 @@ fn session(snapshot: &Snapshot) -> Session {
 fn begin_selection(
     core: Arc<Mutex<NetworkCore>>,
     jobs: Arc<diagnostics::Jobs>,
+    preparing:Arc<std::sync::atomic::AtomicBool>,
     samples: u8,
     force_reconnect: bool,
 ) -> Result<String> {
@@ -238,6 +241,7 @@ fn begin_selection(
             .lock()
             .map_err(|_| Error::new("CoreUnavailable", "selection", "Core unavailable"))?;
         let summaries = c.store.profiles()?;
+        if preparing.load(Ordering::Acquire){return Err(Error::new("RuntimePreparing","selection","Дождитесь завершения операции с ядрами."));}
         if summaries.is_empty() || summaries.len() > 2000 {
             return Err(Error::new(
                 "NoProfiles",
@@ -331,7 +335,7 @@ fn begin_selection(
             let mut c = core
                 .lock()
                 .map_err(|_| Error::new("CoreUnavailable", "selection", "Core unavailable"))?;
-            if cancel.load(Ordering::SeqCst)
+            if cancel.load(Ordering::SeqCst) || preparing.load(Ordering::Acquire)
                 || c.guarded(|c| Ok(session(&c.snapshot())))? != expected
             {
                 return Ok(());
@@ -407,7 +411,8 @@ pub async fn start_best_server(state: host::State<'_, AppState>, samples: u8) ->
     // runtime. Never execute it on Tauri's async executor (nested runtime panic).
     let core = state.core.clone();
     let jobs = state.diagnostics.clone();
-    selection_start_worker(move || begin_selection(core, jobs, samples, false)).await
+    let preparing=state.runtime_preparing.clone();
+    selection_start_worker(move || begin_selection(core, jobs, preparing, samples, false)).await
 }
 async fn selection_start_worker(
     f: impl FnOnce() -> Result<String> + Send + 'static,
@@ -425,6 +430,7 @@ pub fn selection_monitor(
     app: host::AppHandle,
     core: Arc<Mutex<NetworkCore>>,
     jobs: Arc<diagnostics::Jobs>,
+    preparing:Arc<std::sync::atomic::AtomicBool>,
 ) {
     std::thread::spawn(move || {
         let mut failures = 0;
@@ -432,6 +438,7 @@ pub fn selection_monitor(
         loop {
             std::thread::sleep(std::time::Duration::from_secs(10));
             let request = core.try_lock().ok().and_then(|mut c| {
+                if preparing.load(Ordering::Acquire){return None;}
                 let prefs = c.store.preferences().ok()?;
                 let snapshot = c.snapshot();
                 if !prefs.auto_failover
@@ -486,7 +493,7 @@ pub fn selection_monitor(
             }
             if failures >= 3 {
                 failures = 0;
-                if begin_selection(core.clone(), jobs.clone(), 5, true).is_ok() {
+                if begin_selection(core.clone(), jobs.clone(), preparing.clone(), 5, true).is_ok() {
                     let _ = app.emit("automatic-selection", ());
                 }
             }

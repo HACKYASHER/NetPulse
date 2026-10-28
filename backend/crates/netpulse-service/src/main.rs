@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use netpulse_core::{Error, Result, service};
 mod maintenance;
+mod client_update;
 use std::{
     ffi::OsString,
     sync::{
@@ -24,6 +25,10 @@ fn maintenance_exit(error: &Error) -> i32 {
 }
 fn main() {
     let args: Vec<_> = std::env::args().collect();
+    if args.get(1).is_some_and(|a|a=="--client-update") {
+        let result=if args.len()==3{client_update::install(&args[2])}else{Err(Error::new("InstallArguments","client-update","Expected an official release tag"))};
+        if let Err(e)=result{eprintln!("{e}");std::process::exit(1);}return;
+    }
     if args.get(1).is_some_and(|a| a == "--self-test") {
         let result = (|| {
             if args.len() != 3 {
@@ -249,6 +254,7 @@ fn install(args: &[String]) -> Result<()> {
         "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;CCLCRPLO;;;{owner})"
     ))?;
     let source = std::path::Path::new(&args[3]);
+    netpulse_core::layout::local_directory(source)?;
     let approvals = netpulse_core::core_releases::authenticated_approvals(source)?;
     netpulse_core::engine::verify_engine(&source.join("sing-box.exe"))?;
     let dest = service::protected_directory()?;
@@ -384,6 +390,7 @@ fn upgrade(args: &[String]) -> Result<()> {
     };
     service::validate_sid(&args[2])?;
     let source = std::path::Path::new(&args[3]);
+    netpulse_core::layout::local_directory(source)?;
     let approvals = netpulse_core::core_releases::authenticated_approvals(source)?;
     netpulse_core::engine::verify_engine(&source.join("sing-box.exe"))?;
     netpulse_core::runtime::verify_xray(&source.join("xray.exe"))?;

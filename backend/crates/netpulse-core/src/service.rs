@@ -139,7 +139,7 @@ pub fn current_sid() -> Result<String> {
     let handle = Handle(token);
     token_sid(handle.0)
 }
-pub fn application_directory() -> Result<PathBuf> {
+pub fn default_application_directory() -> Result<PathBuf> {
     use windows_sys::Win32::{
         System::Com::CoTaskMemFree,
         UI::Shell::{FOLDERID_ProgramFilesX64, SHGetKnownFolderPath},
@@ -168,7 +168,8 @@ pub fn application_directory() -> Result<PathBuf> {
     Ok(path.join("NetPulse"))
 }
 pub fn canonical_service_directory() -> Result<PathBuf> { Ok(application_directory()?.join("service")) }
-pub fn legacy_service_directory() -> Result<PathBuf> { Ok(application_directory()?.with_file_name("NetPulse Core Qt")) }
+pub fn application_directory() -> Result<PathBuf> { Ok(crate::install_paths::registered_root().unwrap_or(default_application_directory()?)) }
+pub fn legacy_service_directory() -> Result<PathBuf> { Ok(default_application_directory()?.with_file_name("NetPulse Core Qt")) }
 /// Accept only the two installer-owned SCM locations while upgrading old clients.
 pub fn protected_directory() -> Result<PathBuf> {
     use windows_service::{service::ServiceAccess,service_manager::{ServiceManager,ServiceManagerAccess}};
@@ -181,7 +182,9 @@ pub fn protected_directory() -> Result<PathBuf> {
     };
     let config=handle.query_config().map_err(service_configuration_error)?;
     let actual=config.executable_path.to_string_lossy();
-    for directory in [canonical,legacy_service_directory()?] {
+    let mut directories=vec![canonical,legacy_service_directory()?,default_application_directory()?.join("service")];
+    directories.extend(crate::install_paths::previous_roots().into_iter().map(|r|r.join("service")));
+    for directory in directories {
         if actual.trim_matches('"').eq_ignore_ascii_case(&directory.join("NetPulseService.exe").to_string_lossy()) {
             crate::layout::normal_directory(&directory)?;return Ok(directory);
         }
@@ -318,6 +321,7 @@ pub fn validate_service_files(directory: &Path) -> Result<()> {
     Ok(())
 }
 pub fn validate_install_source(installer: &Path, directory: &Path) -> Result<()> {
+    crate::layout::local_directory(directory)?;
     readable_service_component(installer)?;
     crate::engine::verify_engine(&directory.join("sing-box.exe"))?;
     crate::runtime::verify_xray(&directory.join("xray.exe"))?;
@@ -340,6 +344,18 @@ pub fn elevated_stop(installer: &Path) -> Result<()> {
     Ok(())
 }
 fn elevated_parameters(installer: &Path, parameters: &str) -> Result<()> {
+    elevated_parameters_timeout(installer,parameters,180000)
+}
+pub fn elevated_client_update(tag:&str)->Result<()> {
+    let root=application_directory()?;
+    crate::install_paths::validate_root(&root)?;
+    // A strictly parsed tag is the only value passed across the UAC boundary.
+    // Full release/hash/channel validation is repeated by the trusted helper.
+    if tag.len()>96 || !tag.starts_with('v') || !tag.bytes().all(|b|b.is_ascii_alphanumeric()||b".-".contains(&b)){return Err(Error::new("ClientUpdateInvalid","client-update","Invalid release tag"));}
+    elevated_parameters_timeout(&root.join("NetPulseService.exe"),&format!("--client-update {tag}"),420000)
+}
+fn elevated_parameters_timeout(installer: &Path, parameters: &str, timeout:u32) -> Result<()> {
+    protected_elevation_source(installer)?;
     use windows_sys::Win32::{System::Threading::*, UI::Shell::*};
     let exe = wide(&installer.to_string_lossy());
     let verb = wide("runas");
@@ -371,7 +387,7 @@ fn elevated_parameters(installer: &Path, parameters: &str) -> Result<()> {
             "Windows did not return the installation process",
         ));
     }
-    if unsafe { WaitForSingleObject(process.0, 180000) } != WAIT_OBJECT_0 {
+    if unsafe { WaitForSingleObject(process.0, timeout) } != WAIT_OBJECT_0 {
         return Err(Error::new(
             "ServiceInstallTimeout",
             "service-install",
@@ -386,6 +402,25 @@ fn elevated_parameters(installer: &Path, parameters: &str) -> Result<()> {
         ));
     }
     maintenance_result(code)
+}
+/// All GUI elevation crosses through the immutable installed helper. A portable
+/// or per-user writable executable must never be promoted merely by its name.
+pub fn installer_executable()->Result<PathBuf>{
+    let path=application_directory()?.join("NetPulseService.exe");protected_elevation_source(&path)?;Ok(path)
+}
+fn protected_elevation_source(path:&Path)->Result<()> {
+    crate::layout::local_directory(path.parent().ok_or_else(||Error::new("ProtectedServiceInstallerRequired","service-install","Use the installed NetPulse helper"))?)?;
+    readable_service_component(path)?;
+    let root=application_directory()?;
+    if !helper_path_matches(path,&root)?{
+        return Err(Error::new("ProtectedServiceInstallerRequired","service-install","Для обслуживания TUN сначала установите NetPulse официальным установщиком. Повышение прав для файла из изменяемой папки не выполняется."));
+    }
+    crate::install_paths::validate_root(&root)
+}
+fn helper_path_matches(path:&Path,root:&Path)->Result<bool>{
+    let actual=path.canonicalize().map_err(|e|Error::io("service-installer-location",e))?;
+    let expected=root.join("NetPulseService.exe").canonicalize().map_err(|e|Error::io("service-installer-location",e))?;
+    Ok(actual.to_string_lossy().eq_ignore_ascii_case(&expected.to_string_lossy()))
 }
 fn maintenance_result(code: u32) -> Result<()> {
     if code == 20 {
@@ -1407,6 +1442,12 @@ impl Drop for Controller {
 
 #[cfg(test)]
 mod tests {
+    #[test] fn same_named_writable_helper_cannot_replace_the_registered_helper() {
+        let temporary=tempfile::tempdir().unwrap();let root=temporary.path().join("protected");std::fs::create_dir(&root).unwrap();
+        let expected=root.join("NetPulseService.exe");let other=temporary.path().join("NetPulseService.exe");
+        std::fs::write(&expected,b"same fixture").unwrap();std::fs::write(&other,b"same fixture").unwrap();
+        assert!(super::helper_path_matches(&expected,&root).unwrap());assert!(!super::helper_path_matches(&other,&root).unwrap());
+    }
     use super::*;
     #[test]
     fn missing_or_empty_service_components_stop_before_scm_start() {

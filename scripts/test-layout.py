@@ -24,7 +24,7 @@ def main():
         host.call('save_preferences',preferences=prefs)
     finally:host.close()
     env=os.environ.copy();env['LOCALAPPDATA']=str(local)
-    command=[str(app/'netpulsed.exe'),'--resolve-data']
+    command=[str(app/'netpulsed.exe'),'--resolve-data','--isolated']
     def resolve():
         result=subprocess.run(command,env=env,capture_output=True,timeout=120,creationflags=0x08000000)
         assert result.returncode==0,result.stdout.decode(errors='replace')

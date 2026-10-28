@@ -32,7 +32,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // The packaged bundle must supply it without requiring a prior repair.
         if name=="xray" { std::fs::remove_file(target.join("sing-box.exe"))?; }
         let bundle=sbox.parent().ok_or("Fixture bundle directory missing")?;
-        core_releases::install_with_bundle(selected, data.path(), &[], &Preferences::default(),Some(bundle))?;
+        let profiles=vec![netpulse_core::imports::parse_uri("hysteria2://fixture-password@127.0.0.1:443?sni=fixture.invalid#Hysteria2")?,netpulse_core::imports::parse_uri("vless://15bc786a-b01b-4a8a-962e-cb52e089e500@127.0.0.1:443?security=tls#VLESS")?];
+        core_releases::install_with_bundle(selected, data.path(), &profiles, &Preferences::default(),Some(bundle))?;
         assert!(core_releases::approval(&target, name)?.is_some());
         assert_eq!(
             core_releases::executable_version(

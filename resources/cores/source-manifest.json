@@ -2,54 +2,28 @@
   "roots": [
     {
       "name": "sing-box",
-      "tag": "v1.14.3",
-      "file": "sing-box-v1.14.3-source.tar.gz",
-      "sha256": "9a8e3712a5f611ad95f1d16874bbdcdffbd3b8eed16dae2d71ce7042a33c3386",
-      "repository": "https://github.com/SagerNet/sing-box"
+      "tag": "v1.14.4-netpulse.1",
+      "file": "sing-box-v1.14.4-netpulse.1-source.tar.gz",
+      "sha256": "2b891e836573f5c3eb14408e65514573e9c83d8c60d587aaebd7f71b598d719f",
+      "repository": "https://github.com/SagerNet/sing-box",
+      "base_tag": "v1.14.4",
+      "modified_by": "NetPulse"
     },
     {
       "name": "xray",
-      "tag": "v26.10.17",
-      "file": "xray-v26.10.17-source.tar.gz",
-      "sha256": "62fb186017bc29c3d10950d7a1a61fd40aff0cb92ba2b77363e9004455f6bf89",
+      "tag": "v26.10.21",
+      "file": "xray-v26.10.21-source.tar.gz",
+      "sha256": "44ef4874529a03848c90f1fdcfb763350fbc5f1de741ec90e0024d651df25650",
       "repository": "https://github.com/XTLS/Xray-core"
     }
   ],
   "modules": [
-    {
-      "module": "filippo.io/edwards25519",
-      "version": "v1.2.0",
-      "h1": "h1:crnVqOiS4jqYleHd9vaKZ+HKtHfllngJIiOpNpoJsjo=",
-      "archive": "6c729efccdcdd7f569407cb1e20dc6a871f8f13084fad19de57e7e5d03d356b3.zip",
-      "sha256": "98f2d3ca9b88daa031b0fb2fb521b7ea386af1fed61b6f445a20bef7fa381c17"
-    },
-    {
-      "module": "github.com/RyuaNerin/go-krypto",
-      "version": "v1.3.0",
-      "h1": "h1:smavTzSMAx8iuVlGb4pEwl9MD2qicqMzuXR2QWp2/Pg=",
-      "archive": "05ff261367111f41a320fbcc9237a623ad8413eb5eb1bcc1e48ddf907aa97471.zip",
-      "sha256": "4f98d5d243e2706b588fba752dd8a75c0e2e76542a990a3c6494fc0aac3e9a9b"
-    },
     {
       "module": "github.com/ajg/form",
       "version": "v1.5.1",
       "h1": "h1:t9c7v8JUKu/XxOGBU0yjNpaMloxGEJhUkqFRq0ibGeU=",
       "archive": "fd47436441b155a080807b07328836286228b60c50ef6331bd9d722770f301db.zip",
       "sha256": "b063b07639670ce9b6a0065b4dc35ef9e4cebc0c601be27f5494a3e6a87eb78b"
-    },
-    {
-      "module": "github.com/alexbrainman/sspi",
-      "version": "v0.0.0-20231016080023-1a75b4708caa",
-      "h1": "h1:LHTHcTQiSGT7VVbI0o4wBRNQIgn917usHWOd6VAffYI=",
-      "archive": "6ee985a63c290ca02fc97b8044ae4e72cc561db8cb8fc9244db8ab2aac6cf4d1.zip",
-      "sha256": "4b2381cffbceb9396c8331becd683b629f350c8eadf1feec38acfd79fdbc01b0"
-    },
-    {
-      "module": "github.com/anchore/go-lzo",
-      "version": "v0.1.0",
-      "h1": "h1:NgAacnzqPeGH49Ky19QKLBZEuFRqtTG9cdaucc3Vncs=",
-      "archive": "90a5d6666c2ef96a9aad7502c7360bc99e13145bcf43cb11d4227e2b2741d668.zip",
-      "sha256": "74e5636203039daeb2339a7953b653d39a1d15c23856e74135e6c5f9fe749216"
     },
     {
       "module": "github.com/andybalholm/brotli",
@@ -66,20 +40,6 @@
       "sha256": "3017c784cffc7f0019a6573efcb6d861be4bd08e2072532a88ff39280f3ec15c"
     },
     {
-      "module": "github.com/anmitsu/go-shlex",
-      "version": "v0.0.0-20200514113438-38f4b401e2be",
-      "h1": "h1:9AeTilPcZAjCFIImctFaOjnTIavg87rW78vTPkQqLI8=",
-      "archive": "1bc55d0a5654b1f82eb528aabb5e9d432e5bdc132a8d987fee83d4ddf5051932.zip",
-      "sha256": "2a5cf7c9a2709f649fd508cbacb2be96e4fba4d534a28a122ee4d7574af40b5e"
-    },
-    {
-      "module": "github.com/anthropics/anthropic-sdk-go",
-      "version": "v1.26.0",
-      "h1": "h1:oUTzFaUpAevfuELAP1sjL6CQJ9HHAfT7CoSYSac11PY=",
-      "archive": "6e3b0bc01848d42457b717a67b3fbc0502551037c1d2024923503dec5119ee5e.zip",
-      "sha256": "9c3249d5270113d5a24a2b5bc65298289a879310bf0930fbd8d0542228029205"
-    },
-    {
       "module": "github.com/anytls/sing-anytls",
       "version": "v0.0.11",
       "h1": "h1:w8e9Uj1oP3m4zxkyZDewPk0EcQbvVxb7Nn+rapEx4fc=",
@@ -92,13 +52,6 @@
       "h1": "h1:5mgtR5gwIgBKMiGI1QdXldZZ+SNor06Nbu1wCBulQBg=",
       "archive": "034086c762bf9acc794c46f181223c0c8b931f2abbcc952b29bf52723b8719c8.zip",
       "sha256": "44106844bd31ddc1abadb584e6e99e8c033625a9444af727a22600f3c10af861"
-    },
-    {
-      "module": "github.com/axiomhq/hyperloglog",
-      "version": "v0.0.0-20240319100328-84253e514e02",
-      "h1": "h1:bXAPYSbdYbS5VTy92NIUbeDI1qyggi+JYh5op9IFlcQ=",
-      "archive": "cce4eb2c1754aaf4ddcfbd94cf77836768b4568edd77bf29fbf66bd8e7a73268.zip",
-      "sha256": "94d387d574deadfc4e719503149fafdcddaf04c06a323966781a41026d2ba493"
     },
     {
       "module": "github.com/caddyserver/certmagic",
@@ -129,13 +82,6 @@
       "sha256": "b729277821461eb21a816c16e29a02029dd6abbb1a43b526c1e0a6b794942de0"
     },
     {
-      "module": "github.com/coreos/go-oidc/v3",
-      "version": "v3.17.0",
-      "h1": "h1:hWBGaQfbi0iVviX4ibC7bk8OKT5qNr4klBaCHVNvehc=",
-      "archive": "603baadfceea356e6393a4686d376d75835789fe0ef34b24b792eb35cfa56edd.zip",
-      "sha256": "fba667f687448a228315d6f0cfd00a5fa9ab8ad9b511e38575a699afc0b30aeb"
-    },
-    {
       "module": "github.com/cretz/bine",
       "version": "v0.2.0",
       "h1": "h1:8GiDRGlTgz+o8H9DSnsl+5MeBK4HsExxgl6WgzOCuZo=",
@@ -157,53 +103,11 @@
       "sha256": "4904e23e365ed31913ef986cda7833140702e6aeb27fc341f0e35aac0fe89c69"
     },
     {
-      "module": "github.com/dblohm7/wingoes",
-      "version": "v0.0.0-20240119213807-a09d6be7affa",
-      "h1": "h1:h8TfIT1xc8FWbwwpmHn1J5i43Y0uZP97GqasGCzSRJk=",
-      "archive": "d609ee68f287843a9751e62abcbf8992b64e7bd134f71d47ede4d863eab52a84.zip",
-      "sha256": "178bc9e224d5d6d647ea2983416f279477b295149e1ac954fa1a47d6fcdb1644"
-    },
-    {
-      "module": "github.com/dgryski/go-camellia",
-      "version": "v0.0.0-20191119043421-69a8a13fb23d",
-      "h1": "h1:CPqTNIigGweVPT4CYb+OO2E6XyRKFOmvTHwWRLgCAlE=",
-      "archive": "534728db29ea8f5ed38cbda6722290951a035fbdb5b5f250b252f21d4952d019.zip",
-      "sha256": "be22e00ee49e337febae1dc49c0df536b729304f2e8f00473c12fd4e59a2ef28"
-    },
-    {
-      "module": "github.com/dgryski/go-metro",
-      "version": "v0.0.0-20180109044635-280f6062b5bc",
-      "h1": "h1:8WFBn63wegobsYAX0YjD+8suexZDga5CctH4CCTx2+8=",
-      "archive": "1595a2daf9f083bdc82937995c1b30cb67e2a55ebe2d8d8e71aa0a320a695d1f.zip",
-      "sha256": "3f97b3cdeaee7b4fbf4fa06b7c52e3ee6bca461a100077892e861c6c8fc03722"
-    },
-    {
-      "module": "github.com/ebitengine/purego",
-      "version": "v0.10.0",
-      "h1": "h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/ISU=",
-      "archive": "5d8e82edece4b677ab25c3c6369a92ee0435ac6b378ee47254428aeeb6643b2b.zip",
-      "sha256": "df60829d7715bf609e78ebb6c945bdb865ccdfec56a71603d6e12346f98065c9"
-    },
-    {
       "module": "github.com/fsnotify/fsnotify",
       "version": "v1.9.0",
       "h1": "h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=",
       "archive": "378f777c98af074fd0b9c573fc8ee5415ac1e51d9a0849e498eb5a803e8d9573.zip",
       "sha256": "94e64824b23591b7aa504e3321d5ec3f57de88f4d49882eaefbbf6820dab746e"
-    },
-    {
-      "module": "github.com/fxamacker/cbor/v2",
-      "version": "v2.9.0",
-      "h1": "h1:NpKPmjDBgUfBms6tr6JZkTHtfFGcMKsw3eGcmD/sapM=",
-      "archive": "3c0a76b068a13b110edd2b0fa19530ba0f93471dcd7a768948d0b6a8e852c9e0.zip",
-      "sha256": "5b0ec6424bd522aeeeab30cbdcad6f40bf976a9a2ddf125ab27b97826140d97a"
-    },
-    {
-      "module": "github.com/gaissmai/bart",
-      "version": "v0.26.1",
-      "h1": "h1:+w4rnLGNlA2GDVn382Tfe3jOsK5vOr5n4KmigJ9lbTo=",
-      "archive": "a3a70fbe3cda4500ad65c3cdcde5a845db4b575e9a1f1e6e36c912aa0a8adaf2.zip",
-      "sha256": "7cead7fb3f4be36f3864efaf1344d72ca7ba03ab5a557338c80ca6d4bda59cca"
     },
     {
       "module": "github.com/ghodss/yaml",
@@ -214,10 +118,10 @@
     },
     {
       "module": "github.com/go-chi/chi/v5",
-      "version": "v5.2.5",
-      "h1": "h1:Eg4myHZBjyvJmAFjFvWgrqDTXFyOzjj7YIm3L3mu6Ug=",
-      "archive": "1a28e51cdbf9ac6a20633b7114ada036b78b369e29f10f74863258739ad2ef60.zip",
-      "sha256": "f78c1525f8b3af815bcf3406c0aba1f272eff96413ff51874677bf8a314fcad8"
+      "version": "v5.3.0",
+      "h1": "h1:halUjDxhshgXHMrao5bB8eNBXo/rnzwr8m5m36glehM=",
+      "archive": "b31d2c301c9f1ebaadb212edb4734c8d399f5dbf2041377af2fb923018b5173c.zip",
+      "sha256": "d7e7d7f765a93066c27b3df35494588dbf322587439b75056d88a32a0b3983ec"
     },
     {
       "module": "github.com/go-chi/render",
@@ -227,25 +131,11 @@
       "sha256": "6d0bfe49b2b06e125acd7b348aba5eb255891018b3cd7ff86b62599c33922be7"
     },
     {
-      "module": "github.com/go-jose/go-jose/v4",
-      "version": "v4.1.3",
-      "h1": "h1:CVLmWDhDVRa6Mi/IgCgaopNosCaHz7zrMeF9MlZRkrs=",
-      "archive": "2b4543dfed830db1fa024b8012835731c0e98bcab643f19b473c18641ce42bfd.zip",
-      "sha256": "ec019b110f6cdc3f55f067f52573be4474d5051b9b7c7fc11eb846b13c56beb4"
-    },
-    {
       "module": "github.com/go-ole/go-ole",
       "version": "v1.3.0",
       "h1": "h1:Dt6ye7+vXGIKZ7Xtk4s6/xVdGDQynvom7xCFEdWr6uE=",
       "archive": "4dbe05cbdb75cb346aadadafebf86e8f06241ab154b3c56bff4d632a5a236ff3.zip",
       "sha256": "bbf5b3bfa227a5daa06eb16ecdecccc0b20e08749bf103afb523fd72764e727a"
-    },
-    {
-      "module": "github.com/go4org/hashtriemap",
-      "version": "v0.0.0-20251130024219-545ba229f689",
-      "h1": "h1:0psnKZ+N2IP43/SZC8SKx6OpFJwLmQb9m9QyV9BC2f8=",
-      "archive": "656574a870bc0c1cea823e688ceee467246d59bec257d9fd344c9c9064916911.zip",
-      "sha256": "700297f21d2b96537dc99217716d2ae148c5e82a01cd5f4c608e69526e6b9f1f"
     },
     {
       "module": "github.com/gobwas/httphead",
@@ -269,25 +159,11 @@
       "sha256": "1f3a1af9f73c5934482bccfeb3bca76779d0ea6668e1f21d7e8771052c6c8ada"
     },
     {
-      "module": "github.com/golang/groupcache",
-      "version": "v0.0.0-20241129210726-2c02b8208cf8",
-      "h1": "h1:f+oWsMOmNPc8JmEHVZIycC7hBoQxHH9pNKQORJNozsQ=",
-      "archive": "5ec6dd3c226939a07313c73b8bd0a8600a7acf82e1793c74f509b9b0f163d26b.zip",
-      "sha256": "163367355442a630b12b0b452892cd98e99fcfdf7e40b68d358be73479cc1c23"
-    },
-    {
       "module": "github.com/google/btree",
       "version": "v1.1.3",
       "h1": "h1:CVpQJjYgC4VbzxeGVHfvZrv1ctoYCAI8vbl07Fcxlyg=",
       "archive": "e4abff79393a81b9248d855a69d00fa4c7c9c2bc8dee57d8fb6dd450156c96f6.zip",
       "sha256": "11b736bc8252b52fecdf346d3707ccf3a2b6d458ba21b4f843616fc12eeb30b2"
-    },
-    {
-      "module": "github.com/google/certificate-transparency-go",
-      "version": "v1.3.2",
-      "h1": "h1:9ahSNZF2o7SYMaKaXhAumVEzXB2QaayzII9C8rv7v+A=",
-      "archive": "4e212a32c498364e107588c6b973b69d3eb70f09628cc65c9728b02af1ce2fdd.zip",
-      "sha256": "3ed01f6ab05444275466dd46a6c2ce7593c58ffa8c0563528dbc2499e6c1100a"
     },
     {
       "module": "github.com/google/gopacket",
@@ -318,13 +194,6 @@
       "sha256": "8ba2b4b2d37260d4aeabf85ac9c26841a287a264c02bc629f40f19d2bd977df4"
     },
     {
-      "module": "github.com/hdevalence/ed25519consensus",
-      "version": "v0.2.0",
-      "h1": "h1:37ICyZqdyj0lAZ8P4D1d1id3HqbbG1N3iBb1Tb4rdcU=",
-      "archive": "37c5edaafc175ae11f487648b612a4b874b9f8ef93a6b5a2c97b591976576135.zip",
-      "sha256": "111cafade3ba9c7c3adf66b6a424386e30829c46c60b80dabe288e1837d30e33"
-    },
-    {
       "module": "github.com/huin/goupnp",
       "version": "v1.3.0",
       "h1": "h1:UvLUlWDNpoUdYzb2TCn+MuTWtcjXKSza2n6CBdQ0xXc=",
@@ -344,13 +213,6 @@
       "h1": "h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=",
       "archive": "ed398141bf73abe6cad35fbfe26e4d696e95d5eef9ed5cb793b63349de125dc3.zip",
       "sha256": "526674de624d7db108cfe7653ef110ccdfd97bc85026254224815567928ed243"
-    },
-    {
-      "module": "github.com/insomniacslk/dhcp",
-      "version": "v0.0.0-20260220084031-5adc3eb26f91",
-      "h1": "h1:u9i04mGE3iliBh0EFuWaKsmcwrLacqGmq1G3XoaM7gY=",
-      "archive": "095c74decc5bb1c3200d19d60ae6e22e84b027bfb49abe440f4d5053e76744d3.zip",
-      "sha256": "911962b5821178a49b95922452f66bae6f350ad1c4da84475ea3cd0ad2bba7e9"
     },
     {
       "module": "github.com/jackpal/go-nat-pmp",
@@ -389,10 +251,10 @@
     },
     {
       "module": "github.com/klauspost/cpuid/v2",
-      "version": "v2.4.0",
-      "h1": "h1:S6Hrbc7+ywsr0r+RLapfGBHfyefhCTwEh3A0tV913Dw=",
-      "archive": "024fc0249f22de59197ec631f53e7a050cc541e46bf2c1135dc3bac3bdef9324.zip",
-      "sha256": "4e0c1281558514efccc2cc3ab78d430426486fe9101d6dcc9a1b090e05c26c69"
+      "version": "v2.4.1",
+      "h1": "h1:I9KxadAkvo+QjtcEE2f2tyfEvmIla/T0m+14PrZNl0U=",
+      "archive": "ce20fcbc10c33cc865ef5506e8ee60b69bc0b0ef5be361d942ac9d6fb716f47b.zip",
+      "sha256": "e882fb8121e3daec9ecb51908b8c62642b458546df13195dbc41baf0df50eb64"
     },
     {
       "module": "github.com/koron/go-ssdp",
@@ -400,34 +262,6 @@
       "h1": "h1:1IDwrghSKYM7yLf7XCzbByg2sJ/JcNOZRXS2jczTwz0=",
       "archive": "3fd5a8ea83e3592e29be79c81b6650b77fa54cf944f7d43884cbed06586a28a4.zip",
       "sha256": "4a4c4a048c0ac4632d8e9f0be4fd64804a2cb872e660be4b79d83a29bc347ad4"
-    },
-    {
-      "module": "github.com/kr/fs",
-      "version": "v0.1.0",
-      "h1": "h1:Jskdu9ieNAYnjxsi0LbQp1ulIKZV1LAFgK1tWhpZgl8=",
-      "archive": "18fd7ce4bb101b413583559f8cfbf091e855f7580620b8fbab4a33dda31c172b.zip",
-      "sha256": "d376bd98e81aea34585fc3b04bab76363e9e87cde69383964e57e9779f2af81e"
-    },
-    {
-      "module": "github.com/libdns/acmedns",
-      "version": "v0.5.0",
-      "h1": "h1:5pRtmUj4Lb/QkNJSl1xgOGBUJTWW7RjpNaIhjpDXjPE=",
-      "archive": "354a3f95601d1ee8ae945ee4a8f0f5f2a4f33171372c3d9c2fa8a43308d0ad99.zip",
-      "sha256": "8313f998d0aa1e450c64d5987060228055d559a087b925164bebf686acd63d8c"
-    },
-    {
-      "module": "github.com/libdns/alidns",
-      "version": "v1.0.6",
-      "h1": "h1:/Ii428ty6WHFJmE24rZxq2taq++gh7rf9jhgLfp8PmM=",
-      "archive": "2e82927b5b4aa8581ab0776f9d23c25ed9d8f0e5c9a29c3ea1d390e3e636c397.zip",
-      "sha256": "d6fa4379b355786ba150ccac23da83f69592e169cd28e1f62554ce04392cb5a5"
-    },
-    {
-      "module": "github.com/libdns/cloudflare",
-      "version": "v0.2.2",
-      "h1": "h1:XWHv+C1dDcApqazlh08Q6pjytYLgR2a+Y3xrXFu0vsI=",
-      "archive": "ecd7031ccd276413fe5457f138de3f85cbc3aa4a78bec0b488f0f51a37c8d93e.zip",
-      "sha256": "eedcf4aa400cac994e2b8c4378f683c57199f40e41cb7e75f1a54eb45fdd9c98"
     },
     {
       "module": "github.com/libdns/libdns",
@@ -493,20 +327,6 @@
       "sha256": "bbed3c53b503db53002598615bf9bdb59918a6f9d72bd9151e0c52ab19e22a6f"
     },
     {
-      "module": "github.com/mitchellh/go-ps",
-      "version": "v1.0.0",
-      "h1": "h1:i6ampVEEF4wQFF+bkYfwYgY+F/uYJDktmvLPf7qIgjc=",
-      "archive": "df5583e96e9e09fee1766b184f76a2b5897175d89eb863c1f82cff35b4e44c69.zip",
-      "sha256": "f2f0400b1d5e136419daed275c27a930b0f5447ac12bb8acd3ddbe39547b2834"
-    },
-    {
-      "module": "github.com/openai/openai-go/v3",
-      "version": "v3.26.0",
-      "h1": "h1:bRt6H/ozMNt/dDkN4gobnLqaEGrRGBzmbVs0xxJEnQE=",
-      "archive": "bfbce87f6c3b0d7e149115ba9906ab8612fe66731e135fdc3f48c790a33df853.zip",
-      "sha256": "7ede21b06a6725e7e87414a3406ee3de508b715a247b9e8a63a0dd3db2cdee87"
-    },
-    {
       "module": "github.com/oschwald/maxminddb-golang",
       "version": "v1.13.1",
       "h1": "h1:G3wwjdN9JmIK2o/ermkHM+98oX5fS+k5MbwsmL4MRQE=",
@@ -519,13 +339,6 @@
       "h1": "h1:4yBQzkHv+7BHq2PQUZF3Mx0IYxG7LsP222s7Agd3ve8=",
       "archive": "26cd11d8f7dd9769ec238b7ca9703ed317489646a651f8dde944fffd4072cee2.zip",
       "sha256": "de3dcda660cc800cd86d03273a25956d67f416e8fcbe4d2001a2cb4a01e6ac60"
-    },
-    {
-      "module": "github.com/pierrec/lz4/v4",
-      "version": "v4.1.26",
-      "h1": "h1:GrpZw1gZttORinvzBdXPUXATeqlJjqUG/D87TKMnhjY=",
-      "archive": "8207abb77469a21403ef3b1abfc919fbdc0b155796a86afd659bfd7d7cb966de.zip",
-      "sha256": "cf67f99d8d4ed84775a51de3167b70907e5436dd2f501f37deffac46c0a51ae1"
     },
     {
       "module": "github.com/pion/dtls/v3",
@@ -550,13 +363,6 @@
     },
     {
       "module": "github.com/pion/transport/v4",
-      "version": "v4.0.2",
-      "h1": "h1:ifYlPqNwsy6aKQ9y8yzxXlHae5431ZrH2avkD/Rn6Tk=",
-      "archive": "636f637387bfb3ae7244d93b1213cd82ff10a56823fdc5748ec5394bfee66927.zip",
-      "sha256": "5c44f0562179e9e2761f7d3c2d68ac030fdbd3be565771e536e88444666d73b5"
-    },
-    {
-      "module": "github.com/pion/transport/v4",
       "version": "v4.1.0",
       "h1": "h1:8S+nF2reM2cJuqC6g78OVy2BBgmbdns+acx3jA97BvQ=",
       "archive": "4896d6dae59581175cd664d01f5c32f51b479700887acc33761beb411971e191.zip",
@@ -564,24 +370,10 @@
     },
     {
       "module": "github.com/pires/go-proxyproto",
-      "version": "v0.8.1",
-      "h1": "h1:9KEixbdJfhrbtjpz/ZwCdWDD2Xem0NZ38qMYaASJgp0=",
-      "archive": "24cc0bf2c7896d5e2b6dad6555868ed77486088f643c611efdeb37e4e2461881.zip",
-      "sha256": "a979a2f26160bfcb6f3829dd546d5f53c8b1879e7ad84466e359cf3f6237aa4c"
-    },
-    {
-      "module": "github.com/pires/go-proxyproto",
       "version": "v0.15.0",
       "h1": "h1:dTshmNbFm/D+0+sbrxUuddPOZ5Y0B7c5NhtsBkm6LqI=",
       "archive": "20a35fd64abb9f801f3ae84e4870d47da0b1c603a3c31667c73aceca65c0b584.zip",
       "sha256": "2237420b2bf86755a4ef462d7b9eff2d66f87756dc8d247bb7a47e0c8702094a"
-    },
-    {
-      "module": "github.com/pkg/sftp",
-      "version": "v1.13.10",
-      "h1": "h1:+5FbKNTe5Z9aspU88DPIKJ9z2KZoaGCu6Sr6kKR/5mU=",
-      "archive": "581dbb1cadd0213ed5c128039157a703220577b8fba948632618bcfe820d1342.zip",
-      "sha256": "390185d4b33cb550ebd27381b4aa80f245a9bda1ccb4dac65685bf94eeb81470"
     },
     {
       "module": "github.com/quic-go/qpack",
@@ -619,39 +411,11 @@
       "sha256": "5f4124cdeddbc6b55d65899df6b47782a59afe0e8ca54800286cc2a45f61703f"
     },
     {
-      "module": "github.com/sagernet/cronet-go",
-      "version": "v0.0.0-20260912104727-0d28acc44093",
-      "h1": "h1:CsvsLVIli53L6nzgEpyRjjWnRRhTds4D3eh5sEnF5Sw=",
-      "archive": "1152ee0bcdc7ddbf3f1228fd8294d630624b5812736c27ec53ed970b0ced6ea8.zip",
-      "sha256": "f7e101df96b4777c452546bcdd958952f0bc6b6a9ea16917d01b0113a676dfad"
-    },
-    {
-      "module": "github.com/sagernet/cronet-go/all",
-      "version": "v0.0.0-20260912104727-0d28acc44093",
-      "h1": "h1:1lRUqrLcBz0Q0r/xvyiXS5hZwH5pOq6Lwb4dqbSqJfs=",
-      "archive": "3915c35175b3ed3384c1d12c12c0bb87ae6559f3faeb2ff0dec18d42ea298deb.zip",
-      "sha256": "b53adbda07244e36d5e9a302d28a322fc652045f7fb537eb243e87730e688f24"
-    },
-    {
-      "module": "github.com/sagernet/cronet-go/lib/windows_amd64",
-      "version": "v0.0.0-20260912104006-c10c03c318db",
-      "h1": "h1:fKs7KaruaDhStaiYpaqMQXDCmAc4YmNLI/pBkPYvwH8=",
-      "archive": "f2a01f7d5db19ad0005bfabe7acf420a14395d90a884a9fb388f6b653489f364.zip",
-      "sha256": "db2e4ea2553df4f82adffeb7772ae4edc0bdbc7c1e656c2fc7f64ca20b58a248"
-    },
-    {
       "module": "github.com/sagernet/fswatch",
       "version": "v0.1.2",
       "h1": "h1:/TT7k4mkce1qFPxamLO842WjqBgbTBiXP2mlUjp9PFk=",
       "archive": "15a9b9320d2676bd1b367568bc9976bba66099c1304d92393a57deed8b419783.zip",
       "sha256": "657ff3190c4c9583c855c0c1d9cd73ea56eb3933b29b2ce1a549cab1af065aac"
-    },
-    {
-      "module": "github.com/sagernet/gliderssh",
-      "version": "v0.3.4-0.20260531100337-2194faca5648",
-      "h1": "h1:IWVjKBARzVjdmH0VUaeTBOBli1qkwKmTG4XfbkpSS20=",
-      "archive": "56bb875913e517d04256bc39237329658113eae8060f0538b3edb8d82928f22d.zip",
-      "sha256": "2ff787549fa55459def9f0cc2dd66b429cd79c36dc0c21c155ddbf7dd1f8dbca"
     },
     {
       "module": "github.com/sagernet/gvisor",
@@ -662,24 +426,17 @@
     },
     {
       "module": "github.com/sagernet/quic-go",
-      "version": "v0.61.0-sing-box-mod.9",
-      "h1": "h1:Lojx77uC63TxZO38Z1OSo6aOoBSXY+ueH0/IKKeTZuI=",
-      "archive": "f95f88227eadc3277164c97bd1aab8ab81492fdc5d5ad3c589c9bc5385d48b48.zip",
-      "sha256": "0523191a90bd11b280f0ebd02a55a58f3013a0189d39d773506716c98733a31e"
+      "version": "v0.61.0-sing-box-mod.12",
+      "h1": "h1:9/USaaiONHFeqBePb+4C/A0MBM2dmxED49UGBpHLHS4=",
+      "archive": "b75c3cd977ee888c8d5206fe03d765f745e0902f5992c0e99afd20ede570c2af.zip",
+      "sha256": "8629241e0de0e90c52eb51835925eb41fe525e933022ba28bc7b54ec9e29109b"
     },
     {
       "module": "github.com/sagernet/sing",
-      "version": "v0.9.7-0.20260929150544-0ad23b637bd4",
-      "h1": "h1:d4WT3KO4zhp9qzPHUZCKqCP+ZmP1GXBsAmReqlnE4zA=",
-      "archive": "5d40a498636ba39dd0abb692a073c4aa1246924606b3774a2bfdc1c28d44b26c.zip",
-      "sha256": "f644691dc57dc01fdc1d6b8e28fcacc9dae2648fe8d8a7d8d846105256579da4"
-    },
-    {
-      "module": "github.com/sagernet/sing-cloudflared",
-      "version": "v0.1.4-0.20261002084126-c1255ae368f2",
-      "h1": "h1:+AfbAXGEV8tezIYHeShzwHm7IMUE5kYGVFLo0ly7W24=",
-      "archive": "daaaefb0df916e926133d1e67f4043786f4883a6d4d6241a01d06157b9be76aa.zip",
-      "sha256": "9bc347c1ef628c2915263c9e711ddfb7789401f90e73162aea7697016b502c84"
+      "version": "v0.9.7-0.20261023115459-5dc452e537bf",
+      "h1": "h1:qWlGERjsI0F1I9e1W5Z/ARk/9KEN7xIas6e2QHEypUM=",
+      "archive": "662fb0208d8133c467f7b15492172827fc6651905cde618f8ceda3f46284af74.zip",
+      "sha256": "1aeff50174f020b86dfc3444a365bb2f5fcef5f0338c02764ada5f64a7afa4dd"
     },
     {
       "module": "github.com/sagernet/sing-mux",
@@ -689,25 +446,11 @@
       "sha256": "38c6e7dc80d93082da3cdd62c24b5e2c5e94f9fdb8e73a35353286efab797db7"
     },
     {
-      "module": "github.com/sagernet/sing-openconnect",
-      "version": "v0.1.1-0.20260929151225-cbd68c45de58",
-      "h1": "h1:WOPVlvbw3zGl4IzpRcfqB901blgDKuiplVrpptf/TOY=",
-      "archive": "05e9d8428dcb4a68f0fbcbd12518a69595c59e70e30df14fc671efd055fd2537.zip",
-      "sha256": "9111ca5f02f11f99a22f1fc7e8b97b45b7b8af7a233dd3d380948d8344e13840"
-    },
-    {
-      "module": "github.com/sagernet/sing-openvpn",
-      "version": "v0.1.1-0.20260929151220-7c3045dbddce",
-      "h1": "h1:uB2DkIJLZ9waR/ZLBO9IF/ws5BWg0FEegLi90ibhX5I=",
-      "archive": "66657621e70ca6fa598c2a5f7cd545a5ceef15dfa94aebec65069f27283fc0a1.zip",
-      "sha256": "1aef218f95a425b011153a1e8355714c641617b78632df3b3cd7d83d601a9bb8"
-    },
-    {
       "module": "github.com/sagernet/sing-quic",
-      "version": "v0.7.2-0.20261002084117-75c3ac4fa12b",
-      "h1": "h1:2Jx/URJAPt32MEbLmAR5nzH87tO6NQZLRfRFvFqBWuk=",
-      "archive": "047b5fe57bb31d8ceb4bc7e6bea7962d8aa422e388c3e38a453837a712d1bc5d.zip",
-      "sha256": "255b652362a34402e16579a3dc5d1d8dbae94d9108336e839b50c13aa6c3bf99"
+      "version": "v0.7.2-0.20261020082049-7e0a5869a5f4",
+      "h1": "h1:QuhAb8QW0pKYmSvfj/nK91libunBwVJiWb852yidlxI=",
+      "archive": "1eb82d2814586f9331059e5ffa9d5e353004fd26734d075f66f371f4103d8a45.zip",
+      "sha256": "2388d5c5cd8e5768487da19642a848550987efd2398fba6bc55be363767829db"
     },
     {
       "module": "github.com/sagernet/sing-shadowsocks",
@@ -739,24 +482,17 @@
     },
     {
       "module": "github.com/sagernet/sing-tun",
-      "version": "v0.9.7-0.20261009020158-bca4bf029237",
-      "h1": "h1:B9tUcRf1FAatPyzN8sKEvIHMvKNkFMBZikeIOL4gqtQ=",
-      "archive": "301ea27c82b09d24eaf359f6b015d7274f5852c90adca817b63ba7effd8c0b0d.zip",
-      "sha256": "4f678effd40bc6da3916641cdfaa023b3aeef26d1cb21c0df0cf0ee69826ec93"
-    },
-    {
-      "module": "github.com/sagernet/sing-usbip",
-      "version": "v0.0.0-20260817040617-28bd42667eca",
-      "h1": "h1:5wA+IE0Fq1CGVLOgSpm0gKKZ03HzugcJ2JyhmDqeX6A=",
-      "archive": "77e80e4930829f80a6650b297d280e7cd18aafc35b696fa79675e712cc8f28a7.zip",
-      "sha256": "c3cb3fe1d9999fda98a232f813425d7376541f498b1c98e0fd2fe717b19aa7da"
+      "version": "v0.9.7-0.20261023115432-040db71fcd33",
+      "h1": "h1:0+op+qbxh/M/JsqIG8tkEwPM+5pZtBeicf1ciMxp4OI=",
+      "archive": "9718a43e1ac29edc548ff9fbdcb80ba960f4e496869f7edc269f663f7f48f65f.zip",
+      "sha256": "f100d921073f3c8068b45d374517084b9cb3b4915c5304db2b7da971e11384ed"
     },
     {
       "module": "github.com/sagernet/sing-vmess",
-      "version": "v0.2.9-0.20260929152519-9b95ab8c9478",
-      "h1": "h1:q2eQn4nq8oWGxRm9zXesXSlPr9GEgPrOGzf4iPtzG9A=",
-      "archive": "f965295609b6e307149ac8054ea0e9deadd8b82fbd723ff38d164b68934d6f6f.zip",
-      "sha256": "f315ae8ee5af110d0b9f45de542be3d9bef4cb9f43a368e1adfc69a9ce09cdc5"
+      "version": "v0.2.9-0.20261019223527-a0c58542bd9d",
+      "h1": "h1:K93710Sq6/TFl3GVs+NclQ3I+KPXFLluSsUFC0Sm0N8=",
+      "archive": "65d794293953b802802e7dfca4fcb3a980e3ea92494c13cfbad8749deed6f769.zip",
+      "sha256": "b1ed0cbabfcbf275d7aa1430d157913bc0b4b720e845ffc02a1f18ebf51b0924"
     },
     {
       "module": "github.com/sagernet/smux",
@@ -766,32 +502,11 @@
       "sha256": "43df443a40c24b561fb7509a8d0074443368f860e73cec2046e80654d1aec06f"
     },
     {
-      "module": "github.com/sagernet/tailscale",
-      "version": "v1.102.1-sing-box-1.14-mod.5",
-      "h1": "h1:mGLWVgj2Pl2NlgE1+sEUIDIMB42JdWEPwYmxTnVWg44=",
-      "archive": "8806c4f1378d88cac7bf9091a2288e35df821aa3c458ef952941386599b17916.zip",
-      "sha256": "91eaa9e0a3af966572b5e553df818dea80fd5fbab3914c572af563c7303a5c33"
-    },
-    {
-      "module": "github.com/sagernet/wireguard-go",
-      "version": "v0.0.8-0.20260929150556-6731c7387c81",
-      "h1": "h1:VsrjoaljEz7jQ1LWbrNyf/scQSQIkVVp7v4nSDrPJ+I=",
-      "archive": "6279c35f2696fe4cd0e18e2bf558f748a75beaf69270a2e211df8c4fbd1703e5.zip",
-      "sha256": "57095db3f96c37f070d661a0afa6dffb9e923883cdb2b87ddb38595655e3f083"
-    },
-    {
       "module": "github.com/sagernet/ws",
       "version": "v0.0.0-20231204124109-acfe8907c854",
       "h1": "h1:6uUiZcDRnZSAegryaUGwPC/Fj13JSHwiTftrXhMmYOc=",
       "archive": "8836654fe13f577558e447d45b01f188e047f9771507797f3529b01b0ba7cd9a.zip",
       "sha256": "b68f73fdda63af79356083de31029bafee27492c5f0013a23fb563e37fe60b66"
-    },
-    {
-      "module": "github.com/smallstep/pkcs7",
-      "version": "v0.1.1",
-      "h1": "h1:x+rPdt2W088V9Vkjho4KtoggyktZJlMduZAtRHm68LU=",
-      "archive": "abb7a6a55cdf4f8bbea7cefc028e73022e3210c06eee390cda3231f9260f5f6f.zip",
-      "sha256": "bc9cd16c7d8306edc4a7b0ca0d841236e6f9e7481ec6ccc5c460a86468cd7b42"
     },
     {
       "module": "github.com/spf13/cobra",
@@ -808,76 +523,6 @@
       "sha256": "a246b8c9d3daa87d6c634cdfee1bdf7fa53d5817eeef4fa0c6da43edd12de4ca"
     },
     {
-      "module": "github.com/tailscale/certstore",
-      "version": "v0.1.1-0.20260409135935-3638fb84b77d",
-      "h1": "h1:JcGKBZAL7ePLwOhUdN8qGQZlP5GueEiIZwY7R62pejE=",
-      "archive": "dfd77f88ba273216f5d743239bb7380e4b35e11d41ca0b53f624a1e490cbde47.zip",
-      "sha256": "28121a4e30fe7a4d4b566366d6923cdc69afc7f0b3485e94400581d0e1cf4826"
-    },
-    {
-      "module": "github.com/tailscale/go-winio",
-      "version": "v0.0.0-20231025203758-c4f33415bf55",
-      "h1": "h1:Gzfnfk2TWrk8Jj4P4c1a3CtQyMaTVCznlkLZI++hok4=",
-      "archive": "55b022ee36c363129711219c292752697af9c305603d4e02391d7e774a890e56.zip",
-      "sha256": "0433037071e067ec3cc0600db97a31b2296b852ade8688b4aad990f7ecbd1a37"
-    },
-    {
-      "module": "github.com/tailscale/hujson",
-      "version": "v0.0.0-20260302212456-ecc657c15afd",
-      "h1": "h1:Rf9uhF1+VJ7ZHqxrG8pJ6YacmHvVCmByDmGbAWCc/gA=",
-      "archive": "5ecd05c6f3c84ec3191b4608acaedab63b4fa9c13afa5772385ed2bac611d492.zip",
-      "sha256": "9f9c320dd90c86880b26107b931d6c056e99642d4c4e50fafcdf7de8ea0989e6"
-    },
-    {
-      "module": "github.com/tailscale/web-client-prebuilt",
-      "version": "v0.0.0-20250124233751-d4cd19a26976",
-      "h1": "h1:UBPHPtv8+nEAy2PD8RyAhOYvau1ek0HDJqLS/Pysi14=",
-      "archive": "07820b1bb5711fcb8018525372a241c0339a22f2a0217c22ec6cbbf2a1f2f69b.zip",
-      "sha256": "1d02f0804bb41e0743b7d889b8e2dbd8466a89793f03997f4c1fd10f9e8974c3"
-    },
-    {
-      "module": "github.com/tidwall/gjson",
-      "version": "v1.18.0",
-      "h1": "h1:FIDeeyB800efLX89e5a8Y0BNH+LOngJyGrIWxG2FKQY=",
-      "archive": "fc05932e9130b5c208e4a5cf74ef3e22b0688a9838658deea55f3f843c242d2f.zip",
-      "sha256": "ab8092b3e42f83f003466757c63ec819a45d1e83caa63c6c131cebbe760f1df2"
-    },
-    {
-      "module": "github.com/tidwall/match",
-      "version": "v1.1.1",
-      "h1": "h1:+Ho715JplO36QYgwN9PGYNhgZvoUSc9X2c80KVTi+GA=",
-      "archive": "8998e411417e01032a7d669c6d7693615d473259d3fa95594f1e53006f59d00e.zip",
-      "sha256": "2ba41f7f27330d49e0e432cbf96bf90720a33e4a97be58fe53f63a7e66f04d37"
-    },
-    {
-      "module": "github.com/tidwall/pretty",
-      "version": "v1.2.1",
-      "h1": "h1:qjsOFOWWQl+N3RsoF5/ssm1pHmJJwhjlSbZ51I6wMl4=",
-      "archive": "315850ec22c247687a371c50c73a92e403c123cc45d12c9b4d8d81e8c4ddb716.zip",
-      "sha256": "9327579bf9e610de753eeb7c35c8cf1e3f56e6e5623cbf65e47bc8076023d1ab"
-    },
-    {
-      "module": "github.com/tidwall/sjson",
-      "version": "v1.2.5",
-      "h1": "h1:kLy8mja+1c9jlljvWTlSazM7cKDRfJuR/bOJhcY5NcY=",
-      "archive": "eea9578c25ec7c2c86a123cdbdd5d179c6161ca7c7d13b00c7afd11dcd7104ab.zip",
-      "sha256": "fc40fda87c7de55362f6386e069d674772f25c9d76411ee823acb9ac78b20565"
-    },
-    {
-      "module": "github.com/tjfoc/gmsm",
-      "version": "v1.4.1",
-      "h1": "h1:aMe1GlZb+0bLjn+cKTPEvvn9oUEBlJitaZiiBwsbgho=",
-      "archive": "90d1d0fedc40d3e39ad389d7787e4b40c3040193472983df5f8d2fecb2621858.zip",
-      "sha256": "ba1f3ccf698a62bcb28c594d995f21587021ad759e777aa64367c8a7332cc10b"
-    },
-    {
-      "module": "github.com/u-root/uio",
-      "version": "v0.0.0-20240224005618-d2acac8f3701",
-      "h1": "h1:pyC9PaHYZFgEKFdlp3G8RaCKgVpHZnecvArXvPXcFkM=",
-      "archive": "e6c55f04a46cc4d68363c82fb81f94af4ac6270d0c7eff5cf5b1cc32f7159bec.zip",
-      "sha256": "f6e8f912e968744999d508c3df54f0308aaf337052a8d0bd3edd72583adfd9cd"
-    },
-    {
       "module": "github.com/vishvananda/netns",
       "version": "v0.0.5",
       "h1": "h1:DfiHV+j8bA32MFM7bfEunvT8IAqQ/NzSJHtcmW5zdEY=",
@@ -892,25 +537,11 @@
       "sha256": "5d6e471ccaa553e0cac56e17f8e44499f99ca1a1e37d80d5fdb3c64d4d50d02a"
     },
     {
-      "module": "github.com/x448/float16",
-      "version": "v0.8.4",
-      "h1": "h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=",
-      "archive": "bf5b0184ba5ef37b5596883e1f83004ad076b9ad926066cbbcbf0c871699beb8.zip",
-      "sha256": "73b24a41037ea999ab66851e3798a0973dbb1f214925915b01f0820f7b2f1500"
-    },
-    {
       "module": "github.com/xtls/reality",
       "version": "v0.0.0-20261014101318-83f621788ca8",
       "h1": "h1:RjLnVvlzK4q6zWaSBPNRGsrgx2fbJDeUWffjw574uzs=",
       "archive": "d60751bca270a990657c8d9a5c116b457ecbe03b752b8988c8037f0018ef5f49.zip",
       "sha256": "f38aa2ac9cd2f9b57bc4838aec2870505583f00bbcf1a7ce825c1ad809ce1a18"
-    },
-    {
-      "module": "github.com/youmark/pkcs8",
-      "version": "v0.0.0-20240726163527-a2c0da244d78",
-      "h1": "h1:ilQV1hzziu+LLM3zUTJ0trRztfwgjqKnBWNtSRkbmwM=",
-      "archive": "f60e08c41910af5c6c0d015e437f2533737455dde0e0a7a412437b2762efefc1.zip",
-      "sha256": "cdcf5e96850f9f60bc96ab512e4bd06ee19dd2dbe855260c3589c6c79a1bcfb5"
     },
     {
       "module": "github.com/yuin/gopher-lua",
@@ -948,25 +579,11 @@
       "sha256": "1a71ce6ea8df554dc002af9d18d6f1083a9b2782ee0c971b929314e86e8aebd3"
     },
     {
-      "module": "go4.org/mem",
-      "version": "v0.0.0-20240501181205-ae6ca9944745",
-      "h1": "h1:Tl++JLUCe4sxGu8cTpDzRLd3tN7US4hOxG5YpKCzkek=",
-      "archive": "92e576d264dad485fb7ed52f3f5da462dd7b05e367edb5d1515c12c7bb50e820.zip",
-      "sha256": "9b5037a57122457fdc5c2c0a31e3996b44cf9dfcdee5c53ed72adfd88d077795"
-    },
-    {
       "module": "go4.org/netipx",
       "version": "v0.0.0-20231129151722-fdeea329fbba",
       "h1": "h1:0b9z3AuHCjxk0x/opv64kcgZLBseWJUpBw5I82+2U4M=",
       "archive": "f066bcb2a6a3f58e4cee8abc50259348fb3f4e497a4c90025803072ab76e955b.zip",
       "sha256": "e15f57de368c92b826010181906f26112ba3a0d7fde7d94c8a8c60c525dc4044"
-    },
-    {
-      "module": "golang.org/x/crypto",
-      "version": "v0.54.0",
-      "h1": "h1:YLIA59K4fiNzHzjnZt2tUJQjQtUWfWbeHBqKtk3eScw=",
-      "archive": "a02127aa55ad93946e6194c25b3adfaa237ce1fd8efb766c767ec3caa322a235.zip",
-      "sha256": "ecf4030c1c6b55b897826b95f01d7416cf2785b4675b0f9ac218ddf754a03abb"
     },
     {
       "module": "golang.org/x/crypto",
@@ -977,10 +594,10 @@
     },
     {
       "module": "golang.org/x/crypto/x509roots/fallback",
-      "version": "v0.0.0-20261005185213-c3db4df58582",
-      "h1": "h1:wjDBrGbfLuifgrVLFEWUBJYAfh5Q1wkMc5t0FY0tCbs=",
-      "archive": "e81d34764807767876d17f630859d600df481d148630fde5c8c307829ad3738c.zip",
-      "sha256": "690cbb797cc52caaf3cd2045510ada9b2443fc9d8ac3ca05abfc971136f94301"
+      "version": "v0.0.0-20261020153306-9f2b28d4331a",
+      "h1": "h1:V5oicZXS0oqZx30gY/apgSVD7YvNBfrIOdcMnlelJY4=",
+      "archive": "167b40a24f3b0a9259c9b0eb4bab2c32a6745a7227b81e709bd15d11677dc4c3.zip",
+      "sha256": "23a2f7fd5e693c276e8920ea60d7ed2c977d5f66dd933e6f0d021812e1964ed7"
     },
     {
       "module": "golang.org/x/exp",
@@ -998,17 +615,17 @@
     },
     {
       "module": "golang.org/x/mod",
-      "version": "v0.37.0",
-      "h1": "h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=",
-      "archive": "84892de4fc2cf60a1130fa9f8e8bfde0f979daba6bd379ff0d9eb0491dda6f61.zip",
-      "sha256": "91e8e4e9b74a8706dae808b66538d4ab22befd00c11f34134eb97ff572d52e85"
+      "version": "v0.41.0",
+      "h1": "h1:qJmnOUb4YB+FsEuM3HcWucdZASCPGhsX6uljO6pog0c=",
+      "archive": "a7d228f7365b97d20dd7900707eeec5a8e307fd2d35c9e0bc3d8ff8ddf9a9bfa.zip",
+      "sha256": "201e678d0a35b18b246abe58d80017b75d60be21cbaf4cbb9e963b48872565a9"
     },
     {
       "module": "golang.org/x/net",
-      "version": "v0.57.0",
-      "h1": "h1:K5+3DljvIuDG9/Jv9rvyMywYNFCQ9RSUY6OOTTkT+tE=",
-      "archive": "249afe93c89fea2738a21be9ca9f3f72a8e8f86e38f869fa8182d3fbfbd8bea7.zip",
-      "sha256": "f8d652c629374b43846ef4f2efd419e8d1c81779eb728306d09f0de1cc1bab80"
+      "version": "v0.62.0",
+      "h1": "h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY=",
+      "archive": "90f4b461a2365224fd7704cf100f76d562e23f33902cc0eeea18fedac57cee0b.zip",
+      "sha256": "50e869800f4921e910eb6550369f937c7187d130a7f7f78a26ef9b589a7071a6"
     },
     {
       "module": "golang.org/x/net",
@@ -1016,20 +633,6 @@
       "h1": "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=",
       "archive": "0c902f72afbf52366fcc062b4583603d932bda29d0796273af7ba325785636aa.zip",
       "sha256": "f6843a98d608298e48a6ca287292c9a6fae066284050ce174d5ffb781c9b3dcf"
-    },
-    {
-      "module": "golang.org/x/oauth2",
-      "version": "v0.36.0",
-      "h1": "h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=",
-      "archive": "cd1e020970123f4df5ff7b6af3918e092268d7de30cf71cfe71e936636a9cfac.zip",
-      "sha256": "15bf65ff103e5dafc809d78cd037a1d1e88ccb8451824e851156002a13304504"
-    },
-    {
-      "module": "golang.org/x/sync",
-      "version": "v0.22.0",
-      "h1": "h1:SZjpbeLmrCk4xhRSZFNZW5gFUeCeFgjekvI/+gfScek=",
-      "archive": "af94cab6dfaad8454e0598f6aed4d620892be979cac8c34bda15bc4709d8055e.zip",
-      "sha256": "4bc67d258ce7867cfc1a43765c43d98b4c49b90c46dd0b86f896a5a4909fade0"
     },
     {
       "module": "golang.org/x/sync",
@@ -1040,13 +643,6 @@
     },
     {
       "module": "golang.org/x/sys",
-      "version": "v0.47.0",
-      "h1": "h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=",
-      "archive": "dc957412cc909276320f70037599d72891e1f71a764e36c332bace8e873c07d2.zip",
-      "sha256": "cdac013ddced0262926ec29ffcda645da39670e61c7e5b761e572b6b1809bb1b"
-    },
-    {
-      "module": "golang.org/x/sys",
       "version": "v0.49.0",
       "h1": "h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=",
       "archive": "1e7b1aaf85f9116b3cf987163aeaa64c0c26a202b5997b73d2fa26ed679465c6.zip",
@@ -1054,17 +650,10 @@
     },
     {
       "module": "golang.org/x/term",
-      "version": "v0.45.0",
-      "h1": "h1:NwWyBmoJCbfTHpxrWoZ9C6/VxOf7ic219I8xZZFdrf0=",
-      "archive": "6b13efd86cb2d64e3b141d445a3599b3150a065dffae3f5f9266bdceabc07dd2.zip",
-      "sha256": "b3a3af689728b43012ae1b21482571a35c033c545e98e021606bd4fcf1f79108"
-    },
-    {
-      "module": "golang.org/x/text",
-      "version": "v0.40.0",
-      "h1": "h1:Ub2Z6/xjgF1WrYQz2nuITOEegKFtiIy+rieRJ5lHZKs=",
-      "archive": "fc76a9419522a8142272483863b4566a4ad0ceeef797748a572cd1d784451f0a.zip",
-      "sha256": "07757384728d0f52dd85c1f3f163405e6396b2b0fb7eb7d6b610f2a711d69ee3"
+      "version": "v0.47.0",
+      "h1": "h1:cpyOwQkr2Nzxe2p6KnrTG7Ei2wtzjsuSjhpXXepZ/BM=",
+      "archive": "90b006a725b65490d0acc5b71ac0e0a890542f645c5ea3a52043652a4db46638.zip",
+      "sha256": "d990d5ab94dfa41ba980645b721bba7490064337a01bb03e6cacace70e8df0bf"
     },
     {
       "module": "golang.org/x/text",
@@ -1103,13 +692,6 @@
     },
     {
       "module": "golang.zx2c4.com/wireguard/windows",
-      "version": "v0.5.3",
-      "h1": "h1:On6j2Rpn3OEMXqBq00QEDC7bWSZrPIHKIus8eIuExIE=",
-      "archive": "7a157b2a476fd45220ca064fe18c706a3b490a32dbfa7ab35bc66249bedc7c94.zip",
-      "sha256": "e2d55170e777024f0847c625a9d90520e90e31128fa8525c67bc5daacaeb55ed"
-    },
-    {
-      "module": "golang.zx2c4.com/wireguard/windows",
       "version": "v1.1.1",
       "h1": "h1:8/H97U1v1PNDNcBsMZgU3KFuND9MQdTsU2NOwmCXArE=",
       "archive": "db849f7ec5132e5a729e2678aecc259a7e7c5b9bd93a6c217da332f6f072d254.zip",
@@ -1117,10 +699,10 @@
     },
     {
       "module": "google.golang.org/genproto/googleapis/rpc",
-      "version": "v0.0.0-20251202230838-ff82c1b0f217",
-      "h1": "h1:gRkg/vSppuSQoDjxyiGfN4Upv/h/DQmIR10ZU8dh4Ww=",
-      "archive": "0a8b4fd9700485399319ad4abb8d1d1d0d1b3d5180f1d6eb618e632ac2d850ae.zip",
-      "sha256": "29f02d8e0e2f6e9cc0ee24abc29989e5e44d168eec35c12046efee3fea201aef"
+      "version": "v0.0.0-20260526163538-3dc84a4a5aaa",
+      "h1": "h1:mZHHdPZl0dbGHCflZgAq/Q468DWVFcU2whhB2KAo8fk=",
+      "archive": "b698af6e15d000ba670106f10e9717979730585d30855e9de8a12cb5a0007e83.zip",
+      "sha256": "55f932b106d6f4f8cb76ae869e44f5d6d8400965fa441ee3532d09c96d64aac1"
     },
     {
       "module": "google.golang.org/genproto/googleapis/rpc",
@@ -1131,10 +713,10 @@
     },
     {
       "module": "google.golang.org/grpc",
-      "version": "v1.79.1",
-      "h1": "h1:zGhSi45ODB9/p3VAawt9a+O/MULLl9dpizzNNpq7flY=",
-      "archive": "288d4f2b684dab0ec614780c1ea227621f504110c0bada31ab673e1647bf2000.zip",
-      "sha256": "df09b5b9369cb149e9219224e9622736bd67c435380e9f09cb0723660fd58d44"
+      "version": "v1.83.2",
+      "h1": "h1:EManeRomTObA0BU7I8vXgg/78uE5MJ9M8B39EX2WscU=",
+      "archive": "e991380da57b31140cb3002e461802f8dcf29b13806f62d5b92374f3b14e4bc6.zip",
+      "sha256": "84292905a694e17862d15abc123a6f7f7efa9e1e3a77e80120982ff95b2605ea"
     },
     {
       "module": "google.golang.org/grpc",
@@ -1184,13 +766,6 @@
       "h1": "h1:I3Smz7gso8w4/TunLKec6K2fn+kyKtDxr/xcQEN84Wg=",
       "archive": "3026168c763cf0f70ccd778a5e871711575ce9c43b8c65a95754bcd13265407f.zip",
       "sha256": "b3a3338a6e830b79fb2ff1d263f07f3fe0adcfbafd04b65e5fe14415613e2e4d"
-    },
-    {
-      "module": "zombiezen.com/go/capnproto2",
-      "version": "v2.18.2+incompatible",
-      "h1": "h1:v3BD1zbruvffn7zjJUU5Pn8nZAB11bhZSQC4W+YnnKo=",
-      "archive": "d0851dcd777c1c64aec0febd3d7dc5745b3ce54557bcbbb8914022d17b075d75.zip",
-      "sha256": "b0109f13110df4d243b5d1cc49b875bcc07c4c9713eeecc42e16a2b5022f4082"
     }
   ]
 }

@@ -1,22 +1,36 @@
 {
-  "version": "1.0.5",
+  "version": "1.0.6",
   "status": "release",
   "release_channel": "stable",
   "github_prerelease": false,
-  "validation_date": "2026-10-28",
+  "validation_date": "2026-10-29",
   "result": "passed_with_environment_limits",
   "core_tests": {
-    "passed": 126,
+    "passed": 137,
     "failed": 0,
     "blocked_by_environment": [
       "icmp::tests::owned_ipv4_and_ipv6_echo",
       "runtime::tests::prefer_ipv4_preserves_ipv6_only_names_without_using_external_dns"
     ],
-    "total": 128
+    "total": 139
+  },
+  "controller_tests": {
+    "passed": 5,
+    "failed": 0
   },
   "service_file_tests": {
     "passed": 8,
     "failed": 0
+  },
+  "transport_integration": {
+    "passed": 2,
+    "failed": 0,
+    "checks": [
+      "TLS SNI and peer certificate preserved through CONNECT and SOCKS",
+      "8 MiB upload and download through patched sing-box to Xray gRPC/TLS"
+    ],
+    "own_loopback_targets_only": true,
+    "internet_speed_benchmark": false
   },
   "service_self_test": {
     "protected_directory_lookup": true,
@@ -24,17 +38,18 @@
     "security_descriptor": true,
     "sid_validation": true,
     "system_changes": false,
-    "version": "1.0.5"
+    "version": "1.0.6"
   },
   "qml_interactions": {
     "passed": 15,
     "failed": 0
   },
   "controller_integration": {
-    "passed_groups": 14,
+    "passed_groups": 15,
     "checks": [
       "offline engines verified; no connection on startup",
       "unknown and malformed requests rejected; channel remains usable",
+      "isolated sessions reject service maintenance and client installation before argument handling",
       "profile import, selection, encrypted persistence, settings validation",
       "DNS persists, EXE rules migrate and deduplicate, routing has its own JSON file",
       "62 settings form variants persist; invalid saves are atomic; isolated tests preserve Windows autorun",
@@ -47,7 +62,8 @@
       "audit reads work and path traversal is rejected",
       "last per-server ping survives controller restart",
       "settings and profile persist after controller restart"
-    ]
+    ],
+    "system_network_changed": false
   },
   "layout": {
     "result": "passed",
@@ -66,10 +82,26 @@
     "install": true,
     "update_repair": true,
     "uninstall": true,
+    "reinstall_with_retained_data": true,
     "data_preserved": true,
     "in_root_data_preserved": true,
     "layout_helper_stubbed": true,
-    "registry_removed": true,
+    "uninstall_entry_removed": true,
+    "profile_identity_retained": true,
+    "test_registry_cleaned": true,
+    "installed_ui": {
+      "activity_viewports_fit": true,
+      "core_log_rows": 1,
+      "frames": 22,
+      "network_changed": false,
+      "pages": 8,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.6",
+      "webview_used": false
+    },
     "simulated_service_failure_codes": [
       20,
       21,
@@ -97,7 +129,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "webview_used": false
     },
     {
@@ -112,7 +144,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "webview_used": false
     },
     {
@@ -127,7 +159,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "webview_used": false
     },
     {
@@ -142,24 +174,118 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "webview_used": false
     }
   ],
   "official_core_updates": {
-    "archives_removed": true,
-    "independent_service_approval": true,
-    "installed_xray": "26.10.21",
-    "previous_xray": "26.10.17",
     "result": "passed",
-    "rollback": "passed",
-    "system_settings_changed": false
+    "checks": [
+      {
+        "engine": "xray",
+        "previous": "26.10.17",
+        "installed": "26.10.21",
+        "hysteria2_profile_present": true,
+        "snapshot_max_seconds": 0.0,
+        "cached_lookup_seconds": 0.0,
+        "archives_clean": true
+      },
+      {
+        "engine": "sing-box",
+        "previous": "1.14.3",
+        "installed": "1.14.4",
+        "hysteria2_profile_present": true,
+        "snapshot_max_seconds": 0.0,
+        "cached_lookup_seconds": 0.0,
+        "archives_clean": true
+      }
+    ],
+    "restored_patched_bundle": "1.14.4-netpulse.1",
+    "concurrent_data_reset_blocked": true,
+    "system_network_changed": false,
+    "core_updates_did_not_block_controller": true
+  },
+  "bundled_engines": {
+    "sing-box": {
+      "version": "1.14.4-netpulse.1",
+      "sha256": "d9165cec1cd167e589c40f3454e31c77c18066490e1ddd7117f83e929deeea5d",
+      "modified_by": "NetPulse",
+      "base_version": "1.14.4",
+      "reproduced_identically": true
+    },
+    "xray": {
+      "version": "26.10.21",
+      "sha256": "c77a00eb84fb93ae044c2d771a1cabcc033b81e487253fbc35b12df6879c1e15",
+      "official_binary": true
+    },
+    "engine_source_modules": 107
+  },
+  "dependency_audit": {
+    "version": "1.0.6",
+    "date": "2026-10-29",
+    "rustsec": {
+      "dependencies": 215,
+      "vulnerabilities": 0,
+      "warnings": 0,
+      "database_commit": "40f5be6fb12ed93fc591bf4ab23b7d793b3f2239",
+      "yanked_check_performed": false
+    },
+    "go": {
+      "scanner": "govulncheck 1.9.0",
+      "mode": "binary symbol",
+      "database_last_modified": "2026-10-27T21:16:18Z",
+      "advisories": {
+        "sing-box": [
+          "GO-2026-4762",
+          "GO-2026-4945",
+          "GO-2026-5774",
+          "GO-2026-5775",
+          "GO-2026-5777",
+          "GO-2026-5932",
+          "GO-2026-6061",
+          "GO-2026-6179",
+          "GO-2026-6180",
+          "GO-2026-6237",
+          "GO-2026-6303",
+          "GO-2026-6348",
+          "GO-2026-6354",
+          "GO-2026-6355",
+          "GO-2026-6441",
+          "GO-2026-6443",
+          "GO-2026-6603",
+          "GO-2026-6610",
+          "GO-2026-6611",
+          "GO-2026-6612",
+          "GO-2026-6617",
+          "GO-2026-6629",
+          "GO-2026-6860",
+          "GO-2026-6866"
+        ],
+        "sing-box-patched": [
+          "GO-2026-5932"
+        ],
+        "xray": [
+          "GO-2026-5932",
+          "GO-2026-6860",
+          "GO-2026-6866"
+        ]
+      },
+      "patched_openpgp_assessment": "Module-wide warning retained; no OpenPGP package in the exact compiled package list.",
+      "xray_assessment": "Official binary retained. NetPulse does not supply HTML or OpenPGP input in its restricted run configuration; the upstream advisories remain."
+    },
+    "qt": {
+      "version": "6.8.3",
+      "known_later_advisories_remain": true,
+      "assessment": "Reviewed NetPulse inputs use plain text, embedded trusted SVG and local EXE icons; no subscription-provided SVG/XML/HTML is loaded into Qt."
+    }
   },
   "limitations": [
-    "Actual elevated installation and SCM relocation were not executed against the live Windows service.",
-    "Installer hooks were stubbed in a unique test namespace; profile migration, private ACLs and repair were exercised separately on real temporary files.",
-    "Two IPv6 loopback tests are blocked independently by Windows error 10013.",
-    "No new vendor antivirus verdict or signing certificate was obtained for this release.",
-    "No antivirus, quarantine, live proxy, route or VPN settings were changed."
+    "Actual elevated installation, service relocation and TUN/proxy connections were not executed against the live Windows configuration.",
+    "Installer layout/service/cache hooks were stubbed in a unique test namespace. Profile migration, private ACLs, repair and maintenance replacement were tested separately on owned temporary files; this is not a live multi-user/UAC test.",
+    "Two IPv6 loopback tests were skipped after independent TCP ::1 failed with Windows error 10013 and ping -6 failed; IPv4 loopback succeeded.",
+    "Known Qt 6.8.3 advisories and module-wide Go scanner warnings are documented; the complete application is not declared free of vulnerabilities.",
+    "No new Kaspersky verdict or signing certificate was obtained. Antivirus and quarantine were not modified.",
+    "No Internet throughput or MTU benchmark was performed; loopback transfer results do not predict Internet speed.",
+    "No live proxy, route, VPN or trust-store settings were changed during verification."
   ]
 }

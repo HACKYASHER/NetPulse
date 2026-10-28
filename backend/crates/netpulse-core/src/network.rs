@@ -1096,9 +1096,25 @@ fn free_port() -> Result<u16> {
         .port())
 }
 pub fn client(timeout: Duration) -> Result<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
+    cached_client(timeout,false)
+}
+/// Compression is limited to the official update endpoints. Subscription and
+/// diagnostic clients retain their existing uncompressed, bounded payloads.
+pub fn update_client(timeout:Duration)->Result<reqwest::blocking::Client>{cached_client(timeout,true)}
+fn cached_client(timeout:Duration,gzip:bool)->Result<reqwest::blocking::Client>{
+    // Keep each fixed-timeout client alive: dropping the last blocking client
+    // can wait for an OS resolver/TLS task even after a request has timed out.
+    // Idle pooling is disabled so a VPN switch always uses a fresh socket.
+    use std::{collections::HashMap,sync::{Mutex,OnceLock}};
+    static CLIENTS:OnceLock<Mutex<HashMap<(Duration,bool),reqwest::blocking::Client>>>=OnceLock::new();
+    let clients=CLIENTS.get_or_init(||Mutex::new(HashMap::new()));
+    if let Ok(saved)=clients.lock(){if let Some(client)=saved.get(&(timeout,gzip)){return Ok(client.clone());}}
+    let client=reqwest::blocking::Client::builder()
         .no_proxy()
+        .pool_max_idle_per_host(0)
+        .gzip(gzip)
         .timeout(timeout)
+        .connect_timeout(timeout.min(Duration::from_secs(5)))
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
             if attempt.previous().len() > 5 || attempt.url().scheme() != "https" {
                 attempt.stop()
@@ -1113,7 +1129,9 @@ pub fn client(timeout: Duration) -> Result<reqwest::blocking::Client> {
                 "http-client",
                 "Could not initialize Windows TLS client",
             )
-        })
+        })?;
+    let mut saved=clients.lock().map_err(|_|Error::new("HttpClientUnavailable","http-client","HTTP client cache unavailable"))?;
+    Ok(saved.entry((timeout,gzip)).or_insert(client).clone())
 }
 fn probe(
     port: u16,
@@ -1159,6 +1177,22 @@ impl Drop for NetworkCore {
 
 #[cfg(all(test, windows))]
 mod tests {
+    #[test]
+    fn only_official_update_clients_negotiate_compressed_responses() {
+        use std::{io::{Read,Write},net::TcpListener};
+        let listener=TcpListener::bind("127.0.0.1:0").unwrap();let address=listener.local_addr().unwrap();
+        let reader=std::thread::spawn(move ||{
+            let mut requests=Vec::new();
+            for _ in 0..2 {
+                let (mut socket,_)=listener.accept().unwrap();socket.set_read_timeout(Some(Duration::from_secs(3))).unwrap();let mut request=Vec::new();let mut byte=[0];
+                while !request.ends_with(b"\r\n\r\n"){assert!(request.len()<8192);socket.read_exact(&mut byte).unwrap();request.push(byte[0]);}
+                requests.push(String::from_utf8(request).unwrap().to_ascii_lowercase());
+                socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK").unwrap();
+            }requests
+        });
+        for client in [super::client(Duration::from_secs(3)).unwrap(),super::update_client(Duration::from_secs(3)).unwrap()]{assert_eq!(client.get(format!("http://{address}/fixture")).send().unwrap().text().unwrap(),"OK");}
+        let requests=reader.join().unwrap();assert!(!requests[0].contains("gzip"));assert!(requests[1].contains("accept-encoding: gzip"));
+    }
     use super::*;
     use crate::engine::{self, Engine};
     use serde_json::json;

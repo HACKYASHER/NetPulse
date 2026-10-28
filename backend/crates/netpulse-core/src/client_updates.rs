@@ -72,7 +72,7 @@ fn validate(r: &Release) -> Result<()> {
     Ok(())
 }
 fn metadata(endpoint: &str) -> Result<serde_json::Value> {
-    let response = crate::network::client(Duration::from_secs(20))?
+    let response = crate::network::update_client(Duration::from_secs(20))?
         .get(endpoint)
         .header("User-Agent", "NetPulse-client-updater")
         .header("Accept", "application/vnd.github+json")
@@ -131,6 +131,7 @@ fn parse(v: &serde_json::Value) -> Result<Release> {
     Ok(r)
 }
 pub fn check(current: &str) -> Result<Option<Release>> {
+    if version(current).is_none(){return Err(invalid());}
     let values = metadata(&format!(
         "https://api.github.com/repos/{REPOSITORY}/releases?per_page=30"
     ))?;
@@ -139,10 +140,21 @@ pub fn check(current: &str) -> Result<Option<Release>> {
         .ok_or_else(invalid)?
         .iter()
         .filter_map(|v| parse(v).ok())
-        .filter(|r| version(&r.tag) > version(current))
+        .filter(|r| eligible(r,current))
         .collect();
     releases.sort_by_key(|r| std::cmp::Reverse(version(&r.tag)));
     Ok(releases.into_iter().next())
+}
+fn eligible(r:&Release,current:&str)->bool {
+    let (Some(target),Some(current))=(version(&r.tag),version(current)) else{return false;};
+    target>current && (current.3<3 || (!r.prerelease && target.3==3))
+}
+/// Rebuild the authorization from the official repository in the elevated
+/// helper. The caller supplies only a version, never a path or a download URL.
+pub fn release_for_tag(tag:&str,current:&str)->Result<Release> {
+    if tag.len()>96 || version(tag).is_none() || !tag.bytes().all(|b|b.is_ascii_alphanumeric()||b".-".contains(&b)){return Err(invalid());}
+    let release=parse(&metadata(&format!("https://api.github.com/repos/{REPOSITORY}/releases/tags/{tag}"))?)?;
+    if release.tag!=tag || !eligible(&release,current){return Err(invalid());}Ok(release)
 }
 pub fn revalidate(r: &Release) -> Result<()> {
     validate(r)?;
@@ -201,7 +213,7 @@ pub fn download(dir: &Path, r: &Release) -> Result<()> {
         .map_err(|e| Error::io("client-update-folder", e))?;
     let partial = path.with_extension(format!("{}.partial", uuid::Uuid::new_v4()));
     let result = (|| {
-        let response = crate::network::client(Duration::from_secs(300))?
+        let response = crate::network::update_client(Duration::from_secs(300))?
             .get(&r.url)
             .header("User-Agent", "NetPulse-client-updater")
             .send()
@@ -248,12 +260,15 @@ pub fn download(dir: &Path, r: &Release) -> Result<()> {
 /// Remove only updater-owned downloads. Keep a newer verified installer pending
 /// installation; current/older installers and interrupted partials are disposable.
 pub fn cleanup(directory:&Path,current:&str)->Result<usize> {
+ crate::layout::normal_directory(directory)?;
  let root=directory.join("updates");if !root.exists(){return Ok(0)}
+ if crate::layout::normal_directory(&root).is_err(){return Ok(0)}
  if root.symlink_metadata().is_ok_and(|m|m.file_type().is_symlink()){return Ok(0)}
  let mut removed=0;
  for item in std::fs::read_dir(&root).map_err(|e|Error::io("update-cleanup",e))? {
   let item=item.map_err(|e|Error::io("update-cleanup",e))?;
   if !item.file_type().is_ok_and(|t|t.is_dir()){continue}
+  if crate::layout::normal_directory(&item.path()).is_err(){continue}
   let tag=item.file_name().to_string_lossy().into_owned();if version(&tag).is_none(){continue}
   for file in std::fs::read_dir(item.path()).map_err(|e|Error::io("update-cleanup",e))? {
    let file=file.map_err(|e|Error::io("update-cleanup",e))?;
@@ -336,5 +351,12 @@ mod tests {
         assert!(verify_download(d.path(), &r).is_ok());
         std::fs::write(p, vec![43u8; 2048]).unwrap();
         assert!(verify_download(d.path(), &r).is_err());
+    }
+    #[test]
+    fn stable_updates_do_not_promote_prereleases_or_allow_downgrades() {
+        let mut r=Release{tag:"v9.0.0-alpha.1".into(),page:String::new(),url:String::new(),sha256:String::new(),size:0,prerelease:true};
+        assert!(!eligible(&r,"1.0.6"));assert!(eligible(&r,"1.0.6-beta.1"));
+        r.tag="v9.0.0".into();assert!(!eligible(&r,"1.0.6"));r.prerelease=false;
+        assert!(eligible(&r,"1.0.6"));assert!(!eligible(&r,"9.0.0"));assert!(!eligible(&r,"10.0.0"));assert!(!eligible(&r,"invalid"));
     }
 }

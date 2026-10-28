@@ -1,0 +1,59 @@
+{
+  "version": "1.0.6",
+  "date": "2026-10-29",
+  "rustsec": {
+    "dependencies": 215,
+    "vulnerabilities": 0,
+    "warnings": 0,
+    "database_commit": "40f5be6fb12ed93fc591bf4ab23b7d793b3f2239",
+    "yanked_check_performed": false
+  },
+  "go": {
+    "scanner": "govulncheck 1.9.0",
+    "mode": "binary symbol",
+    "database_last_modified": "2026-10-27T21:16:18Z",
+    "advisories": {
+      "sing-box": [
+        "GO-2026-4762",
+        "GO-2026-4945",
+        "GO-2026-5774",
+        "GO-2026-5775",
+        "GO-2026-5777",
+        "GO-2026-5932",
+        "GO-2026-6061",
+        "GO-2026-6179",
+        "GO-2026-6180",
+        "GO-2026-6237",
+        "GO-2026-6303",
+        "GO-2026-6348",
+        "GO-2026-6354",
+        "GO-2026-6355",
+        "GO-2026-6441",
+        "GO-2026-6443",
+        "GO-2026-6603",
+        "GO-2026-6610",
+        "GO-2026-6611",
+        "GO-2026-6612",
+        "GO-2026-6617",
+        "GO-2026-6629",
+        "GO-2026-6860",
+        "GO-2026-6866"
+      ],
+      "sing-box-patched": [
+        "GO-2026-5932"
+      ],
+      "xray": [
+        "GO-2026-5932",
+        "GO-2026-6860",
+        "GO-2026-6866"
+      ]
+    },
+    "patched_openpgp_assessment": "Module-wide warning retained; no OpenPGP package in the exact compiled package list.",
+    "xray_assessment": "Official binary retained. NetPulse does not supply HTML or OpenPGP input in its restricted run configuration; the upstream advisories remain."
+  },
+  "qt": {
+    "version": "6.8.3",
+    "known_later_advisories_remain": true,
+    "assessment": "Reviewed NetPulse inputs use plain text, embedded trusted SVG and local EXE icons; no subscription-provided SVG/XML/HTML is loaded into Qt."
+  }
+}

@@ -7,6 +7,8 @@ fn encode<T: Serialize>(value:T) -> Result<serde_json::Value> {
     serde_json::to_value(value).map_err(|_| Error::new("SerializationError","ipc","Could not encode response"))
 }
 async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
+    if state.startup_smoke&&matches!(method,"manage_service"|"install_client_update"){return Err(Error::new("VerificationOnly","verification","Обслуживание системы отключено в проверочном сеансе."));}
+    if state.runtime_preparing.load(std::sync::atomic::Ordering::Acquire)&&blocked_during_runtime_change(method){return Err(Error::new("RuntimePreparing","runtime-operation","Дождитесь завершения проверки или обновления ядер."));}
     match method {
         "check_client_update" => encode(check_client_update().await?),
         "download_client_update" => encode(download_client_update(host::State(state), argument(&params,"release")?).await?),
