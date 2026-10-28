@@ -60,6 +60,7 @@ pub const ENGINE_SHA256: &str = "5c19bb3f8c12d4e85b3d47fe63123a7624b314b58dd7a8e
 pub const CRONET_SHA256: &str = "3217c6260fbca5f16072e0b79735742f40109a63bb0ff88fd6b96dd6b54a2928";
 
 pub fn verify_engine(path: &Path) -> Result<()> {
+    std::fs::File::open(path).map_err(|e| component_access_error(&path.to_string_lossy(), e))?;
     if crate::core_releases::verify_custom(path, "sing-box")? {
         return Ok(());
     }
@@ -68,7 +69,7 @@ pub fn verify_engine(path: &Path) -> Result<()> {
         (path.with_file_name("libcronet.dll"), CRONET_SHA256),
     ] {
         let mut file =
-            std::fs::File::open(&p).map_err(|e| component_access_error("sing-box", e))?;
+            std::fs::File::open(&p).map_err(|e| component_access_error(&p.to_string_lossy(), e))?;
         let mut digest = Sha256::new();
         let mut block = [0u8; 65536];
         loop {
@@ -106,7 +107,8 @@ pub(crate) fn component_access_error(component: &str, error: std::io::Error) -> 
             "RuntimeComponentUnavailable",
             "engine-verify",
             format!(
-                "Компонент {component} отсутствует или Windows запрещает доступ (код {}). Проверьте журнал защиты антивируса и установите официальный выпуск NetPulse заново. Настройки и подписки сохраняются.",
+                "{}: {component} (Windows {}). Проверьте указанный путь и отчёт защиты. Восстановление доступно через официальный установщик NetPulse; настройки и подписки сохраняются.",
+                if error.kind()==std::io::ErrorKind::NotFound {"Файл не найден"} else if matches!(error.raw_os_error(),Some(225|226)) {"Файл заблокирован защитой Windows"} else {"Windows отказала в доступе к файлу"},
                 error.raw_os_error().unwrap_or(0)
             ),
         )
@@ -276,7 +278,7 @@ impl Engine {
                 Err(e) if e.raw_os_error() == Some(32) && Instant::now() < until => {
                     std::thread::sleep(Duration::from_millis(60))
                 }
-                Err(e) => return Err(Error::io("engine-spawn", e)),
+                Err(e) => return Err(component_access_error(&path.to_string_lossy(), e)),
             }
         };
         // The engine cannot parse a config/open sockets until stdin is supplied.
@@ -548,6 +550,13 @@ pub fn install(data_dir: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn missing_and_denied_components_report_the_actual_file_and_distinct_reason() {
+        let missing=super::component_access_error(r"C:\NetPulse\data\engine\sing-box.exe",std::io::Error::from_raw_os_error(2));
+        let denied=super::component_access_error(r"C:\NetPulse\cores\libcronet.dll",std::io::Error::from_raw_os_error(5));
+        assert!(missing.message.contains("Файл не найден") && missing.message.contains("sing-box.exe"));
+        assert!(denied.message.contains("отказала в доступе") && denied.message.contains("libcronet.dll"));
+    }
     #[test]
     #[cfg(windows)]
     #[ignore = "Pinned core, owned loopback HTTP only; never creates TUN or changes Windows proxy"]

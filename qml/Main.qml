@@ -345,7 +345,7 @@ ApplicationWindow {
                     Layout.fillWidth: true; implicitHeight: 64
                     RowLayout { anchors.fill: parent; anchors.margins: 12; spacing: 9
                         Rectangle { width: 7; height: 7; radius: 4; color: modelData.engine_ready ? "#6bd9b0" : "#e0b86d" }
-                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.4"; font.pixelSize: 10; color: mutedColor } }
+                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.5"; font.pixelSize: 10; color: mutedColor } }
                     }
                 }
             }
@@ -990,7 +990,7 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: aboutColumn.implicitHeight+40
                 ColumnLayout { id: aboutColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
                     Label { textFormat: Text.PlainText; text: tr("О клиенте","About NetPulse"); color: textColor; font.pixelSize: 17; font.bold: true }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.4 · Windows x64"; color: textColor }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.5 · Windows x64"; color: textColor }
                     Label { textFormat: Text.PlainText; text: "Qt Quick · Rust · sing-box "+(modelData.engine_version||"—")+" · Xray "+(modelData.xray_version||"—"); color: mutedColor; font.pixelSize: 12 }
                     ActionButton { appWindow: win; text: "GitHub · NetPulse ↗"; onClicked: Qt.openUrlExternally("https://github.com/HACKYASHER/NetPulse") }
                 }
@@ -1023,7 +1023,9 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: dataForm.implicitHeight + 40
                 ColumnLayout { id: dataForm; anchors.fill: parent; anchors.margins: 20; spacing: 14
                     Label { textFormat: Text.PlainText; text: tr("Данные и резервные копии", "Data and backups"); color: textColor; font.pixelSize: 16; font.weight: Font.DemiBold }
-                    Label { textFormat: Text.PlainText; text: tr("У Qt-версии отдельный каталог. Резервную копию NetPulse 3.0.4 можно восстановить под той же учётной записью Windows.", "The Qt version has a separate folder. NetPulse 3.0.4 backups can be restored under the same Windows account."); Layout.fillWidth: true; wrapMode: Text.WordWrap; color: mutedColor; font.pixelSize: 12 }
+                    Label { textFormat: Text.PlainText; text: tr("Приложение, ядра, служба и личные данные находятся в общей папке NetPulse. У каждой учётной записи Windows свой защищённый профиль в подпапке data. Обновление и удаление сохраняют личные данные.", "The application, engines, service and personal data share the NetPulse folder. Each Windows account has a private profile in the data subfolder. Updates and uninstall preserve personal data."); Layout.fillWidth: true; wrapMode: Text.WordWrap; color: mutedColor; font.pixelSize: 12 }
+                    Label { textFormat: Text.PlainText; text: tr("Приложение: ", "Application: ")+backend.installationDirectory+"\n"+tr("Личные данные: ", "Personal data: ")+backend.dataDirectory; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; color: mutedColor; font.pixelSize: 12 }
+                    ActionButton { appWindow: win; text: tr("Папка NetPulse", "NetPulse folder"); onClicked: backend.openInstallationDirectory() }
                     RowLayout {
                         ActionButton { appWindow: win; text: tr("Создать копию", "Create backup"); onClicked: call("export_data", {kind: "backup"}) }
                         ActionButton { appWindow: win; text: tr("Восстановить", "Restore"); onClicked: call("restore_data", {backup: true}) }
@@ -1032,7 +1034,7 @@ ApplicationWindow {
                     }
                     HelpText { text: tr("Временные архивы ядер очищаются после установки и при следующем запуске. Незавершённые загрузки и установщики уже установленной версии тоже удаляются; предыдущий комплект ядер остаётся для отката.","Temporary engine archives are cleared after installation and on startup. Interrupted downloads and installers for the installed version are also removed; the previous engine bundle remains for rollback.") }
                     ActionButton { appWindow: win; text: tr("Редактор всех параметров…", "Edit all preferences…"); onClicked: editJson(tr("Параметры NetPulse", "NetPulse preferences"), JSON.stringify(prefs, null, 2), "save_preferences") }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.4  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.5  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
                 }
             }
         }
@@ -1077,7 +1079,7 @@ ApplicationWindow {
                         ActionButton { appWindow: win; text: tr("Откатить комплект","Roll back bundle"); enabled: !snapshot.engine_pid&&!busy("activate_core_bundle"); onClicked: call("activate_core_bundle",{rollback:true}) }
                         ActionButton { appWindow: win; text: tr("Восстановить встроенные ядра","Restore bundled engines"); enabled: !snapshot.engine_pid&&!busy("activate_core_bundle"); onClicked: call("activate_core_bundle",{rollback:false}) }
                     }
-                    Label { textFormat: Text.PlainText; text: tr("Обновление и откат доступны после отключения VPN. Защищённые копии службы обновляются с обычным UAC.","Updates and rollback are available after disconnecting VPN. Protected service copies are updated with normal UAC."); color: mutedColor; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Label { textFormat: Text.PlainText; text: tr("Обновление и откат доступны после отключения VPN. Если второго ядра не хватает, выбранная установка добавит отсутствующие компоненты из проверенного встроенного комплекта. Защищённые копии службы обновляются с обычным UAC.","Updates and rollback are available after disconnecting VPN. If the companion engine is missing, the selected installation adds absent components from the verified bundled set. Protected service copies are updated with normal UAC."); color: mutedColor; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 }
             }
         }

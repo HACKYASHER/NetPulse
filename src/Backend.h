@@ -4,6 +4,7 @@
 #include <QVariantMap>
 #include <QTimer>
 #include <QMap>
+#include <QCoreApplication>
 
 class Backend final : public QObject {
     Q_OBJECT
@@ -12,6 +13,7 @@ class Backend final : public QObject {
     Q_PROPERTY(QStringList pending READ pending NOTIFY pendingChanged)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorChanged)
     Q_PROPERTY(QString dataDirectory READ dataDirectory CONSTANT)
+    Q_PROPERTY(QString installationDirectory READ installationDirectory CONSTANT)
 public:
     explicit Backend(QString directory, bool isolated, QObject* parent = nullptr);
     ~Backend() override;
@@ -20,6 +22,7 @@ public:
     QStringList pending() const { return m_pending.values(); }
     QString errorMessage() const { return m_error; }
     QString dataDirectory() const { return m_directory; }
+    QString installationDirectory() const { return QCoreApplication::applicationDirPath(); }
     Q_INVOKABLE QString request(const QString& method, const QVariantMap& params = {});
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void quit();
@@ -28,6 +31,7 @@ public:
     Q_INVOKABLE void copyText(const QString& text);
     Q_INVOKABLE QString clipboardText() const;
     Q_INVOKABLE void openDataDirectory();
+    Q_INVOKABLE void openInstallationDirectory();
     Q_INVOKABLE void openProxySettings();
     Q_INVOKABLE void confirmDelete(const QString& method, const QVariantMap& params, const QString& label);
     void start();

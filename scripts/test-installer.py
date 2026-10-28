@@ -21,12 +21,20 @@ def main():
     source=(ROOT/'.build/installer.nsi').read_text(encoding='utf-8-sig')
     source=source.replace('NetPulseQt',token).replace('NetPulse Qt',token).replace('$DESKTOP\\NetPulse.lnk','$DESKTOP\\'+token+'.lnk').replace('$SMPROGRAMS\\NetPulse\\','$SMPROGRAMS\\'+token+'\\').replace('$SMPROGRAMS\\NetPulse"','$SMPROGRAMS\\'+token+'"')
     source=source.replace('OutFile "'+str(ROOT/'release/NetPulse-Setup.exe')+'"','OutFile "'+str(output/'Setup.exe')+'"')
-    source=source.replace('--installer-check', '--installer-check --data-dir "'+str(data)+'"')
+    source=source.replace("--installer-check'", '--installer-check --data-dir "'+str(data)+'"'+"'")
     source=source.replace('  nsExec::ExecToStack \'"$INSTDIR\\netpulsed.exe" --installer-service-remove\'','  Push ""\n  Push 0')
     # The install hook remains unreachable with /NOSERVICE; also stub it as a
     # second barrier so a test cannot launch Windows elevation accidentally.
     source=source.replace('  nsExec::ExecToStack \'"$INSTDIR\\netpulsed.exe" --installer-service-install\'','  ${GetOptions} $R0 "/STUBSERVICE=" $0\n  Push "simulated service result"\n  Push $0')
+    source=source.replace('  nsExec::ExecToStack \'"$PLUGINSDIR\\netpulsed.exe" --installer-check-client\'', '  Push ""\n  Push 0')
+    assert '--installer-check-client' not in source
     assert '--installer-service-' not in source
+    source=source.replace('RequestExecutionLevel admin','RequestExecutionLevel user').replace('HKLM','HKCU')
+    source=source.replace('  nsExec::ExecToStack \'"$PLUGINSDIR\\netpulsed.exe" --installer-prepare-layout "$INSTDIR"\'', '  Push ""\n  Push 0')
+    assert '--installer-prepare-layout' not in source
+    source=source.replace('  nsExec::ExecToStack \'"$PLUGINSDIR\\netpulsed.exe" --installer-finalize-layout "$INSTDIR"\'', '  Push ""\n  Push 0')
+    assert '--installer-finalize-layout' not in source
+    source=source.replace('  DeleteRegKey HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\'+token+'"\n  DeleteRegKey HKCU "Software\\'+token+'"\nSectionEnd', 'SectionEnd')
     source=source.replace('SetCompressor /SOLID lzma\nSetCompressorDictSize 32','SetCompressor zlib')
     script=output/'installer.nsi'
     if options.prepared_test:
@@ -43,7 +51,7 @@ def main():
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER,uninstall) as handle:
         assert winreg.QueryValueEx(handle,'DisplayName')[0]=='NetPulse'
         assert winreg.QueryValueEx(handle,'ModifyPath')[0]=='"'+str(install/'NetPulse-Maintenance.exe')+'"'
-    sentinel=data/'settings-sentinel.txt';sentinel.write_text('keep',encoding='ascii')
+    inside=install/'data/fixture';inside.mkdir(parents=True);inside_sentinel=inside/'settings.txt';inside_sentinel.write_text('preserve personal data');sentinel=data/'settings-sentinel.txt';sentinel.write_text('keep',encoding='ascii')
     (install/'netpulsed.exe').write_bytes(b'damaged test controller')
     subprocess.run(command,check=True,timeout=180,creationflags=0x08000000)
     assert sentinel.read_text()=='keep'
@@ -68,7 +76,7 @@ def main():
     until=time.monotonic()+45
     while time.monotonic()<until and (exists(key) or (install/'NetPulse.exe').exists()):time.sleep(.25)
     assert not exists(key) and not exists(uninstall) and not (install/'NetPulse.exe').exists()
-    assert sentinel.read_text()=='keep'
-    report={'result':'passed','install':True,'update_repair':True,'uninstall':True,'data_preserved':True,'registry_removed':True,'installed_ui':result,'simulated_service_failure_codes':failures,'simulated_success_clears_error':True,'tun_service_installed':False,'global_network_changed':False,'verification_namespace':token}
+    assert sentinel.read_text()=='keep' and inside_sentinel.read_text()=='preserve personal data'
+    report={'result':'passed','install':True,'update_repair':True,'uninstall':True,'data_preserved':True,'in_root_data_preserved':True,'layout_helper_stubbed':True,'registry_removed':True,'installed_ui':result,'simulated_service_failure_codes':failures,'simulated_success_clears_error':True,'tun_service_installed':False,'global_network_changed':False,'verification_namespace':token}
     (ROOT/'.build/installer-result.json').write_text(json.dumps(report,indent=2),encoding='utf-8');print(json.dumps(report,indent=2))
 if __name__=='__main__':main()

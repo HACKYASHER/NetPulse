@@ -48,6 +48,7 @@ pub(crate) fn apply_ipv6_policy(config: &mut Value,prefs:&Preferences,physical_i
     }
 }
 pub fn verify_xray(path: &Path) -> Result<()> {
+    std::fs::File::open(path).map_err(|e| crate::engine::component_access_error(&path.to_string_lossy(), e))?;
     if crate::core_releases::verify_custom(path, "xray")? {
         return Ok(());
     }
@@ -59,7 +60,7 @@ pub fn verify_xray(path: &Path) -> Result<()> {
     }
 
     let mut file =
-        std::fs::File::open(path).map_err(|e| crate::engine::component_access_error("Xray", e))?;
+        std::fs::File::open(path).map_err(|e| crate::engine::component_access_error(&path.to_string_lossy(), e))?;
     let mut digest = Sha256::new();
     let mut buf = [0u8; 65536];
     loop {

@@ -22,6 +22,8 @@
 #include <QSystemTrayIcon>
 #include <QSet>
 #include <QTimer>
+#include <QProcess>
+#include <memory>
 
 class ApplicationIcons final : public QQuickImageProvider {
 public:
@@ -40,7 +42,7 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("NetPulse"));
     QCoreApplication::setOrganizationName(QStringLiteral("NetPulse"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.4"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.5"));
     QApplication::setFont(QFont(QStringLiteral("Segoe UI"), 10));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QCommandLineParser parser;
@@ -54,7 +56,41 @@ int main(int argc, char** argv) {
     const bool smoke = parser.isSet(QStringLiteral("smoke-test"));
     QString dataDirectory = parser.value(QStringLiteral("data-dir"));
     if (smoke) dataDirectory = QDir(parser.value(QStringLiteral("smoke-test"))).absoluteFilePath(QStringLiteral("data"));
-    if (dataDirectory.isEmpty()) dataDirectory = qEnvironmentVariable("LOCALAPPDATA") + QStringLiteral("/NetPulseQt");
+
+    std::unique_ptr<QLockFile> legacyLock;
+    if (dataDirectory.isEmpty()) {
+        const QString legacy=qEnvironmentVariable("LOCALAPPDATA")+QStringLiteral("/NetPulseQt");
+        if (QFileInfo::exists(legacy+QStringLiteral("/netpulse.db"))) {
+            legacyLock=std::make_unique<QLockFile>(legacy+QStringLiteral("/client.lock"));
+            if (!legacyLock->tryLock(100)) {
+                if (!parser.isSet(QStringLiteral("installer-check"))) QMessageBox::information(nullptr,QStringLiteral("NetPulse"),QStringLiteral("Закройте прежний NetPulse через значок в трее перед переносом данных."));
+                return 10;
+            }
+        }
+        // Checking a closed installation must not migrate data while elevated.
+        if (parser.isSet(QStringLiteral("installer-check"))) {
+            QDir profiles(QCoreApplication::applicationDirPath()+QStringLiteral("/data"));
+            for (const auto& name:profiles.entryList({QStringLiteral("S-1-*")},QDir::Dirs|QDir::NoDotAndDotDot)) {
+                QLockFile profileLock(profiles.filePath(name+QStringLiteral("/client.lock")));
+                if (!profileLock.tryLock(100)) return 10;
+            }
+            return 0;
+        }
+        QProcess resolver;
+        resolver.setProgram(QCoreApplication::applicationDirPath()+QStringLiteral("/netpulsed.exe"));
+        resolver.setArguments({QStringLiteral("--resolve-data")});
+#ifdef Q_OS_WIN
+        resolver.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* a){a->flags|=0x08000000;});
+#endif
+        resolver.start();
+        if (!resolver.waitForStarted(10000) || !resolver.waitForFinished(180000) || resolver.exitCode()!=0) {
+            const auto detail=QJsonDocument::fromJson(resolver.readAllStandardOutput()).object().value(QStringLiteral("data")).toObject().value(QStringLiteral("message")).toString();
+            QMessageBox::critical(nullptr,QStringLiteral("NetPulse"),QStringLiteral("Не удалось подготовить папку данных NetPulse. Исходный профиль сохранён.\n")+detail+QString::fromUtf8(resolver.readAllStandardError()));
+            return 12;
+        }
+        dataDirectory=QJsonDocument::fromJson(resolver.readAllStandardOutput()).object().value(QStringLiteral("directory")).toString();
+        if (dataDirectory.isEmpty() || !QDir::isAbsolutePath(dataDirectory)) return 12;
+    }
     dataDirectory = QDir(dataDirectory).absolutePath(); QDir().mkpath(dataDirectory);
     QLockFile lock(dataDirectory + QStringLiteral("/client.lock"));
     if (parser.isSet(QStringLiteral("installer-check"))) return lock.tryLock(100) ? 0 : 10;

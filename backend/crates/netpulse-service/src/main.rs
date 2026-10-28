@@ -34,7 +34,7 @@ fn main() {
                 ));
             }
             service::validate_sid(&service::current_sid()?)?;
-            let directory = service::protected_directory()?;
+            let directory = service::canonical_service_directory()?;
             if !directory.is_absolute() {
                 return Err(Error::new(
                     "ProtectedDirectoryInvalid",
@@ -397,7 +397,7 @@ fn upgrade(args: &[String]) -> Result<()> {
         })?;
     let handle = match manager.open_service(
         service::SERVICE_NAME,
-        ServiceAccess::QUERY_CONFIG | ServiceAccess::QUERY_STATUS | ServiceAccess::STOP,
+        ServiceAccess::QUERY_CONFIG | ServiceAccess::QUERY_STATUS | ServiceAccess::STOP | ServiceAccess::CHANGE_CONFIG,
     ) {
         Ok(handle) => handle,
         Err(windows_service::Error::Winapi(e)) if e.raw_os_error() == Some(1060) => {
@@ -443,6 +443,9 @@ fn upgrade(args: &[String]) -> Result<()> {
     // A damaged installed bundle can indicate quarantine. Do not repeatedly
     // repopulate missing files through the maintenance button.
     service::validate_service_files(&dest)?;
+    if dest!=service::canonical_service_directory()? {
+        return relocate_service(&args[2],source,&approvals,&dest,&handle);
+    }
     let helper = std::env::current_exe().map_err(|e| Error::io("service-source",e))?;
     let mut sources = vec![("NetPulseService.exe", Some(helper))];
     for name in ["sing-box.exe", "libcronet.dll", "xray.exe"] {
@@ -487,6 +490,36 @@ fn upgrade(args: &[String]) -> Result<()> {
         netpulse_core::runtime::verify_xray(&dest.join("xray.exe"))?;
         Ok(())
     })
+}
+
+fn relocate_service(owner: &str, source: &std::path::Path, approvals: &[netpulse_core::core_releases::Approval], old: &std::path::Path, handle: &windows_service::service::Service) -> Result<()> {
+    use windows_service::service::{ServiceErrorControl,ServiceInfo,ServiceStartType};
+    let dest=service::canonical_service_directory()?;
+    netpulse_core::layout::prepare_install_root(&service::application_directory()?)?;
+    netpulse_core::layout::normal_directory(&dest)?;
+    std::fs::create_dir_all(&dest).map_err(|e|Error::io("service-relocate",e))?;
+    service::protect_install_path(&dest)?;maintenance::validate_fresh_install_directory(&dest)?;
+    std::fs::OpenOptions::new().create_new(true).write(true).open(dest.join(".install-in-progress")).map_err(|e|Error::io("service-relocate",e))?;
+    let mut attempt=InstallAttempt{directory:dest.clone(),registration:None,committed:false};
+    std::fs::copy(std::env::current_exe().map_err(|e|Error::io("service-source",e))?,dest.join("NetPulseService.exe")).map_err(|e|Error::io("service-relocate",e))?;
+    for name in ["sing-box.exe","libcronet.dll","xray.exe"] {std::fs::copy(source.join(name),dest.join(name)).map_err(|e|Error::io("service-relocate",e))?;}
+    netpulse_core::core_releases::write_approvals(&dest,approvals)?;
+    service::validate_service_files(&dest)?;netpulse_core::engine::verify_engine(&dest.join("sing-box.exe"))?;netpulse_core::runtime::verify_xray(&dest.join("xray.exe"))?;
+    for name in maintenance::FILES {if dest.join(name).exists(){service::protect_install_path(&dest.join(name))?;}}
+    // Preserve the old working service until the complete new copy is verified.
+    stop_installed(owner)?;service::recover_routes()?;
+    let info=ServiceInfo{name:service::SERVICE_NAME.into(),display_name:"NetPulse Network Core".into(),service_type:ServiceType::OWN_PROCESS,start_type:ServiceStartType::OnDemand,error_control:ServiceErrorControl::Normal,executable_path:dest.join("NetPulseService.exe"),launch_arguments:vec![],dependencies:vec![],account_name:None,account_password:None};
+    handle.change_config(&info).map_err(service::service_configuration_error)?;
+    // SCM now references these files. Even if readback fails, keep both copies.
+    attempt.committed=true;
+    let actual=handle.query_config().map_err(service::service_configuration_error)?;
+    if !actual.executable_path.to_string_lossy().trim_matches('"').eq_ignore_ascii_case(&info.executable_path.to_string_lossy()) {return Err(Error::new("ServiceInstallReadback","service-relocate","Windows не подтвердила новый путь службы; оба комплекта сохранены."));}
+    for name in maintenance::FILES {
+        let path=old.join(name);
+        match std::fs::remove_file(&path) {Ok(())=>{},Err(e) if e.kind()==std::io::ErrorKind::NotFound=>{},Err(e)=>return Err(Error::io("service-legacy-cleanup",e))}
+    }
+    let _=std::fs::remove_dir(old);
+    Ok(())
 }
 
 fn stop_installed(owner_sid: &str) -> Result<()> {
@@ -652,6 +685,9 @@ fn uninstall() -> Result<()> {
             "Service has not stopped; protected files were preserved",
         ));
     }
+    // Resolve the verified SCM location before deletion marks the registration
+    // for removal. Querying SCM afterward can return ERROR_SERVICE_MARKED_FOR_DELETE.
+    let dest = netpulse_core::service::protected_directory()?;
     service.delete().map_err(|_| {
         Error::new(
             "ServiceDeleteFailed",
@@ -659,7 +695,6 @@ fn uninstall() -> Result<()> {
             "Could not remove the NetPulse service registration",
         )
     })?;
-    let dest = netpulse_core::service::protected_directory()?;
     // Fixed Program Files paths only. No recursive delete or computed traversal.
     for name in [
         "sing-box.exe",

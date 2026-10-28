@@ -1,29 +1,34 @@
-# Verification — NetPulse 1.0.4
+# Verification — NetPulse 1.0.5
 
-Regular GitHub release, Windows x64, validated on October 26, 2026.
+Regular Windows x64 release. Validation date: October 28, 2026.
 
 | Area | Result |
 |---|---|
-| Core checks | 117 passed, 2 blocked by the machine's IPv6 loopback restrictions |
-| Stable updates | 1.0.4 is newer than 1.0.3-beta and 1.0.4-beta; regular release metadata accepted |
-| Service file checks | 8 passed, including preservation of orphaned update directories |
-| Service binary | Safe self-test reports version 1.0.4 and no system changes |
-| QML interactions | 15 passed, including setup/cleanup |
+| Core checks | 126 passed; two IPv6 checks blocked by this machine |
+| Profile migration | Packaged controller, real synthetic database, encrypted profiles and settings preserved |
+| File security | Private profile ACLs inspected; reparse paths and unsafe installer manifests rejected |
+| Engine repair | Missing engine stays absent on startup; explicit offline restoration succeeds |
+| Official engine updates | Xray 26.10.17 → 26.10.21 and sing-box 1.14.4 installed, authenticated and rolled back in a temporary directory |
+| Missing companion | Explicit selected-core installation succeeds after the other core is removed |
+| Service file transactions | 8 passed |
+| Service self-test | Version 1.0.5; no system changes |
+| QML interactions | 15 passed with the application's Basic style |
 | Controller integration | 14 groups |
-| Packaged UI | 22 frames, 8 pages, RU/EN and dark/light; Activity fits the viewport |
-| Installer | Scoped install, repair/update, uninstall; 8 simulated failure cases and subsequent success |
+| Packaged UI | 22 frames × RU/EN and dark/light; eight pages; no QML warnings |
+| Installer | Isolated install, repair/update, uninstall and eight simulated service failures |
+| Data during removal | Personal files under the installation's data directory preserved |
 
-Windows ping to ::1 fails independently of NetPulse; an independent local TCP
-IPv6 probe returns access denied (10013). The two affected tests are reported as
-blocked, not passed. Their strict source assertions remain in the repository.
-The initial run also exposed an HTTP fixture read-mode issue; the fixture now
-uses blocking reads and consumes the complete request headers before replying.
+An independent IPv6 TCP loopback probe fails with Windows 10013 and Windows
+ping to ::1 fails. The strict IPv6 tests remain in source and are classified as
+environment-blocked, not passed. IPv4 loopback checks pass.
 
-The user supplied a Kaspersky Premium context-menu scan reporting no threats
-among 3,381 objects. Its exact files and hashes were not shown. The service is
-unsigned; the previous behavioral detection has not received a vendor false
-positive determination. Actual service maintenance under antivirus protection
-and a privileged TUN session were not tested. No protection, quarantine, global
-proxy or route settings were modified during these checks.
+The installer tests use a unique temporary namespace and stub the privileged
+service/layout hooks. Migration, ACL preparation and file repair are also tested
+separately against actual temporary files. Actual elevated installation, SCM
+relocation and TUN maintenance under antivirus protection were not exercised on
+the user's live service. Existing service files, protection, quarantine and global
+network settings were not changed. No new antivirus-vendor verdict or signing
+certificate was obtained; the earlier screenshot's scan does not cover this build.
 
-Machine-readable evidence: VERIFICATION.json. Release notes: RELEASE_NOTES.md.
+See [installation layout](docs/INSTALLATION.md), [release notes](RELEASE_NOTES.md)
+and the machine-readable VERIFICATION.json.

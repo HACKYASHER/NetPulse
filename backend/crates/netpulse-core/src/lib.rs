@@ -7,6 +7,7 @@ pub mod engine;
 mod icmp;
 pub mod imports;
 pub mod inventory;
+pub mod layout;
 pub mod model;
 pub mod network;
 pub mod proxy;

@@ -20,6 +20,9 @@ fn prepare(directory: &Path, resources: &Path, isolated: bool) -> Result<AppStat
     let store=Store::open(&directory.join("netpulse.db"))?;
     if let Err(e)=netpulse_core::mtu_tuning::recover(&store){let _=store.log("WARNING","Network",&e.stage,&e.code,&e.message);}
     let preferences=store.preferences()?.for_startup();
+    if !isolated && preferences.autostart {
+        if let Err(e)=desktop::autostart(true) {let _=store.log("WARNING","Application",&e.stage,&e.code,&e.message);}
+    }
     store.save_preferences(&preferences)?;
     let core=Arc::new(Mutex::new(NetworkCore::new(store,engine::installed_engine(directory))?));
     let preparing=Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -66,6 +69,21 @@ fn prepare(directory: &Path, resources: &Path, isolated: bool) -> Result<AppStat
 
 fn run() -> Result<()> {
     let args=std::env::args_os().collect::<Vec<_>>();
+    if args.get(1).is_some_and(|v|v=="--installer-check-client") {
+        std::process::exit(if netpulse_core::layout::client_running()? {10} else {0});
+    }
+    if args.get(1).is_some_and(|v|v=="--resolve-data") {
+        let exe=std::env::current_exe().map_err(|e|Error::io("layout",e))?;
+        let legacy=std::env::var_os("LOCALAPPDATA").map(|p|PathBuf::from(p).join("NetPulseQt"));
+        let profile=netpulse_core::layout::resolve_profile(exe.parent().unwrap(),legacy.as_deref())?;
+        if let Some(local)=std::env::var_os("LOCALAPPDATA") {let _=netpulse_core::layout::cleanup_legacy_application(exe.parent().unwrap(),&PathBuf::from(local).join("Programs"));}
+        println!("{}",serde_json::json!({"directory":profile}));return Ok(());
+    }
+    if args.get(1).is_some_and(|v|v=="--installer-prepare-layout"||v=="--installer-finalize-layout") {
+        let root=PathBuf::from(args.get(2).ok_or_else(||Error::new("InstallDirectory","layout","Expected install directory"))?);
+        if root!=netpulse_core::service::application_directory()? {return Err(Error::new("InstallDirectory","layout","The installation must use the protected NetPulse directory"));}
+        return if args[1]=="--installer-finalize-layout" {netpulse_core::layout::finalize_install_root(&root)} else {netpulse_core::layout::prepare_install_root(&root)};
+    }
     if args.get(1).is_some_and(|v|v=="--installer-service-install") {
         let executable=std::env::current_exe().map_err(|e|Error::io("installer",e))?;
         let root=executable.parent().unwrap();

@@ -381,11 +381,34 @@ pub fn write_approvals(directory: &Path, records: &[Approval]) -> Result<()> {
     }
     Ok(())
 }
+fn fill_missing_companions(stage: &Path, bundle: &Path) -> Result<()> {
+    crate::engine::verify_engine(&bundle.join("sing-box.exe"))?;
+    crate::runtime::verify_xray(&bundle.join("xray.exe"))?;
+    for name in ["sing-box.exe","libcronet.dll","xray.exe"] {
+        match std::fs::symlink_metadata(stage.join(name)) {
+            Ok(_) => {},
+            Err(e) if e.kind()==std::io::ErrorKind::NotFound => {
+                std::fs::copy(bundle.join(name),stage.join(name)).map_err(|e|crate::engine::component_access_error(&bundle.join(name).to_string_lossy(),e))?;
+            },
+            Err(e)=>return Err(crate::engine::component_access_error(&stage.join(name).to_string_lossy(),e)),
+        }
+    }
+    Ok(())
+}
 pub fn install(
     release: Release,
     data: &Path,
     profiles: &[crate::model::Profile],
     prefs: &crate::model::Preferences,
+) -> Result<()> {
+    install_with_bundle(release,data,profiles,prefs,None)
+}
+pub fn install_with_bundle(
+    release: Release,
+    data: &Path,
+    profiles: &[crate::model::Profile],
+    prefs: &crate::model::Preferences,
+    bundle: Option<&Path>,
 ) -> Result<()> {
     authenticate(&release)?;
     let target = data.join("engine");
@@ -404,6 +427,10 @@ pub fn install(
                     .map_err(|e| Error::io("core-stage", e))?;
             }
         }
+        // This explicit update may follow a failed/missing runtime installation.
+        // Fill absent companion components from the shipped, verified bundle;
+        // preserve all present components, including user-selected versions.
+        if let Some(bundle)=bundle {fill_missing_companions(&stage,bundle)?;}
         let bytes = archive(&release, Some(&data.join("core-downloads")))?;
         let name = if release.engine == "xray" {
             "xray.exe"
@@ -559,7 +586,7 @@ pub fn executable_version(path: &Path, engine: &str) -> Result<String> {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000);
     }
-    let mut child = cmd.spawn().map_err(|e| Error::io("core-version", e))?;
+    let mut child = cmd.spawn().map_err(|e| crate::engine::component_access_error(&path.to_string_lossy(),e))?;
     let until = std::time::Instant::now() + Duration::from_secs(4);
     loop {
         if let Some(status) = child.try_wait().map_err(|e| Error::io("core-version", e))? {
@@ -600,6 +627,17 @@ pub fn executable_version(path: &Path, engine: &str) -> Result<String> {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[ignore = "Pinned local runtime fixtures only; no downloads or system changes"]
+    fn explicit_install_fills_missing_companion_without_overwriting_existing_files() {
+        let stage=tempfile::tempdir().unwrap();let bundle=tempfile::tempdir().unwrap();
+        let sbox=std::path::PathBuf::from(std::env::var_os("NETPULSE_TEST_ENGINE").unwrap());let xray=std::path::PathBuf::from(std::env::var_os("NETPULSE_TEST_XRAY").unwrap());
+        for (source,name) in [(sbox.clone(),"sing-box.exe"),(sbox.with_file_name("libcronet.dll"),"libcronet.dll"),(xray,"xray.exe")] {std::fs::copy(source,bundle.path().join(name)).unwrap();}
+        std::fs::write(stage.path().join("xray.exe"),b"existing selected version").unwrap();
+        super::fill_missing_companions(stage.path(),bundle.path()).unwrap();
+        crate::engine::verify_engine(&stage.path().join("sing-box.exe")).unwrap();assert_eq!(std::fs::read(stage.path().join("xray.exe")).unwrap(),b"existing selected version");
+        std::fs::write(bundle.path().join("sing-box.exe"),b"tampered").unwrap();assert!(super::fill_missing_companions(stage.path(),bundle.path()).is_err());
+    }
     use super::*;
     #[test]
     fn cache_cleanup_removes_only_owned_zip_names() {

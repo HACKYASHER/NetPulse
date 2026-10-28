@@ -139,7 +139,7 @@ pub fn current_sid() -> Result<String> {
     let handle = Handle(token);
     token_sid(handle.0)
 }
-pub fn protected_directory() -> Result<PathBuf> {
+pub fn application_directory() -> Result<PathBuf> {
     use windows_sys::Win32::{
         System::Com::CoTaskMemFree,
         UI::Shell::{FOLDERID_ProgramFilesX64, SHGetKnownFolderPath},
@@ -165,7 +165,28 @@ pub fn protected_directory() -> Result<PathBuf> {
         std::slice::from_raw_parts(ptr, n)
     }));
     unsafe { CoTaskMemFree(ptr as _) };
-    Ok(path.join("NetPulse Core Qt"))
+    Ok(path.join("NetPulse"))
+}
+pub fn canonical_service_directory() -> Result<PathBuf> { Ok(application_directory()?.join("service")) }
+pub fn legacy_service_directory() -> Result<PathBuf> { Ok(application_directory()?.with_file_name("NetPulse Core Qt")) }
+/// Accept only the two installer-owned SCM locations while upgrading old clients.
+pub fn protected_directory() -> Result<PathBuf> {
+    use windows_service::{service::ServiceAccess,service_manager::{ServiceManager,ServiceManagerAccess}};
+    let canonical=canonical_service_directory()?;
+    let manager=ServiceManager::local_computer(None::<&str>,ServiceManagerAccess::CONNECT).map_err(service_error)?;
+    let handle=match manager.open_service(SERVICE_NAME,ServiceAccess::QUERY_CONFIG) {
+        Ok(h)=>h,
+        Err(windows_service::Error::Winapi(e)) if e.raw_os_error()==Some(1060)=>return Ok(canonical),
+        Err(e)=>return Err(service_error(e)),
+    };
+    let config=handle.query_config().map_err(service_configuration_error)?;
+    let actual=config.executable_path.to_string_lossy();
+    for directory in [canonical,legacy_service_directory()?] {
+        if actual.trim_matches('"').eq_ignore_ascii_case(&directory.join("NetPulseService.exe").to_string_lossy()) {
+            crate::layout::normal_directory(&directory)?;return Ok(directory);
+        }
+    }
+    Err(Error::new("ServiceIdentityMismatch","service-directory","Путь службы не принадлежит установке NetPulse. Обслуживание отменено."))
 }
 pub fn owner_sid() -> Result<String> {
     let root = winreg::RegKey::predef(windows_sys::Win32::System::Registry::HKEY_LOCAL_MACHINE);

@@ -83,9 +83,15 @@ pub fn check() -> Vec<CoreVersion> {
     .collect()
 }
 pub fn ensure_bundled(resources: &Path, data: &Path) -> Result<()> {
+    crate::layout::normal_directory(&data.join("engine"))?;
     let target = data.join("engine");
-    if engine::verify_engine(&target.join("sing-box.exe")).is_ok()
-        && runtime::verify_xray(&target.join("xray.exe")).is_ok()
+    if target.exists() {
+        // A previously activated runtime can have been quarantined. Do not
+        // silently recreate deleted or blocked executables on every startup.
+        engine::verify_engine(&target.join("sing-box.exe"))?;
+        runtime::verify_xray(&target.join("xray.exe"))?;
+    }
+    if target.exists()
         && (crate::core_releases::approval(&target, "xray")?.is_some()
             || crate::core_releases::hash(&target.join("xray.exe"))? == runtime::XRAY_SHA256)
     {
@@ -311,6 +317,11 @@ mod tests {
             std::fs::copy(from, cores.join(name)).unwrap();
         }
         ensure_bundled(resources.path(), data.path()).unwrap();
+        let sbox_path=data.path().join("engine/sing-box.exe");
+        std::fs::remove_file(&sbox_path).unwrap();
+        assert_eq!(ensure_bundled(resources.path(),data.path()).unwrap_err().code,"RuntimeComponentUnavailable");
+        assert!(!sbox_path.exists());
+        activate_bundled(resources.path(),data.path()).unwrap();
         std::fs::write(data.path().join("engine/marker"), b"old").unwrap();
         activate_bundled(resources.path(), data.path()).unwrap();
         assert!(!data.path().join("engine/marker").exists());

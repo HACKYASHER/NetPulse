@@ -1,4 +1,4 @@
-> Kaspersky context-menu scan supplied by the user: 3,381 objects, no threats detected. The file scope was not shown; service maintenance under antivirus protection remains unverified. [Details](docs/FIXES-1.0.4.md).
+> The installer keeps the client, engines, service and personal data under `C:\Program Files\NetPulse`. See [installation layout and profile migration](docs/INSTALLATION.md).
 
 # NetPulse
 
@@ -9,11 +9,11 @@ C++ / Qt Quick desktop interface with a separate Rust network controller,
 sing-box and Xray. Use System Proxy for proxy-aware applications or TUN for
 traffic capture through a virtual network adapter.
 
-**Current release: 1.0.4 · Windows x64**
+**Current release: 1.0.5 · Windows x64**
 
-[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.4/NetPulse-Setup.exe)
-· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.4/NetPulse-Portable.zip)
-· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.4)
+[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.5/NetPulse-Setup.exe)
+· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.5/NetPulse-Portable.zip)
+· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.5)
 · [Русская инструкция](README.ru.md)
 
 ![NetPulse desktop interface](docs/images/overview.png)
@@ -74,8 +74,11 @@ See [verification details](VERIFICATION.md).
 
 ## Data and previous versions
 
-This edition uses `%LOCALAPPDATA%\NetPulseQt` and a separate Windows service,
-`NetPulseCoreQt`. It does not automatically open or overwrite the old database.
+The installer keeps the client and service in `C:\Program Files\NetPulse`.
+Personal data lives in `data\<Windows SID>` under that root. The previous Qt
+profile in `%LOCALAPPDATA%\NetPulseQt` is verified and migrated on first launch.
+The service identity remains `NetPulseCoreQt`. The original 3.0.4 database is
+not automatically opened or overwritten.
 
 To migrate from **3.0.4**, create a backup in the old client and restore it in
 **Settings → Restore**, using the same Windows account. Restoring replaces the

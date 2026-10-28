@@ -1,4 +1,4 @@
-"""Create a per-user NSIS installer, portable ZIP, source ZIP and checksums."""
+"""Create a protected, single-root NSIS installer, portable ZIP, source ZIP and checksums."""
 from pathlib import Path
 import argparse, hashlib, json, os, shutil, subprocess, zipfile
 ROOT=Path(__file__).resolve().parents[1]
@@ -23,6 +23,11 @@ def main():
     if (ROOT/'VERIFICATION.json').is_file():shutil.copy2(ROOT/'VERIFICATION.json',RELEASE/'VERIFICATION.json')
     shutil.copytree(ROOT/'licenses',PAYLOAD/'licenses',dirs_exist_ok=True)
     shutil.copytree(ROOT/'docs',PAYLOAD/'docs',dirs_exist_ok=True)
+    # The normal user's first launch uses this bounded list to remove the old
+    # per-user program payload, leaving unknown/personal files untouched.
+    manifest=sorted(p.relative_to(PAYLOAD).as_posix() for p in PAYLOAD.rglob('*') if p.is_file())
+    manifest=sorted(set(manifest+['Uninstall.exe','NetPulse-Maintenance.exe','installation-files.txt']))
+    (PAYLOAD/'installation-files.txt').write_text('\n'.join(manifest)+'\n',encoding='utf-8')
     files=sorted(p for p in PAYLOAD.rglob('*') if p.is_file())
     directories=sorted((p for p in PAYLOAD.rglob('*') if p.is_dir()),key=lambda p:len(p.parts),reverse=True)
     script=ROOT/'.build/installer.nsi'
@@ -43,16 +48,16 @@ Var ExistingDirectory
 Var ExistingVersion
 Name "NetPulse"
 Caption "NetPulse"
-VIProductVersion "1.0.4.0"
+VIProductVersion "1.0.5.0"
 VIAddVersionKey "ProductName" "NetPulse"
 VIAddVersionKey "FileDescription" "NetPulse VPN client installer"
-VIAddVersionKey "ProductVersion" "1.0.4"
-VIAddVersionKey "FileVersion" "1.0.4"
+VIAddVersionKey "ProductVersion" "1.0.5"
+VIAddVersionKey "FileVersion" "1.0.5"
 VIAddVersionKey "LegalCopyright" "NetPulse contributors, GPL-3.0-or-later"
 OutFile "@OUTPUT@"
-InstallDir "$LOCALAPPDATA\Programs\NetPulse"
-InstallDirRegKey HKCU "Software\NetPulseQt" "InstallDir"
-RequestExecutionLevel user
+InstallDir "$PROGRAMFILES64\NetPulse"
+InstallDirRegKey HKLM "Software\NetPulseQt" "InstallDir"
+RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 SetCompressorDictSize 32
 !define MUI_ABORTWARNING
@@ -61,7 +66,7 @@ SetCompressorDictSize 32
 !insertmacro MUI_PAGE_WELCOME
 Page custom MaintenanceCreate MaintenanceLeave
 !insertmacro MUI_PAGE_LICENSE "@LICENSE@"
-!insertmacro MUI_PAGE_DIRECTORY
+; Fixed protected root: application, service and data must stay together.
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -96,9 +101,9 @@ LangString ServiceFailed ${LANG_RUSSIAN} "Служба TUN не установл
 LangString ServiceFailed ${LANG_ENGLISH} "The TUN service was not installed (code $ServiceResult). This does not necessarily mean Windows confirmation was cancelled. The client is installed; the error is recorded in the installation details."
 
 Function MaintenanceCreate
-  ReadRegStr $ExistingDirectory HKCU "Software\NetPulseQt" "InstallDir"
+  ReadRegStr $ExistingDirectory HKLM "Software\NetPulseQt" "InstallDir"
   IfFileExists "$ExistingDirectory\NetPulse.exe" 0 maintenance_skip
-  ReadRegStr $ExistingVersion HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion"
+  ReadRegStr $ExistingVersion HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion"
   !insertmacro MUI_HEADER_TEXT "$(MaintenanceTitle)" "NetPulse $ExistingVersion"
   nsDialogs::Create 1018
   Pop $MaintenanceDialog
@@ -123,32 +128,35 @@ Function MaintenanceLeave
     SetErrorLevel $1
     Quit
   ${EndIf}
-  StrCpy $INSTDIR $ExistingDirectory
+  StrCpy $INSTDIR "$PROGRAMFILES64\NetPulse"
 FunctionEnd
 
 
 Function .onInit
+  SetRegView 64
+  InitPluginsDir
+  SetOutPath "$PLUGINSDIR"
+  File /oname=netpulsed.exe "@PAYLOAD@\netpulsed.exe"
   ${GetParameters} $R0
   ClearErrors
   ${GetOptions} $R0 "/WAITFORCLIENT" $R1
   IfErrors regular_start
   StrCpy $R2 0
   wait_client:
-  ReadRegStr $0 HKCU "Software\NetPulseQt" "InstallDir"
-  IfFileExists "$0\NetPulse.exe" 0 regular_start
-  ExecWait '"$0\NetPulse.exe" --installer-check' $1
+  nsExec::ExecToStack '"$PLUGINSDIR\netpulsed.exe" --installer-check-client'
+  Pop $1
+  Pop $0
   StrCmp $1 0 regular_start
   Sleep 500
   IntOp $R2 $R2 + 1
   IntCmp $R2 60 regular_start wait_client regular_start
   regular_start:
-  ReadRegStr $0 HKCU "Software\NetPulseQt" "InstallDir"
-  StrCmp $0 "" done
-  IfFileExists "$0\NetPulse.exe" 0 done
-  ExecWait '"$0\NetPulse.exe" --installer-check' $1
+  nsExec::ExecToStack '"$PLUGINSDIR\netpulsed.exe" --installer-check-client'
+  Pop $1
+  Pop $0
   StrCmp $1 0 done
   IfSilent abort
-  MessageBox MB_OK|MB_ICONEXCLAMATION "Завершите NetPulse через меню значка в трее и повторите установку."
+  MessageBox MB_OK|MB_ICONEXCLAMATION "Завершите NetPulse через меню значка в трее и повторите установку / Quit NetPulse from the tray before installing."
   abort:
   SetErrorLevel 10
   Abort
@@ -156,22 +164,46 @@ Function .onInit
 FunctionEnd
 
 Section "NetPulse"
+  ; Validate and protect the canonical root before any payload overwrite.
+  InitPluginsDir
+  SetOutPath "$PLUGINSDIR"
+  File /oname=netpulsed.exe "@PAYLOAD@\netpulsed.exe"
+  nsExec::ExecToStack '"$PLUGINSDIR\netpulsed.exe" --installer-prepare-layout "$INSTDIR"'
+  Pop $0
+  Pop $1
+  StrCmp $0 0 layout_ready
+  IfSilent layout_abort
+  MessageBox MB_OK|MB_ICONSTOP "Не удалось подготовить общую папку NetPulse / Could not prepare the NetPulse folder.$\r$\n$1"
+  layout_abort:
+  SetErrorLevel 12
+  Abort
+  layout_ready:
   SetOutPath "$INSTDIR"
   File /r "@PAYLOAD@\*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKCU "Software\NetPulseQt" "InstallDir" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayName" "NetPulse"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.4"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "Publisher" "NetPulse"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "UninstallString" '"$INSTDIR\Uninstall.exe"'
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayIcon" "$INSTDIR\NetPulse.exe"
+  WriteRegStr HKLM "Software\NetPulseQt" "InstallDir" "$INSTDIR"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayName" "NetPulse"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.5"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "Publisher" "NetPulse"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayIcon" "$INSTDIR\NetPulse.exe"
   StrCmp $EXEPATH "$INSTDIR\NetPulse-Maintenance.exe" maintenance_copied
   CopyFiles /SILENT "$EXEPATH" "$INSTDIR\NetPulse-Maintenance.exe"
   maintenance_copied:
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "ModifyPath" '"$INSTDIR\NetPulse-Maintenance.exe"'
-  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "NoModify" 0
-  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "NoRepair" 1
+  nsExec::ExecToStack '"$PLUGINSDIR\netpulsed.exe" --installer-finalize-layout "$INSTDIR"'
+  Pop $0
+  Pop $1
+  StrCmp $0 0 files_protected
+  IfSilent security_abort
+  MessageBox MB_OK|MB_ICONSTOP "Не удалось защитить файлы NetPulse / Could not protect NetPulse files.$\r$\n$1"
+  security_abort:
+  SetErrorLevel 12
+  Abort
+  files_protected:
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "ModifyPath" '"$INSTDIR\NetPulse-Maintenance.exe"'
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "NoModify" 0
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "NoRepair" 1
   Delete "$DESKTOP\NetPulse Qt.lnk"
   Delete "$SMPROGRAMS\NetPulse Qt\NetPulse Qt.lnk"
   RMDir "$SMPROGRAMS\NetPulse Qt"
@@ -212,8 +244,8 @@ Section "NetPulse"
   service_cancelled:
   MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(ServiceCancelled)" IDRETRY install_service
   service_failed:
-  WriteRegStr HKCU "Software\NetPulseQt" "TunService" "not-installed"
-  WriteRegStr HKCU "Software\NetPulseQt" "TunServiceError" "$ServiceResult"
+  WriteRegStr HKLM "Software\NetPulseQt" "TunService" "not-installed"
+  WriteRegStr HKLM "Software\NetPulseQt" "TunServiceError" "$ServiceResult"
   StrCmp $ServiceResult "error" service_failure_unknown
   StrCmp $ServiceResult "timeout" service_failure_unknown
   SetErrorLevel $ServiceResult
@@ -223,13 +255,16 @@ Section "NetPulse"
   Goto service_done
   service_success:
   SetErrorLevel 0
-  WriteRegStr HKCU "Software\NetPulseQt" "TunService" "installed"
-  DeleteRegValue HKCU "Software\NetPulseQt" "TunServiceError"
+  WriteRegStr HKLM "Software\NetPulseQt" "TunService" "installed"
+  DeleteRegValue HKLM "Software\NetPulseQt" "TunServiceError"
   DetailPrint "$(ServiceInstalled)"
   service_done:
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt"
+  DeleteRegKey HKCU "Software\NetPulseQt"
 SectionEnd
 
 Section "Uninstall"
+  SetRegView 64
   ExecWait '"$INSTDIR\NetPulse.exe" --installer-check' $0
   StrCmp $0 0 closed
   IfSilent unabort
@@ -249,8 +284,8 @@ Section "Uninstall"
   Abort
   service_removed:
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "NetPulseQt"
-  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt"
-  DeleteRegKey HKCU "Software\NetPulseQt"
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt"
+  DeleteRegKey HKLM "Software\NetPulseQt"
   Delete "$DESKTOP\NetPulse.lnk"
   Delete "$SMPROGRAMS\NetPulse\NetPulse.lnk"
   RMDir "$SMPROGRAMS\NetPulse"
@@ -286,7 +321,7 @@ SectionEnd
                 archive.write(file,relative.as_posix())
     source_archive=ROOT.parent/'ONE/release-v2/NetPulse-Engine-Sources.zip'
     if source_archive.is_file():shutil.copy2(source_archive,RELEASE/source_archive.name)
-    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.4','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
+    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.5','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
     (RELEASE/'netpulse-qt-update-v1.json').write_text(json.dumps(marker,indent=2)+'\n',encoding='utf-8')
     outputs=[RELEASE/'netpulse-qt-update-v1.json',RELEASE/'NetPulse-Setup.exe',RELEASE/'NetPulse-Portable.zip',RELEASE/'NetPulse-Source.zip',PAYLOAD/'NetPulse.exe',PAYLOAD/'netpulsed.exe',PAYLOAD/'NetPulseService.exe']
     outputs += [p for p in [RELEASE/'NetPulse-Engine-Sources.zip',RELEASE/'VERIFICATION.json'] if p.is_file()]

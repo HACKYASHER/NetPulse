@@ -851,7 +851,8 @@ async fn update_core(
             .collect::<Result<Vec<_>>>()?;
         let engine = release.engine.clone();
         let previous = netpulse_core::core_releases::version(&data.join("engine"), &engine);
-        netpulse_core::core_releases::install(release, &data, &profiles, &c.store.preferences()?)?;
+        let exe=std::env::current_exe().map_err(|e|Error::io("core-bundle",e))?;
+        netpulse_core::core_releases::install_with_bundle(release, &data, &profiles, &c.store.preferences()?,Some(&exe.parent().unwrap().join("cores")))?;
         let installed = netpulse_core::core_releases::executable_version(&data.join("engine").join(if engine == "xray" {"xray.exe"} else {"sing-box.exe"}), &engine)?;
         c.store.log("INFO", "Update", "core-installed", "Verified", &format!("{engine}: {previous} -> {installed}; executable version and SHA-256 verified"))?;
         Ok(serde_json::json!({"engine":engine,"previous":previous,"installed":installed,"cache_clean": !std::fs::read_dir(data.join("core-downloads")).is_ok_and(|mut i| i.next().is_some())}))

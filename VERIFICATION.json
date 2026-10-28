@@ -1,24 +1,22 @@
 {
-  "version": "1.0.4",
+  "version": "1.0.5",
   "status": "release",
   "release_channel": "stable",
   "github_prerelease": false,
-  "validation_date": "2026-10-26",
+  "validation_date": "2026-10-28",
   "result": "passed_with_environment_limits",
   "core_tests": {
-    "passed": 117,
+    "passed": 126,
     "failed": 0,
     "blocked_by_environment": [
       "icmp::tests::owned_ipv4_and_ipv6_echo",
       "runtime::tests::prefer_ipv4_preserves_ipv6_only_names_without_using_external_dns"
     ],
-    "total": 119,
-    "stable_upgrade_order_verified": true
+    "total": 128
   },
   "service_file_tests": {
     "passed": 8,
-    "failed": 0,
-    "orphaned_owned_stages_preserved": true
+    "failed": 0
   },
   "service_self_test": {
     "protected_directory_lookup": true,
@@ -26,7 +24,7 @@
     "security_descriptor": true,
     "sid_validation": true,
     "system_changes": false,
-    "version": "1.0.4"
+    "version": "1.0.5"
   },
   "qml_interactions": {
     "passed": 15,
@@ -51,88 +49,27 @@
       "settings and profile persist after controller restart"
     ]
   },
-  "ui": [
-    {
-      "language": "ru",
-      "theme": "dark",
-      "activity_viewports_fit": true,
-      "core_log_rows": 2,
-      "frames": 22,
-      "network_changed": false,
-      "pages": 8,
-      "qml_issues": 0,
-      "qml_messages": [],
-      "qt": "6.8.3",
-      "result": "passed",
-      "version": "1.0.4",
-      "webview_used": false
-    },
-    {
-      "language": "ru",
-      "theme": "light",
-      "activity_viewports_fit": true,
-      "core_log_rows": 2,
-      "frames": 22,
-      "network_changed": false,
-      "pages": 8,
-      "qml_issues": 0,
-      "qml_messages": [],
-      "qt": "6.8.3",
-      "result": "passed",
-      "version": "1.0.4",
-      "webview_used": false
-    },
-    {
-      "language": "en",
-      "theme": "light",
-      "activity_viewports_fit": true,
-      "core_log_rows": 2,
-      "frames": 22,
-      "network_changed": false,
-      "pages": 8,
-      "qml_issues": 0,
-      "qml_messages": [],
-      "qt": "6.8.3",
-      "result": "passed",
-      "version": "1.0.4",
-      "webview_used": false
-    },
-    {
-      "language": "en",
-      "theme": "dark",
-      "activity_viewports_fit": true,
-      "core_log_rows": 2,
-      "frames": 22,
-      "network_changed": false,
-      "pages": 8,
-      "qml_issues": 0,
-      "qml_messages": [],
-      "qt": "6.8.3",
-      "result": "passed",
-      "version": "1.0.4",
-      "webview_used": false
-    }
-  ],
+  "layout": {
+    "result": "passed",
+    "packaged_profile_migration": true,
+    "encrypted_profile_preserved": true,
+    "preferences_preserved": true,
+    "legacy_known_files_cleaned": true,
+    "unknown_files_preserved": true,
+    "missing_engine_not_silently_recreated": true,
+    "explicit_offline_repair": true,
+    "all_data_under_application": true,
+    "system_network_changed": false
+  },
   "installer": {
     "result": "passed",
     "install": true,
     "update_repair": true,
     "uninstall": true,
     "data_preserved": true,
+    "in_root_data_preserved": true,
+    "layout_helper_stubbed": true,
     "registry_removed": true,
-    "installed_ui": {
-      "activity_viewports_fit": true,
-      "core_log_rows": 1,
-      "frames": 22,
-      "network_changed": false,
-      "pages": 8,
-      "qml_issues": 0,
-      "qml_messages": [],
-      "qt": "6.8.3",
-      "result": "passed",
-      "version": "1.0.4",
-      "webview_used": false
-    },
     "simulated_service_failure_codes": [
       20,
       21,
@@ -147,38 +84,82 @@
     "tun_service_installed": false,
     "global_network_changed": false
   },
-  "ipv6_environment": {
-    "tcp_ipv6_loopback": "failed",
-    "windows_error": 10013,
-    "message": "[WinError 10013] Сделана попытка доступа к сокету методом, запрещенным правами доступа",
-    "ping-6": {
-      "exit_code": 1,
-      "output": "\r\nPinging ::1 with 32 bytes of data:\r\nGeneral failure.\r\n\r\nPing statistics for ::1:\r\n    Packets: Sent = 1, Received = 0, Lost = 1 (100% loss),\r\n"
+  "ui": [
+    {
+      "language": "ru",
+      "theme": "dark",
+      "activity_viewports_fit": true,
+      "core_log_rows": 2,
+      "frames": 22,
+      "network_changed": false,
+      "pages": 8,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.5",
+      "webview_used": false
     },
-    "ping-4": {
-      "exit_code": 0,
-      "output": "\r\nPinging 127.0.0.1 with 32 bytes of data:\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\n\r\nPing statistics for 127.0.0.1:\r\n    Packets: Sent = 1, Received = 1, Lost = 0 (0% loss),\r\nApproximate round trip times in milli-seconds:\r\n    Minimum = 0ms, Maximum = 0ms, Average = 0ms\r\n"
+    {
+      "language": "ru",
+      "theme": "light",
+      "activity_viewports_fit": true,
+      "core_log_rows": 2,
+      "frames": 22,
+      "network_changed": false,
+      "pages": 8,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.5",
+      "webview_used": false
+    },
+    {
+      "language": "en",
+      "theme": "light",
+      "activity_viewports_fit": true,
+      "core_log_rows": 2,
+      "frames": 22,
+      "network_changed": false,
+      "pages": 8,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.5",
+      "webview_used": false
+    },
+    {
+      "language": "en",
+      "theme": "dark",
+      "activity_viewports_fit": true,
+      "core_log_rows": 2,
+      "frames": 22,
+      "network_changed": false,
+      "pages": 8,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.5",
+      "webview_used": false
     }
+  ],
+  "official_core_updates": {
+    "archives_removed": true,
+    "independent_service_approval": true,
+    "installed_xray": "26.10.21",
+    "previous_xray": "26.10.17",
+    "result": "passed",
+    "rollback": "passed",
+    "system_settings_changed": false
   },
-  "antivirus": {
-    "service_digitally_signed": false,
-    "vendor_false_positive_review": "not_obtained",
-    "user_provided_context_scan": {
-      "product": "Kaspersky Premium",
-      "objects": 3381,
-      "duration_seconds": 7,
-      "result": "no_threats_detected",
-      "evidence_received_date": "2026-10-26",
-      "file_scope_and_hashes_shown": false
-    },
-    "service_maintenance_under_antivirus": "not_verified",
-    "protection_or_quarantine_modified": false
-  },
-  "system_network_changed": false,
-  "live_tun_service_modified": false,
-  "limits": [
-    "Two strict IPv6-dependent tests remain blocked: standard Windows ping ::1 fails and an independent TCP ::1 probe returns WSAEACCES 10013. Network and protection settings were not changed.",
-    "No live privileged service installation or TUN connection was attempted; installer service outcomes were simulated in an isolated namespace.",
-    "The supplied context-menu scan does not establish the cause of the earlier behavioral detection or validate service maintenance under antivirus protection."
+  "limitations": [
+    "Actual elevated installation and SCM relocation were not executed against the live Windows service.",
+    "Installer hooks were stubbed in a unique test namespace; profile migration, private ACLs and repair were exercised separately on real temporary files.",
+    "Two IPv6 loopback tests are blocked independently by Windows error 10013.",
+    "No new vendor antivirus verdict or signing certificate was obtained for this release.",
+    "No antivirus, quarantine, live proxy, route or VPN settings were changed."
   ]
 }

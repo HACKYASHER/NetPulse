@@ -18,20 +18,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         runtime::verify_xray(&target.join("xray.exe"))?;
     }
     let previous = core_releases::executable_version(&target.join("xray.exe"), "xray")?;
-    for (name, version) in [
-        ("xray", runtime::XRAY_VERSION),
-        ("sing-box", engine::ENGINE_VERSION),
-    ] {
+    for name in ["xray", "sing-box"] {
         println!("Checking official release list: {name}");
         let releases = core_releases::list(name)?;
-        let tag = format!("v{version}");
         let selected = releases
             .iter()
-            .find(|r| r.tag == tag)
+            .find(|r| !r.prerelease)
             .cloned()
-            .ok_or("Bundled release missing in official list")?;
+            .ok_or("Stable official release missing in release list")?;
+        let version=selected.tag.trim_start_matches('v').to_owned();
         println!("Installing and validating: {name} {}", selected.tag);
-        core_releases::install(selected, data.path(), &[], &Preferences::default())?;
+        // Deliberately remove a companion core before the explicit update.
+        // The packaged bundle must supply it without requiring a prior repair.
+        if name=="xray" { std::fs::remove_file(target.join("sing-box.exe"))?; }
+        let bundle=sbox.parent().ok_or("Fixture bundle directory missing")?;
+        core_releases::install_with_bundle(selected, data.path(), &[], &Preferences::default(),Some(bundle))?;
         assert!(core_releases::approval(&target, name)?.is_some());
         assert_eq!(
             core_releases::executable_version(
