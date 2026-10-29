@@ -54,11 +54,11 @@ Var ExistingDirectory
 Var ExistingVersion
 Name "NetPulse"
 Caption "NetPulse"
-VIProductVersion "1.0.6.0"
+VIProductVersion "1.0.7.0"
 VIAddVersionKey "ProductName" "NetPulse"
 VIAddVersionKey "FileDescription" "NetPulse VPN client installer"
-VIAddVersionKey "ProductVersion" "1.0.6"
-VIAddVersionKey "FileVersion" "1.0.6"
+VIAddVersionKey "ProductVersion" "1.0.7"
+VIAddVersionKey "FileVersion" "1.0.7"
 VIAddVersionKey "LegalCopyright" "NetPulse contributors, GPL-3.0-or-later"
 OutFile "@OUTPUT@"
 InstallDir "$PROGRAMFILES64\NetPulse"
@@ -220,7 +220,7 @@ Section "NetPulse"
   Abort
   files_protected:
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayName" "NetPulse"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.6"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.7"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "Publisher" "NetPulse"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "InstallLocation" "$INSTDIR"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "UninstallString" '"$INSTDIR\Uninstall.exe"'
@@ -356,7 +356,7 @@ SectionEnd
     with zipfile.ZipFile(source_archive) as source_zip:
         source_manifest=json.loads(source_zip.read('manifest.json'))
         if {(r['name'],r['tag']) for r in source_manifest['roots']}!={('sing-box','v1.14.4-netpulse.1'),('xray','v26.10.21')}:raise RuntimeError('Engine sources do not match the bundled versions')
-    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.6','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
+    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.7','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
     (RELEASE/'netpulse-qt-update-v1.json').write_text(json.dumps(marker,indent=2)+'\n',encoding='utf-8')
     outputs=[RELEASE/'netpulse-qt-update-v1.json',RELEASE/'NetPulse-Setup.exe',RELEASE/'NetPulse-Portable.zip',RELEASE/'NetPulse-Source.zip',PAYLOAD/'NetPulse.exe',PAYLOAD/'netpulsed.exe',PAYLOAD/'NetPulseService.exe']
     outputs += [p for p in [RELEASE/'NetPulse-Engine-Sources.zip',RELEASE/'VERIFICATION.json'] if p.is_file()]

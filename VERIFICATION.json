@@ -1,18 +1,18 @@
 {
-  "version": "1.0.6",
+  "version": "1.0.7",
   "status": "release",
   "release_channel": "stable",
   "github_prerelease": false,
   "validation_date": "2026-10-29",
   "result": "passed_with_environment_limits",
   "core_tests": {
-    "passed": 137,
+    "passed": 139,
     "failed": 0,
+    "total": 141,
     "blocked_by_environment": [
       "icmp::tests::owned_ipv4_and_ipv6_echo",
       "runtime::tests::prefer_ipv4_preserves_ipv6_only_names_without_using_external_dns"
-    ],
-    "total": 139
+    ]
   },
   "controller_tests": {
     "passed": 5,
@@ -32,17 +32,23 @@
     "own_loopback_targets_only": true,
     "internet_speed_benchmark": false
   },
-  "service_self_test": {
-    "protected_directory_lookup": true,
+  "startup": {
     "result": "passed",
-    "security_descriptor": true,
-    "sid_validation": true,
-    "system_changes": false,
-    "version": "1.0.6"
-  },
-  "qml_interactions": {
-    "passed": 15,
-    "failed": 0
+    "version": "1.0.7",
+    "checks": [
+      "default profile with existing database starts from multiple working directories",
+      "migration list contains only absolute noncurrent profiles",
+      "stale lock from a missing process is recovered",
+      "directory creation error is not reported as another instance",
+      "lock file access error is not reported as another instance",
+      "real GUI reaches its isolated controller using default profile resolution",
+      "second instance preserves the active primary lock",
+      "restart after abrupt isolated client exit recovers its lock",
+      "existing profile is preserved"
+    ],
+    "production_profile_changed": false,
+    "system_network_changed": false,
+    "registry_modified": false
   },
   "controller_integration": {
     "passed_groups": 15,
@@ -62,8 +68,7 @@
       "audit reads work and path traversal is rejected",
       "last per-server ping survives controller restart",
       "settings and profile persist after controller restart"
-    ],
-    "system_network_changed": false
+    ]
   },
   "layout": {
     "result": "passed",
@@ -76,45 +81,6 @@
     "explicit_offline_repair": true,
     "all_data_under_application": true,
     "system_network_changed": false
-  },
-  "installer": {
-    "result": "passed",
-    "install": true,
-    "update_repair": true,
-    "uninstall": true,
-    "reinstall_with_retained_data": true,
-    "data_preserved": true,
-    "in_root_data_preserved": true,
-    "layout_helper_stubbed": true,
-    "uninstall_entry_removed": true,
-    "profile_identity_retained": true,
-    "test_registry_cleaned": true,
-    "installed_ui": {
-      "activity_viewports_fit": true,
-      "core_log_rows": 1,
-      "frames": 22,
-      "network_changed": false,
-      "pages": 8,
-      "qml_issues": 0,
-      "qml_messages": [],
-      "qt": "6.8.3",
-      "result": "passed",
-      "version": "1.0.6",
-      "webview_used": false
-    },
-    "simulated_service_failure_codes": [
-      20,
-      21,
-      22,
-      23,
-      24,
-      1,
-      "error",
-      "timeout"
-    ],
-    "simulated_success_clears_error": true,
-    "tun_service_installed": false,
-    "global_network_changed": false
   },
   "ui": [
     {
@@ -129,7 +95,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "webview_used": false
     },
     {
@@ -144,7 +110,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "webview_used": false
     },
     {
@@ -159,7 +125,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "webview_used": false
     },
     {
@@ -174,36 +140,17 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "webview_used": false
     }
   ],
-  "official_core_updates": {
+  "service_self_test": {
+    "protected_directory_lookup": true,
     "result": "passed",
-    "checks": [
-      {
-        "engine": "xray",
-        "previous": "26.10.17",
-        "installed": "26.10.21",
-        "hysteria2_profile_present": true,
-        "snapshot_max_seconds": 0.0,
-        "cached_lookup_seconds": 0.0,
-        "archives_clean": true
-      },
-      {
-        "engine": "sing-box",
-        "previous": "1.14.3",
-        "installed": "1.14.4",
-        "hysteria2_profile_present": true,
-        "snapshot_max_seconds": 0.0,
-        "cached_lookup_seconds": 0.0,
-        "archives_clean": true
-      }
-    ],
-    "restored_patched_bundle": "1.14.4-netpulse.1",
-    "concurrent_data_reset_blocked": true,
-    "system_network_changed": false,
-    "core_updates_did_not_block_controller": true
+    "security_descriptor": true,
+    "sid_validation": true,
+    "system_changes": false,
+    "version": "1.0.7"
   },
   "bundled_engines": {
     "sing-box": {
@@ -220,72 +167,17 @@
     },
     "engine_source_modules": 107
   },
-  "dependency_audit": {
-    "version": "1.0.6",
-    "date": "2026-10-29",
-    "rustsec": {
-      "dependencies": 215,
-      "vulnerabilities": 0,
-      "warnings": 0,
-      "database_commit": "40f5be6fb12ed93fc591bf4ab23b7d793b3f2239",
-      "yanked_check_performed": false
-    },
-    "go": {
-      "scanner": "govulncheck 1.9.0",
-      "mode": "binary symbol",
-      "database_last_modified": "2026-10-27T21:16:18Z",
-      "advisories": {
-        "sing-box": [
-          "GO-2026-4762",
-          "GO-2026-4945",
-          "GO-2026-5774",
-          "GO-2026-5775",
-          "GO-2026-5777",
-          "GO-2026-5932",
-          "GO-2026-6061",
-          "GO-2026-6179",
-          "GO-2026-6180",
-          "GO-2026-6237",
-          "GO-2026-6303",
-          "GO-2026-6348",
-          "GO-2026-6354",
-          "GO-2026-6355",
-          "GO-2026-6441",
-          "GO-2026-6443",
-          "GO-2026-6603",
-          "GO-2026-6610",
-          "GO-2026-6611",
-          "GO-2026-6612",
-          "GO-2026-6617",
-          "GO-2026-6629",
-          "GO-2026-6860",
-          "GO-2026-6866"
-        ],
-        "sing-box-patched": [
-          "GO-2026-5932"
-        ],
-        "xray": [
-          "GO-2026-5932",
-          "GO-2026-6860",
-          "GO-2026-6866"
-        ]
-      },
-      "patched_openpgp_assessment": "Module-wide warning retained; no OpenPGP package in the exact compiled package list.",
-      "xray_assessment": "Official binary retained. NetPulse does not supply HTML or OpenPGP input in its restricted run configuration; the upstream advisories remain."
-    },
-    "qt": {
-      "version": "6.8.3",
-      "known_later_advisories_remain": true,
-      "assessment": "Reviewed NetPulse inputs use plain text, embedded trusted SVG and local EXE icons; no subscription-provided SVG/XML/HTML is loaded into Qt."
-    }
+  "unchanged_component_audit": {
+    "source_version": "1.0.6",
+    "dependency_versions_unchanged": true,
+    "engine_bytes_unchanged": true,
+    "report": "docs/SECURITY-AUDIT-1.0.6.ru.md"
   },
   "limitations": [
-    "Actual elevated installation, service relocation and TUN/proxy connections were not executed against the live Windows configuration.",
-    "Installer layout/service/cache hooks were stubbed in a unique test namespace. Profile migration, private ACLs, repair and maintenance replacement were tested separately on owned temporary files; this is not a live multi-user/UAC test.",
-    "Two IPv6 loopback tests were skipped after independent TCP ::1 failed with Windows error 10013 and ping -6 failed; IPv4 loopback succeeded.",
-    "Known Qt 6.8.3 advisories and module-wide Go scanner warnings are documented; the complete application is not declared free of vulnerabilities.",
-    "No new Kaspersky verdict or signing certificate was obtained. Antivirus and quarantine were not modified.",
-    "No Internet throughput or MTU benchmark was performed; loopback transfer results do not predict Internet speed.",
-    "No live proxy, route, VPN or trust-store settings were changed during verification."
+    "Real elevated installation and TUN/proxy connections were not executed against the live Windows configuration.",
+    "Two IPv6 loopback tests remain excluded after the independent Windows 10013/environment diagnosis in 1.0.6.",
+    "The installer script differs only in its release version; its full scoped lifecycle test was last run for 1.0.6. Default-profile startup is now independently exercised by the packaged GUI.",
+    "No new antivirus verdict was obtained. Known dependency advisories and reachability limits documented for 1.0.6 remain applicable.",
+    "Tests use owned synthetic profiles. Production subscriptions, service, proxy and routes were not changed."
   ]
 }

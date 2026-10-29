@@ -25,6 +25,7 @@
 #include <QProcess>
 #include <memory>
 #include <vector>
+#include <cstdio>
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -57,7 +58,7 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("NetPulse"));
     QCoreApplication::setOrganizationName(QStringLiteral("NetPulse"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.6"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.7"));
     QApplication::setFont(QFont(QStringLiteral("Segoe UI"), 10));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QCommandLineParser parser;
@@ -65,10 +66,18 @@ int main(int argc, char** argv) {
     parser.addOption({QStringLiteral("data-dir"), QStringLiteral("Independent data folder"), QStringLiteral("path")});
     parser.addOption({QStringLiteral("background"), QStringLiteral("Start in the tray")});
     parser.addOption({QStringLiteral("installer-check"), QStringLiteral("Check that this user's Qt client is closed")});
+    parser.addOption({QStringLiteral("startup-check"), QStringLiteral("Check profile preparation and locking without starting the network")});
     parser.addOption({QStringLiteral("smoke-test"), QStringLiteral("Render all QML pages in isolated mode and exit"), QStringLiteral("output-directory")});
     parser.addOption({QStringLiteral("isolated"), QStringLiteral("Use isolated data for UI verification")});
     parser.process(app);
     const bool smoke = parser.isSet(QStringLiteral("smoke-test"));
+    const bool startupCheck=parser.isSet(QStringLiteral("startup-check"));
+    const auto startupFailure=[startupCheck](int code,const QString& message,bool information=false) {
+        if(startupCheck) std::fprintf(stderr,"%s\n",message.toUtf8().constData());
+        else if(information) QMessageBox::information(nullptr,QStringLiteral("NetPulse"),message);
+        else QMessageBox::critical(nullptr,QStringLiteral("NetPulse"),message);
+        return code;
+    };
     QString dataDirectory = parser.value(QStringLiteral("data-dir"));
     if (smoke) dataDirectory = QDir(parser.value(QStringLiteral("smoke-test"))).absoluteFilePath(QStringLiteral("data"));
 
@@ -80,13 +89,13 @@ int main(int argc, char** argv) {
 #ifdef Q_OS_WIN
             paths.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* a){a->flags|=0x08000000;});
 #endif
-            paths.start();if(!paths.waitForStarted(10000)||!paths.waitForFinished(10000)||paths.exitCode()!=0){QMessageBox::critical(nullptr,QStringLiteral("NetPulse"),QStringLiteral("Не удалось определить прежнюю папку данных NetPulse."));return 12;}
+            paths.start();if(!paths.waitForStarted(10000)||!paths.waitForFinished(10000)||paths.exitCode()!=0)return startupFailure(12,QStringLiteral("Не удалось определить прежнюю папку данных NetPulse."));
             sources.clear();for(const auto& source:QJsonDocument::fromJson(paths.readAllStandardOutput()).object().value(QStringLiteral("sources")).toArray())sources.append(source.toString());
         }
         for (const auto& legacy:sources) if (QFileInfo::exists(legacy+QStringLiteral("/netpulse.db"))) {
             auto sourceLock=std::make_unique<QLockFile>(legacy+QStringLiteral("/client.lock"));
             if (!sourceLock->tryLock(100)) {
-                if (!parser.isSet(QStringLiteral("installer-check"))) QMessageBox::information(nullptr,QStringLiteral("NetPulse"),QStringLiteral("Закройте прежний NetPulse через значок в трее перед переносом данных."));
+                if (!parser.isSet(QStringLiteral("installer-check"))) return startupFailure(10,sourceLock->error()==QLockFile::LockFailedError?QStringLiteral("Закройте прежний NetPulse через значок в трее перед переносом данных."):QStringLiteral("Не удалось открыть папку прежнего профиля NetPulse. Проверьте права доступа к папке:\n")+legacy,true);
                 return 10;
             }
             legacyLocks.push_back(std::move(sourceLock));
@@ -109,16 +118,23 @@ int main(int argc, char** argv) {
         resolver.start();
         if (!resolver.waitForStarted(10000) || !resolver.waitForFinished(180000) || resolver.exitCode()!=0) {
             const auto detail=QJsonDocument::fromJson(resolver.readAllStandardOutput()).object().value(QStringLiteral("data")).toObject().value(QStringLiteral("message")).toString();
-            QMessageBox::critical(nullptr,QStringLiteral("NetPulse"),QStringLiteral("Не удалось подготовить папку данных NetPulse. Исходный профиль сохранён.\n")+detail+QString::fromUtf8(resolver.readAllStandardError()));
-            return 12;
+            return startupFailure(12,QStringLiteral("Не удалось подготовить папку данных NetPulse. Исходный профиль сохранён.\n")+detail+QString::fromUtf8(resolver.readAllStandardError()));
         }
         dataDirectory=QJsonDocument::fromJson(resolver.readAllStandardOutput()).object().value(QStringLiteral("directory")).toString();
         if (dataDirectory.isEmpty() || !QDir::isAbsolutePath(dataDirectory)) return 12;
     }
-    dataDirectory = QDir(dataDirectory).absolutePath(); QDir().mkpath(dataDirectory);
-    QLockFile lock(dataDirectory + QStringLiteral("/client.lock"));
+    dataDirectory = QDir(dataDirectory).absolutePath();
+    if(!QDir().mkpath(dataDirectory))return startupFailure(12,QStringLiteral("Не удалось создать папку данных NetPulse:\n")+dataDirectory);
+    const QString lockPath=dataDirectory+QStringLiteral("/client.lock");
+    const QFileInfo lockInfo(lockPath);
+    if(lockInfo.isSymLink()||(lockInfo.exists()&&!lockInfo.isFile()))return startupFailure(12,QStringLiteral("Файл блокировки NetPulse имеет неверный тип. Проверьте путь:\n")+lockPath);
+    QLockFile lock(lockPath);
     if (parser.isSet(QStringLiteral("installer-check"))) return lock.tryLock(100) ? 0 : 10;
-    if (!lock.tryLock(100)) { QMessageBox::information(nullptr, QStringLiteral("NetPulse"), QStringLiteral("Эта копия NetPulse уже работает. Откройте её через значок в трее.")); return 1; }
+    if (!lock.tryLock(100)) {
+        if(lock.error()==QLockFile::LockFailedError)return startupFailure(1,QStringLiteral("Эта копия NetPulse уже работает. Откройте её через значок в трее."),true);
+        return startupFailure(12,QStringLiteral("Не удалось создать файл блокировки NetPulse. Проверьте права доступа к папке данных:\n")+dataDirectory);
+    }
+    if(startupCheck)return 0;
     Backend backend(dataDirectory, smoke || parser.isSet(QStringLiteral("isolated")));
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("apps"),new ApplicationIcons);

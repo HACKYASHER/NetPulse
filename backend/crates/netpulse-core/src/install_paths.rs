@@ -8,7 +8,19 @@ pub fn registered_root()->Option<PathBuf> {
 }
 pub fn previous_roots()->Vec<PathBuf> {
     use winreg::{RegKey,enums::*};
-    RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey_with_flags(KEY,KEY_READ|KEY_WOW64_64KEY).ok().and_then(|k|k.get_value::<Vec<String>,_>("PreviousInstallDirs").ok()).unwrap_or_default().into_iter().map(PathBuf::from).collect()
+    let values=RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey_with_flags(KEY,KEY_READ|KEY_WOW64_64KEY).ok().and_then(|k|k.get_value::<Vec<String>,_>("PreviousInstallDirs").ok()).unwrap_or_default();
+    previous_root_values(values)
+}
+fn previous_root_values(values:Vec<String>)->Vec<PathBuf> {
+    use std::path::{Component,Prefix};
+    values.into_iter().filter_map(|value| {
+        let path=PathBuf::from(value);
+        // An empty REG_MULTI_SZ can decode as [""]. Joining that entry with
+        // data/SID would resolve against the working directory and lock our
+        // own current profile as a supposed migration source.
+        let disk=matches!(path.components().next(),Some(Component::Prefix(p)) if matches!(p.kind(),Prefix::Disk(_)|Prefix::VerbatimDisk(_)));
+        (disk&&path.is_absolute()&&!path.components().any(|p|matches!(p,Component::ParentDir))).then_some(path)
+    }).collect()
 }
 fn same(a:&Path,b:&Path)->bool {a.to_string_lossy().eq_ignore_ascii_case(&b.to_string_lossy())}
 fn registered(root:&Path)->bool {registered_root().into_iter().chain(previous_roots()).any(|p|same(&p,root))}
@@ -32,15 +44,28 @@ pub fn record_root(root:&Path)->Result<()> {
     if let Some(old)=registered_root().filter(|p|!same(p,root)){previous.retain(|p|!same(p,&old));previous.insert(0,old);}
     previous.retain(|p|!same(p,root));
     let (key,_)=RegKey::predef(HKEY_LOCAL_MACHINE).create_subkey_with_flags(KEY,KEY_READ|KEY_WRITE|KEY_WOW64_64KEY).map_err(|e|Error::io("install-location",e))?;
-    key.set_value("PreviousInstallDirs",&previous.iter().map(|p|p.to_string_lossy().into_owned()).collect::<Vec<_>>()).map_err(|e|Error::io("install-location",e))?;
+    if previous.is_empty() {
+        if let Err(e)=key.delete_value("PreviousInstallDirs") {if e.kind()!=std::io::ErrorKind::NotFound{return Err(Error::io("install-location",e));}}
+    } else {
+        key.set_value("PreviousInstallDirs",&previous.iter().map(|p|p.to_string_lossy().into_owned()).collect::<Vec<_>>()).map_err(|e|Error::io("install-location",e))?;
+    }
     key.set_value("InstallDir",&root.to_string_lossy().into_owned()).map_err(|e|Error::io("install-location",e))?;
     if pending(root){let _=key.delete_value("PendingInstallDir");}Ok(())
 }
 pub fn profile_sources(root:&Path)->Result<Vec<PathBuf>> {
     let sid=crate::service::current_sid()?;
-    let mut sources=previous_roots().into_iter().filter(|p|!same(p,root)).map(|p|p.join("data").join(&sid)).collect::<Vec<_>>();
-    if let Some(local)=std::env::var_os("LOCALAPPDATA"){sources.push(PathBuf::from(local).join("NetPulseQt"));}
-    Ok(sources)
+    Ok(migration_sources(root,previous_roots(),std::env::var_os("LOCALAPPDATA").map(PathBuf::from),&sid))
+}
+fn profile_path_key(path:&Path)->String {
+    let path=path.canonicalize().unwrap_or_else(|_|path.to_path_buf());
+    let text=path.to_string_lossy().replace('/',"\\");
+    text.strip_prefix(r"\\?\").unwrap_or(&text).trim_end_matches('\\').to_lowercase()
+}
+fn migration_sources(root:&Path,previous:Vec<PathBuf>,local:Option<PathBuf>,sid:&str)->Vec<PathBuf> {
+    let current=profile_path_key(&root.join("data").join(sid));
+    let mut seen=std::collections::HashSet::from([current]);
+    previous.into_iter().map(|p|p.join("data").join(sid)).chain(local.map(|p|p.join("NetPulseQt")))
+        .filter(|p|p.is_absolute()&&seen.insert(profile_path_key(p))).collect()
 }
 fn invalid()->Error {Error::new("UnsafeInstallDirectory","install-location","Выберите отдельную папку на локальном диске, например D:\\NetPulse. Родительская папка должна быть защищена от подмены без прав администратора.")}
 pub fn validate_root(root:&Path)->Result<()> {
@@ -145,6 +170,21 @@ pub fn cleanup_previous_payload(root:&Path)->Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn empty_registry_history_cannot_lock_the_current_profile() {
+        let sid="S-1-5-21-1-2-3-1001";
+        let root=Path::new(r"C:\Program Files\NetPulse");
+        for values in [vec![],vec![""],vec![""," ",".","data",r"C:",r"C:relative",r"\\server\share",r"C:\old\..\NetPulse"]] {
+            let previous=previous_root_values(values.into_iter().map(str::to_owned).collect());
+            assert!(previous.is_empty());assert!(migration_sources(root,previous,None,sid).is_empty());
+        }
+    }
+    #[test] fn migration_history_skips_current_profile_and_duplicate_sources() {
+        let sid="S-1-5-21-1-2-3-1001";
+        let root=Path::new(r"C:\Program Files\NetPulse");
+        let previous=previous_root_values([r"C:\Program Files\NetPulse",r"c:/program files/NetPulse/",r"\\?\C:\Program Files\NetPulse",r"D:\OldNetPulse",r"d:/oldnetpulse/"].into_iter().map(str::to_owned).collect());
+        let sources=migration_sources(root,previous,Some(PathBuf::from(r"C:\Users\fixture\AppData\Local")),sid);
+        assert_eq!(sources,vec![PathBuf::from(r"D:\OldNetPulse").join("data").join(sid),PathBuf::from(r"C:\Users\fixture\AppData\Local\NetPulseQt")]);
+    }
     #[test] fn protected_payload_rejects_foreign_owners_and_writable_acls() {
         use windows_sys::Win32::Security::*;
         for (sddl,valid) in [
