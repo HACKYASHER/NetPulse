@@ -1170,6 +1170,7 @@ async fn manage_service(
     state: host::State<'_, AppState>,
     install: bool,
     upgrade: Option<bool>,
+    repair: Option<bool>,
 ) -> Result<()> {
     let resource=netpulse_core::service::installer_executable()?;
     with_core(&state, "manage_service", move |c| {
@@ -1207,12 +1208,12 @@ async fn manage_service(
         if install {
             engine::verify_engine(&c.engine_path)?;
         }
-        netpulse_core::service::elevated_install(
+        if install && repair.unwrap_or(false) {netpulse_core::service::elevated_repair(&resource,directory)?;} else {netpulse_core::service::elevated_install(
             &resource,
             directory,
             install,
             upgrade.unwrap_or(false),
-        )?;
+        )?;}
         if recovery {
             c.disconnect()?;
         }

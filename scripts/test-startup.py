@@ -64,7 +64,7 @@ def main():
     try:
         boot=host.call('bootstrap');assert len(boot['profiles'])==1 and boot['profiles'][0]['name']=='Startup' and not boot['snapshot']['engine_pid']
     finally:host.close()
-    report={'result':'passed','version':'1.0.7','checks':['default profile with existing database starts from multiple working directories','migration list contains only absolute noncurrent profiles','stale lock from a missing process is recovered','directory creation error is not reported as another instance','lock file access error is not reported as another instance','real GUI reaches its isolated controller using default profile resolution','second instance preserves the active primary lock','restart after abrupt isolated client exit recovers its lock','existing profile is preserved'],'production_profile_changed':False,'system_network_changed':False,'registry_modified':False}
+    report={'result':'passed','version':'1.0.5','checks':['default profile with existing database starts from multiple working directories','migration list contains only absolute noncurrent profiles','stale lock from a missing process is recovered','directory creation error is not reported as another instance','lock file access error is not reported as another instance','real GUI reaches its isolated controller using default profile resolution','second instance preserves the active primary lock','restart after abrupt isolated client exit recovers its lock','existing profile is preserved'],'production_profile_changed':False,'system_network_changed':False,'registry_modified':False}
     (ROOT/'.build/startup-result.json').write_bytes((json.dumps(report,indent=2)+'\n').encode())
     print(json.dumps(report,indent=2))
 

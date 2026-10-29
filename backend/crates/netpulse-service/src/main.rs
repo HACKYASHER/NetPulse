@@ -82,7 +82,7 @@ fn main() {
         };
         std::process::exit(if result.is_ok() { 0 } else { 1 });
     }
-    if args.get(1).is_some_and(|a| a == "--upgrade") {
+    if args.get(1).is_some_and(|a| a == "--upgrade" || a == "--repair") {
         let result = (|| {
             if args.len() != 4 {
                 return Err(Error::new(
@@ -91,7 +91,7 @@ fn main() {
                     "Expected owner and engine directory",
                 ));
             }
-            upgrade(&args)
+            upgrade(&args,args[1]=="--repair")
         })();
         if let Err(e) = result {
             eprintln!("{e}");
@@ -382,8 +382,7 @@ fn install(args: &[String]) -> Result<()> {
     attempt.committed = true;
     Ok(())
 }
-fn upgrade(args: &[String]) -> Result<()> {
-    use std::os::windows::fs::MetadataExt;
+fn upgrade(args: &[String], repair:bool) -> Result<()> {
     use windows_service::{
         service::{ServiceAccess, ServiceState},
         service_manager::{ServiceManager, ServiceManagerAccess},
@@ -422,12 +421,6 @@ fn upgrade(args: &[String]) -> Result<()> {
     let config = handle.query_config().map_err(service::service_configuration_error)?;
     if config.executable_path.to_string_lossy().trim_matches('"')
         != dest.join("NetPulseService.exe").to_string_lossy()
-        || dest
-            .symlink_metadata()
-            .map_err(|e| Error::io("service-upgrade", e))?
-            .file_attributes()
-            & 0x400
-            != 0
     {
         return Err(Error::new(
             "ServiceIdentity",
@@ -435,6 +428,7 @@ fn upgrade(args: &[String]) -> Result<()> {
             "Unexpected service path; installation preserved",
         ));
     }
+    netpulse_core::layout::normal_directory(&dest)?;
     let owner: String =
         winreg::RegKey::predef(windows_sys::Win32::System::Registry::HKEY_LOCAL_MACHINE)
             .open_subkey(service::PARAMETERS)
@@ -447,9 +441,17 @@ fn upgrade(args: &[String]) -> Result<()> {
             "Installed service belongs to another user",
         ));
     }
-    // A damaged installed bundle can indicate quarantine. Do not repeatedly
-    // repopulate missing files through the maintenance button.
-    service::validate_service_files(&dest)?;
+    // Ordinary updates never repopulate missing components. Only a separate
+    // explicit repair action may do so, after verifying ownership and stopping SCM.
+    if repair {
+        service::validate_repair_identity(&dest,&service::canonical_service_directory()?,&owner,&args[2],false)?;
+        stop_installed(&args[2])?;
+        let state=handle.query_status().map_err(|_|Error::new("ServiceStatus","service-repair","Не удалось проверить состояние службы."))?;
+        service::validate_repair_identity(&dest,&service::canonical_service_directory()?,&owner,&args[2],state.current_state!=ServiceState::Stopped)?;
+        netpulse_core::install_paths::validate_root(&service::application_directory()?)?;
+        if !dest.exists() {netpulse_core::install_paths::create_protected_directory(&dest)?;}
+        service::protect_install_path(&dest)?;
+    } else {service::validate_service_files(&dest)?;}
     if dest!=service::canonical_service_directory()? {
         return relocate_service(&args[2],source,&approvals,&dest,&handle);
     }
@@ -530,7 +532,6 @@ fn relocate_service(owner: &str, source: &std::path::Path, approvals: &[netpulse
 }
 
 fn stop_installed(owner_sid: &str) -> Result<()> {
-    use std::os::windows::fs::MetadataExt;
     use windows_service::{
         service::ServiceAccess,
         service_manager::{ServiceManager, ServiceManagerAccess},
@@ -566,12 +567,6 @@ fn stop_installed(owner_sid: &str) -> Result<()> {
         .to_string_lossy()
         .trim_matches('"')
         .eq_ignore_ascii_case(&expected.to_string_lossy())
-        || dest
-            .symlink_metadata()
-            .map_err(|e| Error::io("service-stop", e))?
-            .file_attributes()
-            & 0x400
-            != 0
     {
         return Err(Error::new(
             "ServiceIdentity",
@@ -579,6 +574,7 @@ fn stop_installed(owner_sid: &str) -> Result<()> {
             "Unexpected service path; nothing stopped",
         ));
     }
+    netpulse_core::layout::normal_directory(&dest)?;
     let owner: String =
         winreg::RegKey::predef(windows_sys::Win32::System::Registry::HKEY_LOCAL_MACHINE)
             .open_subkey(service::PARAMETERS)
@@ -702,6 +698,7 @@ fn uninstall() -> Result<()> {
             "Could not remove the NetPulse service registration",
         )
     })?;
+    if !dest.exists() { return Ok(()); }
     // Fixed Program Files paths only. No recursive delete or computed traversal.
     for name in [
         "sing-box.exe",

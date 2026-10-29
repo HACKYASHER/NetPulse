@@ -111,7 +111,7 @@ impl Upgrade {
             verify()
         })();
         if let Err(error) = result {
-            if matches!(error.code.as_str(), "ServiceComponentsUnavailable" | "ServiceUpdateInterrupted" | "RuntimeComponentUnavailable" | "EngineHashMismatch" | "CoreApprovalMismatch") {
+            if matches!(error.code.as_str(), "ServiceComponentsMissing" | "ServiceComponentsUnavailable" | "ServiceUpdateInterrupted" | "RuntimeComponentUnavailable" | "EngineHashMismatch" | "CoreApprovalMismatch") {
                 return Err(interrupted());
             }
             // Validate every artifact before rollback. An externally deleted or
@@ -167,6 +167,24 @@ mod tests {
         assert!(target.file_name().unwrap().to_string_lossy().starts_with("netpulse-maintenance-"));
         let _=std::fs::remove_dir_all(target);
     } }
+    #[test]
+    fn explicit_repair_can_populate_an_absent_bundle_and_preserves_unknown_files() {
+        let f=Fixture::new();let source=Fixture::new();let unknown=f.file("user-note.txt",b"keep");
+        let files=["NetPulseService.exe","sing-box.exe","libcronet.dll","xray.exe"];
+        let sources=files.iter().map(|name|(*name,Some(source.file(name,name.as_bytes())))).collect::<Vec<_>>();
+        let mut tx=Upgrade::prepare(&f.0,&sources,&[],|_|Ok(())).unwrap();
+        tx.apply(|_|Ok(()),||netpulse_core::service::validate_service_files(&f.0)).unwrap();drop(tx);
+        for name in files {assert_eq!(std::fs::read(f.0.join(name)).unwrap(),name.as_bytes());}
+        assert_eq!(std::fs::read(unknown).unwrap(),b"keep");
+    }
+    #[test]
+    fn removal_during_explicit_repair_is_not_retried_or_rolled_back_over_detection() {
+        let f=Fixture::new();let source=Fixture::new();let candidate=source.file(FILES[0],b"verified fixture");
+        let mut tx=Upgrade::prepare(&f.0,&[(FILES[0],Some(candidate))],&[],|_|Ok(())).unwrap();
+        let target=f.0.join(FILES[0]);
+        assert_eq!(tx.apply(|_|Ok(()),||{std::fs::remove_file(&target).unwrap();Err(Error::new("ServiceComponentsMissing","verify","removed"))}).unwrap_err().code,"ServiceUpdateInterrupted");
+        assert!(!target.exists());
+    }
     #[test]
     fn orphaned_owned_updates_do_not_block_fresh_install_and_are_preserved() {
         let f=Fixture::new();validate_fresh_install_directory(&f.0).unwrap();

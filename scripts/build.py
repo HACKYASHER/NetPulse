@@ -1,6 +1,6 @@
 """Build the C++/QML client and standalone Rust controller and deploy Qt DLLs."""
 from pathlib import Path
-import argparse, json, os, shutil, subprocess, sys
+import argparse, hashlib, json, os, re, shutil, subprocess, sys
 
 ROOT=Path(__file__).resolve().parents[1]
 def environment():
@@ -24,7 +24,16 @@ def run(args,env,cwd=ROOT):
     args[0]=shutil.which(str(args[0]),path=env['PATH']) or str(args[0])
     subprocess.run([str(a) for a in args],env=env,cwd=cwd,check=True)
 
+def validate_bundled_cores():
+    for source,constant,name in [('engine.rs','ENGINE_SHA256','sing-box.exe'),('engine.rs','CRONET_SHA256','libcronet.dll'),('runtime.rs','XRAY_SHA256','xray.exe')]:
+        code=(ROOT/'backend/crates/netpulse-core/src'/source).read_text(encoding='utf-8')
+        expected=re.search(r'pub const '+constant+r':\s*&str\s*=\s*"([0-9a-f]{64})"',code)
+        path=ROOT/'resources/cores'/name
+        if expected is None or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest()!=expected.group(1):
+            raise RuntimeError('Bundled component is missing or differs from the pinned build: '+str(path))
+
 def main():
+    validate_bundled_cores()
     parser=argparse.ArgumentParser()
     parser.add_argument('--skip-backend',action='store_true')
     parser.add_argument('--cargo-target',type=Path,default=ROOT/'.build/rust')

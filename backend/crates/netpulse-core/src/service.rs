@@ -275,6 +275,14 @@ pub fn elevated_install(
     install: bool,
     upgrade: bool,
 ) -> Result<()> {
+    elevated_maintenance(installer,engine_directory,install,upgrade,false)
+}
+/// Explicit repair only: invoked by the restore button or the full installer.
+/// Ordinary connection attempts and core updates never recreate missing files.
+pub fn elevated_repair(installer:&Path,engine_directory:&Path)->Result<()> {
+    elevated_maintenance(installer,engine_directory,true,true,true)
+}
+fn elevated_maintenance(installer:&Path,engine_directory:&Path,install:bool,upgrade:bool,repair:bool)->Result<()> {
     if install {
         let state=installation_status()?;
         if let Some(error)=state.error.filter(|e|matches!(e.code.as_str(),"ServiceRegistrationDamaged"|"ServiceRestartRequired")) { return Err(error); }
@@ -284,7 +292,7 @@ pub fn elevated_install(
     let parameters = if install {
         format!(
             "{} {} \"{}\"",
-            if upgrade { "--upgrade" } else { "--install" },
+            if repair { "--repair" } else if upgrade { "--upgrade" } else { "--install" },
             current_sid()?,
             engine_directory.to_string_lossy()
         )
@@ -305,10 +313,10 @@ pub fn elevated_install(
 }
 fn readable_service_component(path: &Path) -> Result<()> {
     use std::os::windows::fs::MetadataExt;
-    let unavailable = |code: i32| Error::new(
-        "ServiceComponentsUnavailable", "service-files",
-        format!("Файл службы {} отсутствует или недоступен (Windows {code}). Операция остановлена. Проверьте отчёт антивируса; при срабатывании не повторяйте восстановление до проверки файла.",path.file_name().unwrap_or_default().to_string_lossy()),
-    );
+    let unavailable = |code:i32| {
+        if matches!(code,2|3) {Error::new("ServiceComponentsMissing","service-files",format!("Не найден компонент службы: {} (Windows {code}). В разделе «Сеть → Служба TUN» нажмите «Восстановить службу» или повторно запустите установщик NetPulse. Если файл был удалён антивирусом, сначала проверьте его отчёт.",path.display()))}
+        else {Error::new("ServiceComponentsUnavailable","service-files",format!("Компонент службы недоступен: {} (Windows {code}). Проверьте права доступа и отчёт антивируса; операция остановлена.",path.display()))}
+    };
     let metadata = std::fs::symlink_metadata(path).map_err(|e|unavailable(e.raw_os_error().unwrap_or(0)))?;
     if !metadata.is_file() || metadata.len()==0 || metadata.file_attributes() & 0x400 != 0 { return Err(unavailable(0)); }
     std::fs::File::open(path).map_err(|e|unavailable(e.raw_os_error().unwrap_or(0)))?;
@@ -319,6 +327,12 @@ pub fn validate_service_files(directory: &Path) -> Result<()> {
         readable_service_component(&directory.join(name))?;
     }
     Ok(())
+}
+pub fn validate_repair_identity(directory:&Path,canonical:&Path,owner:&str,requested_owner:&str,running:bool)->Result<()> {
+    if owner!=requested_owner {return Err(Error::new("ServiceOwner","service-repair","Служба принадлежит другому пользователю; восстановление отменено."));}
+    if running {return Err(Error::new("ServiceBusy","service-repair","Отключите VPN и остановите службу перед восстановлением."));}
+    if !directory.to_string_lossy().eq_ignore_ascii_case(&canonical.to_string_lossy()) {return Err(Error::new("ServiceIdentity","service-repair","Восстановление разрешено только в папку службы текущей установки NetPulse."));}
+    crate::layout::normal_directory(directory)
 }
 pub fn validate_install_source(installer: &Path, directory: &Path) -> Result<()> {
     crate::layout::local_directory(directory)?;
@@ -445,7 +459,7 @@ fn maintenance_result(code: u32) -> Result<()> {
 }
 pub fn maintenance_exit_code(error: &Error) -> i32 {
     match error.code.as_str() {
-        "ServiceComponentsUnavailable" | "ServiceUpdateInterrupted" | "RuntimeComponentUnavailable" | "ServiceSecurityBlocked" | "ServiceFilesMissing" => 20,
+        "ServiceComponentsMissing" | "ServiceComponentsUnavailable" | "ServiceUpdateInterrupted" | "RuntimeComponentUnavailable" | "ServiceSecurityBlocked" | "ServiceFilesMissing" => 20,
         "ServiceStopTimeout" | "ServiceStopFailed" => 21,
         "ServiceRegistrationDamaged" => 22,
         "UserCancelled" => 23,
@@ -1442,6 +1456,13 @@ impl Drop for Controller {
 
 #[cfg(test)]
 mod tests {
+    #[test] fn repair_requires_the_current_installation_owner_and_stopped_service() {
+        let temporary=tempfile::tempdir().unwrap();let canonical=temporary.path().join("service");let other=temporary.path().join("other");
+        assert!(super::validate_repair_identity(&canonical,&canonical,"owner","owner",false).is_ok());assert!(!canonical.exists());
+        assert_eq!(super::validate_repair_identity(&canonical,&canonical,"owner","different",false).unwrap_err().code,"ServiceOwner");
+        assert_eq!(super::validate_repair_identity(&canonical,&canonical,"owner","owner",true).unwrap_err().code,"ServiceBusy");
+        assert_eq!(super::validate_repair_identity(&other,&canonical,"owner","owner",false).unwrap_err().code,"ServiceIdentity");
+    }
     #[test] fn same_named_writable_helper_cannot_replace_the_registered_helper() {
         let temporary=tempfile::tempdir().unwrap();let root=temporary.path().join("protected");std::fs::create_dir(&root).unwrap();
         let expected=root.join("NetPulseService.exe");let other=temporary.path().join("NetPulseService.exe");
@@ -1454,7 +1475,7 @@ mod tests {
         let directory=std::env::temp_dir().join(format!("netpulse-service-files-{}",uuid::Uuid::new_v4()));
         std::fs::create_dir(&directory).unwrap();
         for name in ["NetPulseService.exe","sing-box.exe","libcronet.dll","xray.exe"] {
-            assert_eq!(validate_service_files(&directory).unwrap_err().code,"ServiceComponentsUnavailable");
+            assert_eq!(validate_service_files(&directory).unwrap_err().code,"ServiceComponentsMissing");
             std::fs::write(directory.join(name),b"fixture").unwrap();
         }
         validate_service_files(&directory).unwrap();

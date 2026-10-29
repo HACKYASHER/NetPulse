@@ -103,7 +103,8 @@ fn run() -> Result<()> {
         let executable=std::env::current_exe().map_err(|e|Error::io("installer",e))?;
         let root=executable.parent().unwrap();
         let installed=netpulse_core::service::installation_status()?.installed;
-        return netpulse_core::service::elevated_install(&root.join("NetPulseService.exe"),&root.join("cores"),true,installed);
+        let repair=installed && netpulse_core::service::validate_service_files(&netpulse_core::service::protected_directory()?).is_err_and(|e|e.code=="ServiceComponentsMissing");
+        return if repair {netpulse_core::service::elevated_repair(&root.join("NetPulseService.exe"),&root.join("cores"))} else {netpulse_core::service::elevated_install(&root.join("NetPulseService.exe"),&root.join("cores"),true,installed)};
     }
     if args.get(1).is_some_and(|v|v=="--installer-service-remove") {
         if netpulse_core::service::installation_status()?.installed {

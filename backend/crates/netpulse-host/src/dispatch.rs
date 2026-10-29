@@ -58,7 +58,7 @@ async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> 
         "diagnostic_history" => encode(diagnostic_history(host::State(state), argument::<String>(&params, "kind")?).await?),
         "select_profile" => encode(select_profile(host::State(state), argument::<String>(&params, "id")?).await?),
         "install_compatibility_runtime" => encode(install_compatibility_runtime(host::State(state)).await?),
-        "manage_service" => encode(manage_service(host::AppHandle, host::State(state), argument::<bool>(&params, "install")?, argument::<Option<bool>>(&params, "upgrade")?).await?),
+        "manage_service" => encode(manage_service(host::AppHandle, host::State(state), argument::<bool>(&params, "install")?, argument::<Option<bool>>(&params, "upgrade")?, argument::<Option<bool>>(&params, "repair")?).await?),
         "read_application_catalog" => encode(read_application_catalog(host::State(state)).await?),
         "save_application_catalog" => encode(save_application_catalog(host::State(state), argument::<Vec<inventory::Application>>(&params, "applications")?).await?),
         "scan_applications" => encode(scan_applications().await?),

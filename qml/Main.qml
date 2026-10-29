@@ -345,7 +345,7 @@ ApplicationWindow {
                     Layout.fillWidth: true; implicitHeight: 64
                     RowLayout { anchors.fill: parent; anchors.margins: 12; spacing: 9
                         Rectangle { width: 7; height: 7; radius: 4; color: modelData.engine_ready ? "#6bd9b0" : "#e0b86d" }
-                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.7"; font.pixelSize: 10; color: mutedColor } }
+                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.5"; font.pixelSize: 10; color: mutedColor } }
                     }
                 }
             }
@@ -678,9 +678,9 @@ ApplicationWindow {
                         Label { textFormat: Text.PlainText; text: tr("Служба TUN","TUN service"); color: textColor; font.pixelSize: 16; font.bold: true }
                         Label { textFormat: Text.PlainText; text: modelData.service?(modelData.service.error?tr("Требует внимания","Needs attention"):modelData.service.installed?tr("Установлена","Installed"):tr("Не установлена","Not installed"))+(modelData.service.running?tr(" · работает"," · running"):""):"—"; color: mutedColor }
                         HelpText { visible:!!(modelData.service&&modelData.service.error); text:modelData.service&&modelData.service.error?modelData.service.error.message:"" }
-                        HelpText { text: tr("Установка требует подтверждения Windows. Обновление меняет только отличающиеся файлы после остановки службы. Если антивирус удалил компоненты, операция прерывается: сначала проверьте его отчёт и результат проверки выпуска.","Installation requires Windows confirmation. Updates replace only changed files after the service stops. If antivirus software removes components, maintenance stops: check its report and the release analysis before retrying.") }
+                        HelpText { text: tr("Установка и восстановление требуют подтверждения Windows. Восстановление останавливает службу и возвращает отсутствующие компоненты из проверенного комплекта NetPulse. Если файлы удалены антивирусом, сначала проверьте его отчёт и результат проверки выпуска. Автоматическое подключение файлы не восстанавливает.","Installation and repair require Windows confirmation. Repair stops the service and restores missing components from the verified NetPulse bundle. If antivirus software removed files, check its report and the release analysis first. Connecting never restores missing files automatically.") }
                         RowLayout {
-                            ActionButton { appWindow: win; text: tr("Установить / восстановить","Install / repair"); enabled: !snapshot.engine_pid&&!busy("manage_service")&&!(modelData.service&&modelData.service.error&&["ServiceRegistrationDamaged","ServiceRestartRequired"].indexOf(modelData.service.error.code)>=0); onClicked: call("manage_service",{install:true,upgrade:!!(modelData.service&&modelData.service.installed)}) }
+                            ActionButton { appWindow: win; text: modelData.service&&modelData.service.installed ? tr("Восстановить службу","Repair service") : tr("Установить службу","Install service"); enabled: !snapshot.engine_pid&&!busy("manage_service")&&!(modelData.service&&modelData.service.error&&["ServiceRegistrationDamaged","ServiceRestartRequired"].indexOf(modelData.service.error.code)>=0); onClicked: call("manage_service",{install:true,upgrade:!!(modelData.service&&modelData.service.installed),repair:!!(modelData.service&&modelData.service.installed)}) }
                             ActionButton { appWindow: win; text: tr("Удалить службу","Remove service"); enabled: !snapshot.engine_pid&&!busy("manage_service")&&!!(modelData.service&&modelData.service.installed)&&!(modelData.service.error&&["ServiceRegistrationDamaged","ServiceRestartRequired"].indexOf(modelData.service.error.code)>=0); onClicked: call("manage_service",{install:false}) }
                         }
                     }
@@ -990,7 +990,7 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: aboutColumn.implicitHeight+40
                 ColumnLayout { id: aboutColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
                     Label { textFormat: Text.PlainText; text: tr("О клиенте","About NetPulse"); color: textColor; font.pixelSize: 17; font.bold: true }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.7 · Windows x64"; color: textColor }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.5 · Windows x64"; color: textColor }
                     Label { textFormat: Text.PlainText; text: "Qt Quick · Rust · sing-box "+(modelData.engine_version||"—")+" · Xray "+(modelData.xray_version||"—"); color: mutedColor; font.pixelSize: 12 }
                     ActionButton { appWindow: win; text: "GitHub · NetPulse ↗"; onClicked: Qt.openUrlExternally("https://github.com/HACKYASHER/NetPulse") }
                 }
@@ -1034,7 +1034,7 @@ ApplicationWindow {
                     }
                     HelpText { text: tr("Временные архивы ядер очищаются после установки и при следующем запуске. Незавершённые загрузки и установщики уже установленной версии тоже удаляются; предыдущий комплект ядер остаётся для отката.","Temporary engine archives are cleared after installation and on startup. Interrupted downloads and installers for the installed version are also removed; the previous engine bundle remains for rollback.") }
                     ActionButton { appWindow: win; text: tr("Редактор всех параметров…", "Edit all preferences…"); onClicked: editJson(tr("Параметры NetPulse", "NetPulse preferences"), JSON.stringify(prefs, null, 2), "save_preferences") }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.7  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.5  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
                 }
             }
         }

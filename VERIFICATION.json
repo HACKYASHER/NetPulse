@@ -1,14 +1,14 @@
 {
-  "version": "1.0.7",
+  "version": "1.0.5",
   "status": "release",
   "release_channel": "stable",
   "github_prerelease": false,
   "validation_date": "2026-10-29",
   "result": "passed_with_environment_limits",
   "core_tests": {
-    "passed": 139,
+    "passed": 140,
     "failed": 0,
-    "total": 141,
+    "total": 142,
     "blocked_by_environment": [
       "icmp::tests::owned_ipv4_and_ipv6_echo",
       "runtime::tests::prefer_ipv4_preserves_ipv6_only_names_without_using_external_dns"
@@ -19,7 +19,7 @@
     "failed": 0
   },
   "service_file_tests": {
-    "passed": 8,
+    "passed": 10,
     "failed": 0
   },
   "transport_integration": {
@@ -34,7 +34,7 @@
   },
   "startup": {
     "result": "passed",
-    "version": "1.0.7",
+    "version": "1.0.5",
     "checks": [
       "default profile with existing database starts from multiple working directories",
       "migration list contains only absolute noncurrent profiles",
@@ -95,7 +95,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.7",
+      "version": "1.0.5",
       "webview_used": false
     },
     {
@@ -110,7 +110,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.7",
+      "version": "1.0.5",
       "webview_used": false
     },
     {
@@ -125,7 +125,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.7",
+      "version": "1.0.5",
       "webview_used": false
     },
     {
@@ -140,17 +140,57 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.7",
+      "version": "1.0.5",
       "webview_used": false
     }
   ],
+  "installer": {
+    "result": "passed",
+    "install": true,
+    "update_repair": true,
+    "uninstall": true,
+    "reinstall_with_retained_data": true,
+    "data_preserved": true,
+    "in_root_data_preserved": true,
+    "layout_helper_stubbed": true,
+    "uninstall_entry_removed": true,
+    "profile_identity_retained": true,
+    "test_registry_cleaned": true,
+    "installed_ui": {
+      "activity_viewports_fit": true,
+      "core_log_rows": 1,
+      "frames": 22,
+      "network_changed": false,
+      "pages": 8,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.5",
+      "webview_used": false
+    },
+    "simulated_service_failure_codes": [
+      20,
+      21,
+      22,
+      23,
+      24,
+      1,
+      "error",
+      "timeout"
+    ],
+    "simulated_success_clears_error": true,
+    "tun_service_installed": false,
+    "global_network_changed": false,
+    "verification_namespace": "NetPulseInstallTest6853e2d757e245b69a865d8ea1f2661f"
+  },
   "service_self_test": {
     "protected_directory_lookup": true,
     "result": "passed",
     "security_descriptor": true,
     "sid_validation": true,
     "system_changes": false,
-    "version": "1.0.7"
+    "version": "1.0.5"
   },
   "bundled_engines": {
     "sing-box": {
@@ -167,6 +207,14 @@
     },
     "engine_source_modules": 107
   },
+  "service_repair": {
+    "explicit_action_required": true,
+    "owner_and_canonical_path_checked": true,
+    "stopped_service_required_before_replacement": true,
+    "missing_bundle_transaction_tested": true,
+    "external_removal_aborts_without_retry": true,
+    "live_scm_repair_performed": false
+  },
   "unchanged_component_audit": {
     "source_version": "1.0.6",
     "dependency_versions_unchanged": true,
@@ -174,10 +222,10 @@
     "report": "docs/SECURITY-AUDIT-1.0.6.ru.md"
   },
   "limitations": [
-    "Real elevated installation and TUN/proxy connections were not executed against the live Windows configuration.",
-    "Two IPv6 loopback tests remain excluded after the independent Windows 10013/environment diagnosis in 1.0.6.",
-    "The installer script differs only in its release version; its full scoped lifecycle test was last run for 1.0.6. Default-profile startup is now independently exercised by the packaged GUI.",
-    "No new antivirus verdict was obtained. Known dependency advisories and reachability limits documented for 1.0.6 remain applicable.",
-    "Tests use owned synthetic profiles. Production subscriptions, service, proxy and routes were not changed."
+    "Live elevated service installation/repair and TUN/proxy connections were not executed. The installer lifecycle test stubs Windows service and layout hooks in its own namespace.",
+    "Two IPv6 tests remain excluded following the documented Windows 10013 environment diagnosis.",
+    "Known dependency advisories documented for the unchanged Qt/Go components remain applicable; no new antivirus verdict was obtained.",
+    "The behavior tests were run before changing the release label from 1.0.8 to the user-requested 1.0.5; the final 1.0.5 executables passed startup, IPC, layout, UI and installer checks.",
+    "An installed 1.0.7 client needs manual installation of the user-requested lower version 1.0.5."
   ]
 }
