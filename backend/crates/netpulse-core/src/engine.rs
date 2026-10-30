@@ -55,8 +55,8 @@ fn sensitive(v: &Value, key: &str, out: &mut Vec<String>) {
     }
 }
 
-pub const ENGINE_VERSION: &str = "1.14.4-netpulse.1";
-pub const ENGINE_SHA256: &str = "d9165cec1cd167e589c40f3454e31c77c18066490e1ddd7117f83e929deeea5d";
+pub const ENGINE_VERSION: &str = "1.14.4";
+pub const ENGINE_SHA256: &str = "8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9";
 pub const CRONET_SHA256: &str = "3217c6260fbca5f16072e0b79735742f40109a63bb0ff88fd6b96dd6b54a2928";
 
 pub fn verify_engine(path: &Path) -> Result<()> {
@@ -82,7 +82,7 @@ pub fn verify_engine(path: &Path) -> Result<()> {
             digest.update(&block[..n]);
         }
         let actual=digest.finalize().iter().map(|b|format!("{b:02x}")).collect::<String>();
-        let previous=p==path && ["5c19bb3f8c12d4e85b3d47fe63123a7624b314b58dd7a8e32f51004f1c4d2faf","8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9"].contains(&actual.as_str());
+        let previous=p==path && ["5c19bb3f8c12d4e85b3d47fe63123a7624b314b58dd7a8e32f51004f1c4d2faf","d9165cec1cd167e589c40f3454e31c77c18066490e1ddd7117f83e929deeea5d"].contains(&actual.as_str());
         if actual!=expected && !previous {
             return Err(Error::new(
                 "EngineHashMismatch",

@@ -597,8 +597,12 @@ impl NetworkCore {
         #[cfg(test)]
         let certificate = self.probe_certificate.as_ref();
         let elapsed =
-            probe(plan.probe_port, &b, &prefs.probe_url, certificate).inspect_err(|_| {
+            probe(plan.probe_port, &b, &prefs.probe_url, certificate).map_err(|mut error| {
                 self.log_start_diagnostic(&engine.diagnostic(plan));
+                if profile.outbound["type"]=="vless" && profile.outbound["tls"]["reality"]["enabled"]==true && prefs.transport_engine=="sing-box" {
+                    error.message="Не прошла HTTPS-проверка VLESS REALITY через sing-box. Попробуйте ядро «Авто» или Xray; подробности доступны в журнале ядра.".into();
+                }
+                error
             })?;
         if !engine.alive()? {
             return Err(Error::new(
@@ -1159,7 +1163,7 @@ fn probe(
     })?;
     let start = Instant::now();
     let response=client.get(url).send().map_err(|e|{
-        Error::new(if e.is_timeout(){"ProbeTimeout"}else if e.is_connect(){"ProbeConnectionFailed"}else{"ProbeTlsOrTransportFailed"},"connection-probe","HTTPS probe through the selected profile failed; check server, credentials, TLS and transport")})?;
+        Error::new(if e.is_timeout(){"ProbeTimeout"}else if e.is_connect(){"ProbeConnectionFailed"}else{"ProbeTlsOrTransportFailed"},"connection-probe","Не прошла HTTPS-проверка через выбранный сервер. Подробности TLS и транспорта доступны в журнале ядра.")})?;
     if !response.status().is_success() {
         return Err(Error::new(
             "ProbeHttpError",

@@ -93,7 +93,7 @@ pub fn ensure_bundled(resources: &Path, data: &Path) -> Result<()> {
     }
     let sing_hash=if target.exists(){crate::core_releases::hash(&target.join("sing-box.exe"))?}else{String::new()};
     if target.exists()
-        && !["8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9","5c19bb3f8c12d4e85b3d47fe63123a7624b314b58dd7a8e32f51004f1c4d2faf"].contains(&sing_hash.as_str())
+        && !["d9165cec1cd167e589c40f3454e31c77c18066490e1ddd7117f83e929deeea5d","5c19bb3f8c12d4e85b3d47fe63123a7624b314b58dd7a8e32f51004f1c4d2faf"].contains(&sing_hash.as_str())
         && (crate::core_releases::approval(&target,"sing-box")?.is_some() || sing_hash==engine::ENGINE_SHA256)
         && (crate::core_releases::approval(&target, "xray")?.is_some()
             || crate::core_releases::hash(&target.join("xray.exe"))? == runtime::XRAY_SHA256)
@@ -320,6 +320,9 @@ mod tests {
             std::fs::copy(from, cores.join(name)).unwrap();
         }
         ensure_bundled(resources.path(), data.path()).unwrap();
+        // An already active official bundle must not be replaced on every
+        // startup, or require the installer resources again.
+        ensure_bundled(&resources.path().join("absent-installer-resources"),data.path()).unwrap();
         let sbox_path=data.path().join("engine/sing-box.exe");
         std::fs::remove_file(&sbox_path).unwrap();
         assert_eq!(ensure_bundled(resources.path(),data.path()).unwrap_err().code,"RuntimeComponentUnavailable");

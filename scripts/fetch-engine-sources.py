@@ -3,8 +3,7 @@ from pathlib import Path
 import base64,concurrent.futures,hashlib,io,json,os,re,subprocess,sys,urllib.request,zipfile
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'.build/engine-sources';OUT.mkdir(parents=True,exist_ok=True);CACHE=Path(os.environ.get('NETPULSE_ENGINE_SOURCE_CACHE',ROOT/'.build/engine-source-cache'))
-engines=[('sing-box','v1.14.4-netpulse.1',ROOT/'resources/cores/sing-box.exe','SagerNet/sing-box'),('xray','v26.10.21',ROOT/'resources/cores/xray.exe','XTLS/Xray-core')]
-subprocess.run([sys.executable,ROOT/'scripts/build-sing-box.py','--prepare-only'],check=True)
+engines=[('sing-box','v1.14.4',ROOT/'resources/cores/sing-box.exe','SagerNet/sing-box'),('xray','v26.10.21',ROOT/'resources/cores/xray.exe','XTLS/Xray-core')]
 def fetch(url,path):
  if not path.exists() and (CACHE/path.name).is_file():path.write_bytes((CACHE/path.name).read_bytes())
  if not path.exists():
@@ -26,8 +25,8 @@ for name,tag,exe,repo in engines:
    pending=None
  if pending:modules[(pending[1],pending[2])]=pending[3]
  path=OUT/f'{name}-{tag}-source.tar.gz'
- if name!='sing-box':fetch(f'https://codeload.github.com/{repo}/tar.gz/refs/tags/{tag}',path)
- roots.append({'name':name,'tag':tag,'file':path.name,'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'repository':f'https://github.com/{repo}',**({'base_tag':'v1.14.4','modified_by':'NetPulse'} if name=='sing-box' else {})})
+ fetch(f'https://codeload.github.com/{repo}/tar.gz/refs/tags/{tag}',path)
+ roots.append({'name':name,'tag':tag,'file':path.name,'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'repository':f'https://github.com/{repo}'})
 def module(item):
  (name,version),expected=item;path=OUT/(hashlib.sha256((name+'@'+version).encode()).hexdigest()+'.zip')
  data=fetch('https://proxy.golang.org/'+escape(name)+'/@v/'+escape(version)+'.zip',path)

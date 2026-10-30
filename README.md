@@ -9,11 +9,11 @@ C++ / Qt Quick desktop interface with a separate Rust network controller,
 sing-box and Xray. Use System Proxy for proxy-aware applications or TUN for
 traffic capture through a virtual network adapter.
 
-**Current release: 1.0.5 · Windows x64**
+**Current release: 1.0.6 · Windows x64**
 
-[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.5/NetPulse-Setup.exe)
-· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.5/NetPulse-Portable.zip)
-· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.5)
+[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.6/NetPulse-Setup.exe)
+· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.6/NetPulse-Portable.zip)
+· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.6)
 · [Русская инструкция](README.ru.md)
 
 ![NetPulse desktop interface](docs/images/overview.png)
@@ -157,6 +157,6 @@ the supplied sources. See [third-party components](THIRD-PARTY.md) and `licenses
 Developed by **HACKYASHER**, with assistance from OpenAI Codex.
 
 
-Bundled engines: official Xray **26.10.21**, patched sing-box **1.14.4-netpulse.1** (a separately marked NetPulse build based on stable 1.14.4). Building that engine requires Go **1.27.3**; `NETPULSE_GO_EXE` can point to it. For source builds, run `scripts/fetch-cores.py` and `scripts/fetch-engine-sources.py` before building and packaging.
+Bundled engines: official Xray **26.10.21**, official sing-box **1.14.4**, unchanged from the upstream Windows release. For source builds, run `scripts/fetch-cores.py` and `scripts/fetch-engine-sources.py` before building and packaging.
 
 [NetPulse 1.0.6 audit and limits](docs/SECURITY-AUDIT-1.0.6.ru.md) · [Patched engine provenance](docs/SING-BOX-NETPULSE-BUILD.md).

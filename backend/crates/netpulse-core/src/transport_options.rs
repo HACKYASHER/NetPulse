@@ -125,7 +125,8 @@ pub fn use_xray(profile: &Profile, prefs: &Preferences) -> Result<bool> {
         ));
     }
     let use_xray = required
-        || (prefs.transport_engine == "auto" && profile.outbound["transport"]["type"] == "grpc")
+        || (prefs.transport_engine == "auto" && (profile.outbound["transport"]["type"] == "grpc"
+            || (profile.outbound["type"]=="vless" && profile.outbound["tls"]["reality"]["enabled"]==true)))
         || (prefs.transport_engine == "xray" && supported);
     if use_xray && profile.outbound["tls"]["disable_sni"] == true {
         return Err(invalid(
@@ -345,6 +346,19 @@ impl Profile {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn auto_uses_xray_for_vless_reality_and_preserves_explicit_engine_and_tls_choices() {
+        let profile=crate::imports::parse_uri("vless://15bc786a-b01b-4a8a-962e-cb52e089e500@example.org:443?security=reality&sni=cover.example.org&fp=firefox&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=0123456789abcdef&flow=xtls-rprx-vision").unwrap();
+        let original=profile.outbound.clone();
+        let mut p=Preferences::default();assert!(use_xray(&profile,&p).unwrap());
+        p.transport_engine="sing-box".into();assert!(!use_xray(&profile,&p).unwrap());
+        p.transport_engine="xray".into();assert!(use_xray(&profile,&p).unwrap());
+        assert_eq!(profile.outbound,original);
+        let p=Preferences::default();
+        for uri in ["vless://15bc786a-b01b-4a8a-962e-cb52e089e500@example.org:443?security=tls","hy2://fixture@example.org:443","socks5://example.org:1080"] {
+            assert!(!use_xray(&crate::imports::parse_uri(uri).unwrap(),&p).unwrap());
+        }
+    }
     #[test]
     fn global_transport_defaults_apply_by_capability_and_keep_source_unchanged() {
         let prefs = Preferences {

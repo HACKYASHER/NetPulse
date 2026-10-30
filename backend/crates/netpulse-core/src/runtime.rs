@@ -645,6 +645,19 @@ mod runtime_policy_tests {
         let old:Preferences=serde_json::from_value(json!({})).unwrap();assert_eq!(old.ipv6_mode,"auto");
     }
     #[test]
+    fn auto_reality_keeps_the_tun_frontend_and_routes_its_transport_through_xray() {
+        let profile=crate::imports::parse_uri("vless://15bc786a-b01b-4a8a-962e-cb52e089e500@127.0.0.1:443?security=reality&sni=cover.example.org&fp=firefox&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=0123456789abcdef&flow=xtls-rprx-vision").unwrap();
+        for tun in [false,true] {
+            let p=Preferences{tun,..Default::default()};
+            let plan=RuntimePlan::new(Path::new("sing-box.exe"),&profile,&p,23450,"api","proxy",[23451,23452]).unwrap();
+            let xray=plan.bridge.as_ref().expect("Auto REALITY uses the Xray bridge");
+            assert_eq!(plan.config["outbounds"][0]["type"],"socks");
+            assert_eq!(xray["outbounds"][0]["streamSettings"]["security"],"reality");
+            assert_eq!(xray["outbounds"][0]["streamSettings"]["realitySettings"]["fingerprint"],"firefox");
+            assert_eq!(plan.config["inbounds"].as_array().unwrap().iter().any(|v|v["type"]=="tun"),tun);
+        }
+    }
+    #[test]
     fn both_engines_receive_selected_logging_levels() {
         let profile=crate::imports::parse_uri("socks5://127.0.0.1:1080").unwrap();
         for (level,sing,xray) in [("DEBUG","debug","debug"),("INFO","info","info"),("WARNING","warn","warning"),("ERROR","error","error")] {

@@ -1,14 +1,14 @@
 {
-  "version": "1.0.5",
+  "version": "1.0.6",
   "status": "release",
   "release_channel": "stable",
   "github_prerelease": false,
-  "validation_date": "2026-10-29",
+  "validation_date": "2026-10-31",
   "result": "passed_with_environment_limits",
   "core_tests": {
-    "passed": 140,
+    "passed": 142,
     "failed": 0,
-    "total": 142,
+    "total": 144,
     "blocked_by_environment": [
       "icmp::tests::owned_ipv4_and_ipv6_echo",
       "runtime::tests::prefer_ipv4_preserves_ipv6_only_names_without_using_external_dns"
@@ -27,14 +27,29 @@
     "failed": 0,
     "checks": [
       "TLS SNI and peer certificate preserved through CONNECT and SOCKS",
-      "8 MiB upload and download through patched sing-box to Xray gRPC/TLS"
+      "8 MiB upload and download through official sing-box 1.14.4 to Xray gRPC/TLS"
     ],
     "own_loopback_targets_only": true,
     "internet_speed_benchmark": false
   },
+  "real_reality": {
+    "result": "passed",
+    "client_version": "1.0.6",
+    "engine_selection": "auto",
+    "official_sing_box": "1.14.4",
+    "profiles_tested": 2,
+    "https_samples_passed": 4,
+    "isolated_connection_check_passed": true,
+    "connection_check": "NetworkCore readiness without OS proxy/TUN",
+    "old_builtin_migrated_to_official": true,
+    "profile_records_unchanged": true,
+    "production_profile_changed": false,
+    "system_proxy_changed": false,
+    "production_tun_changed": false
+  },
   "startup": {
     "result": "passed",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "checks": [
       "default profile with existing database starts from multiple working directories",
       "migration list contains only absolute noncurrent profiles",
@@ -95,7 +110,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "webview_used": false
     },
     {
@@ -110,7 +125,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "webview_used": false
     },
     {
@@ -125,7 +140,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "webview_used": false
     },
     {
@@ -140,7 +155,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "webview_used": false
     }
   ],
@@ -166,7 +181,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "webview_used": false
     },
     "simulated_service_failure_codes": [
@@ -182,7 +197,7 @@
     "simulated_success_clears_error": true,
     "tun_service_installed": false,
     "global_network_changed": false,
-    "verification_namespace": "NetPulseInstallTest6853e2d757e245b69a865d8ea1f2661f"
+    "verification_namespace": "NetPulseInstallTest8b0055a3fa974180966f1d022121a931"
   },
   "service_self_test": {
     "protected_directory_lookup": true,
@@ -190,42 +205,67 @@
     "security_descriptor": true,
     "sid_validation": true,
     "system_changes": false,
-    "version": "1.0.5"
+    "version": "1.0.6"
   },
   "bundled_engines": {
     "sing-box": {
-      "version": "1.14.4-netpulse.1",
-      "sha256": "d9165cec1cd167e589c40f3454e31c77c18066490e1ddd7117f83e929deeea5d",
-      "modified_by": "NetPulse",
-      "base_version": "1.14.4",
-      "reproduced_identically": true
+      "version": "1.14.4",
+      "sha256": "8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9",
+      "origin": "official upstream Windows release",
+      "modified": false,
+      "archive_sha256": "99185d75d314a07dbba4a130c8ad986cbeb629a07927975636b341ca61f991df"
     },
     "xray": {
       "version": "26.10.21",
       "sha256": "c77a00eb84fb93ae044c2d771a1cabcc033b81e487253fbc35b12df6879c1e15",
       "official_binary": true
     },
-    "engine_source_modules": 107
+    "engine_source_modules": 168
   },
-  "service_repair": {
-    "explicit_action_required": true,
-    "owner_and_canonical_path_checked": true,
-    "stopped_service_required_before_replacement": true,
-    "missing_bundle_transaction_tested": true,
-    "external_removal_aborts_without_retry": true,
-    "live_scm_repair_performed": false
+  "official_sing_box_audit": {
+    "component": "official sing-box 1.14.4",
+    "sha256": "8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9",
+    "mode": "binary symbol",
+    "advisories": [
+      "GO-2026-4762",
+      "GO-2026-4945",
+      "GO-2026-5774",
+      "GO-2026-5775",
+      "GO-2026-5777",
+      "GO-2026-5932",
+      "GO-2026-6061",
+      "GO-2026-6179",
+      "GO-2026-6180",
+      "GO-2026-6237",
+      "GO-2026-6303",
+      "GO-2026-6348",
+      "GO-2026-6354",
+      "GO-2026-6355",
+      "GO-2026-6441",
+      "GO-2026-6443",
+      "GO-2026-6603",
+      "GO-2026-6610",
+      "GO-2026-6611",
+      "GO-2026-6612",
+      "GO-2026-6617",
+      "GO-2026-6629",
+      "GO-2026-6860",
+      "GO-2026-6866"
+    ],
+    "finding_records": 1565,
+    "symbol_records": 1508,
+    "assessment": "Original upstream binary retained at the user request. Scanner findings remain; a binary-symbol scan does not by itself establish which inputs NetPulse exposes. No vulnerability-free claim."
   },
-  "unchanged_component_audit": {
-    "source_version": "1.0.6",
-    "dependency_versions_unchanged": true,
-    "engine_bytes_unchanged": true,
-    "report": "docs/SECURITY-AUDIT-1.0.6.ru.md"
+  "historical_component_audit": {
+    "report": "docs/SECURITY-AUDIT-1.0.6.ru.md",
+    "rust_and_qt_dependencies_unchanged": true,
+    "sing_box_replaced_by_official_binary": true
   },
   "limitations": [
-    "Live elevated service installation/repair and TUN/proxy connections were not executed. The installer lifecycle test stubs Windows service and layout hooks in its own namespace.",
+    "The live Windows TUN service, routes, system proxy and production profile were not changed. Real profile checks used isolated local proxies and NetworkCore readiness without either OS mode.",
+    "The installer lifecycle test stubs service/layout operations in a separate namespace; this is not a live UAC/service upgrade test.",
     "Two IPv6 tests remain excluded following the documented Windows 10013 environment diagnosis.",
-    "Known dependency advisories documented for the unchanged Qt/Go components remain applicable; no new antivirus verdict was obtained.",
-    "The behavior tests were run before changing the release label from 1.0.8 to the user-requested 1.0.5; the final 1.0.5 executables passed startup, IPC, layout, UI and installer checks.",
-    "An installed 1.0.7 client needs manual installation of the user-requested lower version 1.0.5."
+    "The official sing-box binary retains scanner findings in dependencies. It was restored unchanged at the user request; no vulnerability-free or antivirus verdict is claimed.",
+    "Real-network checks demonstrate the two tested REALITY profiles at test time; they do not guarantee all servers, transports or future availability."
   ]
 }

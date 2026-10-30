@@ -1,3 +1,5 @@
+> Историческая документация прежней отдельной сборки. В текущем комплекте используется неизменённый официальный sing-box 1.14.4.
+
 # sing-box 1.14.4-netpulse.1
 
 This is a separately marked NetPulse build of upstream sing-box v1.14.4,
