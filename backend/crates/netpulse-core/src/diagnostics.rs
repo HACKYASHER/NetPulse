@@ -34,9 +34,19 @@ struct Job {
 #[derive(Default)]
 pub struct Jobs {
     jobs: Mutex<HashMap<String, Job>>,
+    generation: std::sync::atomic::AtomicU64,
 }
 impl Jobs {
+    pub fn reset(&self) {
+        if let Ok(mut jobs)=self.jobs.lock(){self.generation.fetch_add(1,Ordering::AcqRel);for job in jobs.values(){job.cancel.store(true,Ordering::SeqCst);}jobs.clear();}
+    }
+    pub fn generation(&self)->u64 {self.generation.load(Ordering::Acquire)}
     pub fn begin(&self, kind: &str, total: usize) -> Result<(String, Arc<AtomicBool>)> {
+        self.begin_if_current(kind,total,self.generation())
+    }
+    /// A diagnostic may wait for data/the core lock before it can begin. Reject
+    /// launches invalidated by a switch, reset or shutdown during that wait.
+    pub fn begin_if_current(&self, kind:&str, total:usize, generation:u64)->Result<(String,Arc<AtomicBool>)> {
         let mut jobs = self.jobs.lock().map_err(|_| {
             Error::new(
                 "DiagnosticsUnavailable",
@@ -44,6 +54,9 @@ impl Jobs {
                 "Diagnostic controller unavailable",
             )
         })?;
+        if self.generation()!=generation {
+            return Err(Error::new("DiagnosticCancelled","diagnostics-start","Подключение или данные изменились; запустите проверку заново"));
+        }
         if jobs.values().any(|j| j.status.running) {
             return Err(Error::new(
                 "DiagnosticInProgress",
@@ -131,6 +144,7 @@ impl Jobs {
     }
     pub fn cancel_all(&self) {
         if let Ok(jobs) = self.jobs.lock() {
+            self.generation.fetch_add(1,Ordering::AcqRel);
             for j in jobs.values() {
                 j.cancel.store(true, Ordering::SeqCst);
             }
@@ -170,6 +184,23 @@ fn cancelled(cancel: &AtomicBool) -> Result<()> {
         ))
     } else {
         Ok(())
+    }
+}
+#[cfg(test)]
+mod job_lifecycle_tests {
+    use super::*;
+    #[test]
+    fn cancellation_invalidates_pending_launches_and_signals_existing_workers() {
+        let jobs=Jobs::default();let pending=jobs.generation();
+        jobs.cancel_all();
+        assert_eq!(jobs.begin_if_current("latency",2,pending).unwrap_err().code,"DiagnosticCancelled");
+        assert!(jobs.active().unwrap().is_none());
+        let (id,cancel)=jobs.begin("latency",2).unwrap();
+        let pending=jobs.generation();jobs.cancel_all();
+        assert!(cancel.load(Ordering::SeqCst));
+        jobs.finish(&id,None);
+        assert_eq!(jobs.begin_if_current("speed",1,pending).unwrap_err().code,"DiagnosticCancelled");
+        assert!(jobs.begin("speed",1).is_ok());
     }
 }
 fn endpoint(url: &str) -> Result<url::Url> {
@@ -257,6 +288,36 @@ pub fn latency_on_route(
     route: Option<&DiagnosticRoute>,
 ) -> LatencyResult {
     latency_samples_on_route(profile, prefs, path, method, cancel, route, 2)
+}
+/// Race address families so one unreachable IPv6 address cannot consume the
+/// entire deadline before a working IPv4 endpoint is attempted. Each winner is
+/// timed from its own handshake, excluding DNS, route lookup and stagger delay.
+async fn tcp_rtt(host:&str,port:u16)->Result<f64> {
+    tokio::time::timeout(Duration::from_secs(4),async {
+        let addresses=tokio::net::lookup_host((host,port)).await.map_err(|e|Error::io("latency-dns",e))?.take(32).collect::<Vec<_>>();
+        let first_v4=addresses.first().is_none_or(|a|a.is_ipv4());
+        let mut v4=addresses.iter().copied().filter(|a|a.is_ipv4());let mut v6=addresses.iter().copied().filter(|a|a.is_ipv6());let mut ordered=Vec::new();
+        for index in 0..16 {let address=if (index%2==0)==first_v4{v4.next().or_else(||v6.next())}else{v6.next().or_else(||v4.next())};if let Some(address)=address{if !ordered.contains(&address){ordered.push(address);}}else{break;}}
+        tcp_addresses(ordered).await
+    }).await.map_err(|_|Error::new("LatencyTimeout","latency-connect","TCP connect timed out"))?
+}
+async fn tcp_addresses(addresses:Vec<std::net::SocketAddr>)->Result<f64> {
+    let mut attempts=tokio::task::JoinSet::new();
+    for (index,address) in addresses.into_iter().enumerate() {
+        attempts.spawn(async move {
+            if index>0{tokio::time::sleep(Duration::from_millis(index as u64*200)).await;}
+            let socket=if address.is_ipv4(){tokio::net::TcpSocket::new_v4()}else{tokio::net::TcpSocket::new_v6()}.map_err(|e|Error::io("latency-connect",e))?;
+            #[cfg(windows)]
+            if !address.ip().is_loopback(){crate::routes::bind_outside_tun(&socket,address.ip()).map_err(|e|Error::io("latency-route",e))?;}
+            let start=Instant::now();socket.connect(address).await.map_err(|e|Error::io("latency-connect",e))?;
+            Ok::<f64,Error>(start.elapsed().as_secs_f64()*1000.0)
+        });
+    }
+    let mut failure=None;
+    while let Some(attempt)=attempts.join_next().await {
+        match attempt {Ok(Ok(ms))=>return Ok(ms),Ok(Err(e))=>failure=Some(e),Err(_)=>failure=Some(Error::new("LatencyFailed","latency-connect","TCP probe stopped")),}
+    }
+    Err(failure.unwrap_or_else(||Error::new("LatencyFailed","latency-dns","No server addresses")))
 }
 pub fn latency_samples_on_route(
     profile: Profile,
@@ -381,44 +442,11 @@ pub fn latency_samples_on_route(
                     .enable_all()
                     .build()
                     .map_err(|e| Error::io("latency-dns", e))?;
-                let host = profile.summary().host;
-                let port = profile.summary().port;
-                rt.block_on(async {
-                    tokio::time::timeout(Duration::from_secs(4), async {
-                        let addresses = tokio::net::lookup_host((host.as_str(), port)).await?;
-                        started = Instant::now();
-                        let mut last = None;
-                        for address in addresses {
-                            let socket = if address.is_ipv4() {
-                                tokio::net::TcpSocket::new_v4()?
-                            } else {
-                                tokio::net::TcpSocket::new_v6()?
-                            };
-                            #[cfg(windows)]
-                            if !address.ip().is_loopback()
-                                && let Err(e) =
-                                    crate::routes::bind_outside_tun(&socket, address.ip())
-                            {
-                                last = Some(e);
-                                continue;
-                            }
-                            // Measure the remote handshake, not route lookup or a local TUN accept.
-                            started = Instant::now();
-                            match socket.connect(address).await {
-                                Ok(_) => return Ok(()),
-                                Err(e) => last = Some(e),
-                            }
-                        }
-                        Err(last.unwrap_or_else(|| {
-                            std::io::Error::new(std::io::ErrorKind::NotFound, "No address")
-                        }))
-                    })
-                    .await
-                    .map_err(|_| {
-                        Error::new("LatencyTimeout", "latency-connect", "TCP connect timed out")
-                    })?
-                    .map_err(|e| Error::io("latency-connect", e))
-                })
+                let summary=profile.summary();
+                match rt.block_on(tcp_rtt(&summary.host,summary.port)) {
+                    Ok(ms)=>{result.samples.push(ms);continue;},
+                    Err(error)=>Err(error),
+                }
             };
             match sample {
                 Ok(()) => result
@@ -695,6 +723,7 @@ pub fn speed_observed(
                 let limit = (chunk_budget - (result.download_bytes - before)).min(buf.len() as u64) as usize;
                 let n = match response.read(&mut buf[..limit]) {
                     Ok(n) => n,
+                    Err(_) if down_start.elapsed()>=phase_duration&&result.download_bytes>0=>break,
                     Err(_) if transfer_start.elapsed() >= transfer_time && result.download_bytes > before => break,
                     Err(_) => return Err(Error::new("SpeedReadFailed", "speed-download", "Download stream failed; partial data is retained")),
                 };
@@ -706,6 +735,7 @@ pub fn speed_observed(
                 }
             }
             if result.download_bytes == before {
+                if down_start.elapsed()>=phase_duration&&result.download_bytes>0{break;}
                 return Err(Error::new("SpeedEmptyResponse", "speed-download", "The download endpoint returned no test data"));
             }
         }
@@ -744,8 +774,12 @@ pub fn speed_observed(
                     .timeout(remaining.min(transfer_timeout))
                     .header("Content-Type", "application/octet-stream")
                     .body(vec![0u8; n as usize])
-                    .send()
-                    .map_err(|_| Error::new("SpeedUploadFailed", "speed-upload", "Upload failed; the last unconfirmed payload is not included in throughput"))?;
+                    .send();
+                let response=match response {
+                    Ok(response)=>response,
+                    Err(error) if error.is_timeout()&&up_start.elapsed()>=phase_duration&&result.upload_bytes>0=>break,
+                    Err(_)=>return Err(Error::new("SpeedUploadFailed", "speed-upload", "Upload failed; the last unconfirmed payload is not included in throughput")),
+                };
                 if !response.status().is_success() {
                     return Err(Error::new("SpeedHttpError", "speed-upload", format!("HTTP {}", response.status().as_u16())));
                 }
@@ -891,6 +925,9 @@ mod tests {
     }
     impl SpeedOrigin {
         fn new() -> Self {
+            Self::with_payload(4096)
+        }
+        fn with_payload(payload:usize) -> Self {
             use std::{io::Write, net::TcpListener};
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
             let port = listener.local_addr().unwrap().port();
@@ -914,8 +951,8 @@ mod tests {
                                     let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                                 } else {
                                     std::thread::sleep(Duration::from_millis(20));
-                                    let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4096\r\nConnection: close\r\n\r\n");
-                                    let _ = stream.write_all(&[7u8; 4096]);
+                                    let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {payload}\r\nConnection: close\r\n\r\n").as_bytes());
+                                    let _ = stream.write_all(&vec![7u8;payload]);
                                 }
                                 let _ = stream.flush();
                             }
@@ -955,6 +992,12 @@ mod tests {
         assert_eq!(progress.payload_limit_bytes, 32*1024);
     }
     #[test]
+    fn a_genuinely_empty_endpoint_is_not_treated_as_a_completed_speed_test() {
+        let origin=SpeedOrigin::with_payload(0);
+        let result=speed(&origin.request(),&direct_route(),"direct",32*1024,&AtomicBool::new(false));
+        assert_eq!(result.error.unwrap().code,"SpeedEmptyResponse");assert_eq!(result.download_bytes,0);assert!(result.download_mbps.is_none());
+    }
+    #[test]
     fn speed_runs_until_the_time_window_and_can_cancel_partial_transfers() {
         let origin = SpeedOrigin::new();
         let result = speed(&origin.request(), &direct_route(), "direct", 1024*1024, &AtomicBool::new(false));
@@ -972,4 +1015,20 @@ mod tests {
         assert!(result.download_bytes>0 && result.download_bytes<1024*1024);
         assert!(result.duration_ms<2000);
     }
+}
+
+#[cfg(test)]
+mod tcp_fallback_tests {
+ #[test]
+ fn inaccessible_address_does_not_hide_an_owned_working_endpoint() {
+  let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let target=listener.local_addr().unwrap();
+  let bad=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let unavailable=bad.local_addr().unwrap();drop(bad);
+  let runtime=tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();let before=std::time::Instant::now();
+  let ms=runtime.block_on(super::tcp_addresses(vec![unavailable,target])).unwrap();assert!(before.elapsed()<std::time::Duration::from_secs(2));assert!(ms>=0.0&&ms<1000.0);
+ }
+ #[test]
+ fn resetting_jobs_discards_results_and_invalidates_waiting_launches() {
+  let jobs=super::Jobs::default();let generation=jobs.generation();let (id,cancel)=jobs.begin("latency",1).unwrap();jobs.append(&id,serde_json::json!({"fixture":true}));jobs.reset();
+  assert!(cancel.load(std::sync::atomic::Ordering::SeqCst));assert!(jobs.status(&id).is_err());assert!(jobs.begin_if_current("latency",1,generation).is_err());assert!(jobs.active().unwrap().is_none());
+ }
 }

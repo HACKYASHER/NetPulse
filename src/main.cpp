@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("NetPulse"));
     QCoreApplication::setOrganizationName(QStringLiteral("NetPulse"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.6"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.7"));
     QApplication::setFont(QFont(QStringLiteral("Segoe UI"), 10));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QCommandLineParser parser;
@@ -152,6 +152,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    backend.setMainWindow(window);
     app.setQuitOnLastWindowClosed(false);
     QSystemTrayIcon tray(QIcon(QStringLiteral(":/qt/qml/NetPulse/resources/pulse.svg")));
     tray.setToolTip(QStringLiteral("NetPulse"));

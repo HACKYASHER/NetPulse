@@ -3,7 +3,7 @@ from pathlib import Path
 import base64,concurrent.futures,hashlib,io,json,os,re,subprocess,sys,urllib.request,zipfile
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'.build/engine-sources';OUT.mkdir(parents=True,exist_ok=True);CACHE=Path(os.environ.get('NETPULSE_ENGINE_SOURCE_CACHE',ROOT/'.build/engine-source-cache'))
-engines=[('sing-box','v1.14.4',ROOT/'resources/cores/sing-box.exe','SagerNet/sing-box'),('xray','v26.10.21',ROOT/'resources/cores/xray.exe','XTLS/Xray-core')]
+engines=[('sing-box','v1.14.4',ROOT/'resources/cores/sing-box.exe','SagerNet/sing-box'),('xray','v26.10.31',ROOT/'resources/cores/xray.exe','XTLS/Xray-core')]
 def fetch(url,path):
  if not path.exists() and (CACHE/path.name).is_file():path.write_bytes((CACHE/path.name).read_bytes())
  if not path.exists():

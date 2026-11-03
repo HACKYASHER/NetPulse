@@ -1,4 +1,4 @@
-//! Date-separated, bounded JSON-lines audit, independent of UI filters.
+//! Date-separated audit with bounded backward paging, independent of UI filters.
 use crate::{Error, Result, store::LogEvent};
 use std::{
     io::{Read, Seek, SeekFrom, Write},
@@ -6,7 +6,7 @@ use std::{
     sync::Mutex,
 };
 static WRITER: Mutex<()> = Mutex::new(());
-const LIMIT: u64 = 8 * 1024 * 1024;
+const PAGE_BYTES: u64 = 1024 * 1024;
 pub const CATEGORIES: &[&str] = &["main", "core", "tunnel", "subscriptions", "service"];
 pub fn date(timestamp: u64) -> String {
     #[cfg(windows)]
@@ -77,20 +77,8 @@ pub fn category(e: &LogEvent) -> &'static str {
 }
 fn write(folder: &Path, name: &str, bytes: &[u8]) -> Result<()> {
     let path = folder.join(format!("{name}.jsonl"));
-    if path.metadata().is_ok_and(|m| m.len() >= LIMIT) {
-        let oldest = folder.join(format!("{name}.5.jsonl"));
-        if oldest.exists() {
-            std::fs::remove_file(oldest).map_err(|e| Error::io("audit-rotate", e))?;
-        }
-        for n in (1..5).rev() {
-            let source = folder.join(format!("{name}.{n}.jsonl"));
-            if source.exists() {
-                std::fs::rename(source, folder.join(format!("{name}.{}.jsonl", n + 1)))
-                    .map_err(|e| Error::io("audit-rotate", e))?;
-            }
-        }
-        std::fs::rename(&path, folder.join(format!("{name}.1.jsonl")))
-            .map_err(|e| Error::io("audit-rotate", e))?;
+    if path.symlink_metadata().is_ok() && !regular_metadata(&path)?.is_file() {
+        return Err(Error::new("InvalidLogPath","audit-write","Журнал должен быть обычным файлом"));
     }
     let mut file = std::fs::OpenOptions::new()
         .create(true)
@@ -100,44 +88,23 @@ fn write(folder: &Path, name: &str, bytes: &[u8]) -> Result<()> {
     file.write_all(bytes)
         .map_err(|e| Error::io("audit-write", e))
 }
-fn prune(root: &Path) {
-    // Only managed files under strict date folders. Never follow a symlink or
-    // touch legacy files or arbitrary user files placed in the logs directory.
-    let Ok(entries) = std::fs::read_dir(root) else {
-        return;
-    };
-    let mut files = Vec::new();
+fn managed_name(name: &str) -> bool {
+    CATEGORIES.iter().any(|c|name==format!("{c}.jsonl")||(1..=5).any(|n|name==format!("{c}.{n}.jsonl")))
+}
+fn prune_at(root: &Path, timestamp:u64) {
+    // Keep today and four preceding local dates. Unknown files and links are never removed.
+    if crate::layout::normal_directory(root).is_err(){return;}
+    let oldest=date(timestamp.saturating_sub(4*86400));
+    let Ok(entries)=std::fs::read_dir(root) else{return;};
     for day in entries.flatten() {
-        if !day.file_type().is_ok_and(|t| t.is_dir())
-            || !valid_date(&day.file_name().to_string_lossy())
-        {
-            continue;
-        }
-        if let Ok(entries) = std::fs::read_dir(day.path()) {
-            for file in entries.flatten() {
-                if !file.file_type().is_ok_and(|t| t.is_file()) {
-                    continue;
-                }
-                let name = file.file_name().to_string_lossy().into_owned();
-                let managed = CATEGORIES.iter().any(|c| {
-                    name == format!("{c}.jsonl")
-                        || (1..=5).any(|n| name == format!("{c}.{n}.jsonl"))
-                });
-                if managed && let Ok(meta) = file.metadata() {
-                    files.push((meta.modified().ok(), file.path(), meta.len()));
-                }
+        let name=day.file_name().to_string_lossy().into_owned();let path=day.path();
+        if !valid_date(&name)||name>=oldest||crate::layout::normal_directory(&path).is_err()||!regular_metadata(&path).is_ok_and(|m|m.is_dir()){continue;}
+        if let Ok(files)=std::fs::read_dir(&path) {
+            for file in files.flatten() {
+                if managed_name(&file.file_name().to_string_lossy())&&regular_metadata(&file.path()).is_ok_and(|m|m.is_file()) {let _=std::fs::remove_file(file.path());}
             }
         }
-    }
-    let mut size: u64 = files.iter().map(|v| v.2).sum();
-    files.sort_by_key(|v| v.0);
-    for (_, path, len) in files {
-        if size <= 128 * 1024 * 1024 {
-            break;
-        }
-        if std::fs::remove_file(path).is_ok() {
-            size = size.saturating_sub(len);
-        }
+        let _=std::fs::remove_dir(path); // empty managed folders only
     }
 }
 pub fn append(directory: &Path, event: &LogEvent) -> Result<()> {
@@ -146,6 +113,7 @@ pub fn append(directory: &Path, event: &LogEvent) -> Result<()> {
         .map_err(|_| Error::new("AuditUnavailable", "audit", "Audit writer unavailable"))?;
     let root = directory.join("logs");
     let folder = root.join(date(event.timestamp));
+    crate::layout::normal_directory(&folder)?;
     std::fs::create_dir_all(&folder).map_err(|e| Error::io("audit-directory", e))?;
     let mut bytes = serde_json::to_vec(event)
         .map_err(|_| Error::new("AuditSerialize", "audit", "Could not encode audit event"))?;
@@ -155,25 +123,29 @@ pub fn append(directory: &Path, event: &LogEvent) -> Result<()> {
     if group != "main" {
         write(&folder, group, &bytes)?;
     }
-    // Check on rotation-sized boundaries instead of scanning on each command.
+    // Retention housekeeping is independent of file size.
     static LAST: Mutex<Option<std::time::Instant>> = Mutex::new(None);
     if let Ok(mut last) = LAST.lock()
         && last.is_none_or(|t| t.elapsed().as_secs() >= 60)
     {
-        prune(&root);
+        prune_at(&root,crate::store::now());
         *last = Some(std::time::Instant::now());
     }
     Ok(())
 }
 pub fn days(directory: &Path) -> Result<Vec<String>> {
     let root = directory.join("logs");
+    crate::layout::normal_directory(&root)?;
     if !root.exists() {
         return Ok(vec![]);
     }
+    let _guard=WRITER.lock().map_err(|_|Error::new("AuditUnavailable","audit-days","Audit writer unavailable"))?;
+    prune_at(&root,crate::store::now());
     let mut days = std::fs::read_dir(root)
         .map_err(|e| Error::io("audit-days", e))?
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .filter(|e| crate::layout::normal_directory(&e.path()).is_ok())
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .filter(|s| valid_date(s))
         .collect::<Vec<_>>();
@@ -213,6 +185,7 @@ pub fn clear(directory: &Path) -> Result<()> {
         )
     })?;
     let root = directory.join("logs");
+    crate::layout::normal_directory(&root)?;
     if !root.exists() {
         return Ok(());
     }
@@ -254,48 +227,58 @@ pub fn clear(directory: &Path) -> Result<()> {
     } // only empty folders
     Ok(())
 }
-pub fn read(directory: &Path, day: &str, category: &str) -> Result<String> {
-    if !valid_date(day) || !CATEGORIES.contains(&category) {
-        return Err(Error::new(
-            "InvalidLogPath",
-            "audit-read",
-            "Недопустимая дата или раздел журнала",
-        ));
-    }
-    let folder = directory.join("logs").join(day);
-    if folder
-        .symlink_metadata()
-        .is_ok_and(|m| m.file_type().is_symlink())
-    {
-        return Err(Error::new(
-            "InvalidLogPath",
-            "audit-read",
-            "Ссылка вместо папки журнала",
-        ));
-    }
-    let _guard=WRITER.lock().map_err(|_|Error::new("AuditUnavailable","audit-read","Audit writer unavailable"))?;
-    let mut remaining=256*1024u64;
-    let mut newest=Vec::new();
-    for rotation in 0..=5 {
-        if remaining==0 || newest.len()>=500 {break}
-        let name=if rotation==0 {format!("{category}.jsonl")} else {format!("{category}.{rotation}.jsonl")};
-        let path=folder.join(name);
-        if !path.exists(){continue}
-        regular_metadata(&path)?;
-        let mut file=std::fs::File::open(&path).map_err(|e|Error::io("audit-read",e))?;
-        let length=file.metadata().map_err(|e|Error::io("audit-read",e))?.len();
-        let offset=length.saturating_sub(remaining);
-        file.seek(SeekFrom::Start(offset)).map_err(|e|Error::io("audit-read",e))?;
-        let mut bytes=Vec::new();
-        file.take(remaining).read_to_end(&mut bytes).map_err(|e|Error::io("audit-read",e))?;
-        remaining=remaining.saturating_sub(bytes.len() as u64);
-        let text=String::from_utf8_lossy(&bytes);
-        let complete=if offset>0 {text.split_once('\n').map(|(_,tail)|tail).unwrap_or("")} else {&text};
-        newest.extend(complete.lines().rev().take(500-newest.len()).map(str::to_owned));
-    }
-    newest.reverse();
-    Ok(newest.join("\n"))
+#[derive(serde::Serialize)]
+pub struct Page {pub text:String,pub next:Option<String>}
+#[derive(serde::Serialize,serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Cursor {day:String,category:String,rotation:u8,offset:u64,head_len:usize,head:String}
+fn head(file:&mut std::fs::File,len:usize)->Result<String> {
+    use sha2::{Digest,Sha256};
+    file.seek(SeekFrom::Start(0)).map_err(|e|Error::io("audit-read",e))?;
+    let mut bytes=vec![0;len];file.read_exact(&mut bytes).map_err(|e|Error::io("audit-read",e))?;
+    Ok(Sha256::digest(&bytes).iter().map(|b|format!("{b:02x}")).collect())
 }
+pub fn page(directory:&Path,day:&str,category:&str,cursor:Option<&str>,level:&str)->Result<Page> {
+    let invalid=||Error::new("InvalidLogPath","audit-read","Недопустимая дата, раздел, уровень или страница журнала");
+    if !valid_date(day)||!CATEGORIES.contains(&category)||!["ALL","TRACE","DEBUG","INFO","WARNING","ERROR"].contains(&level){return Err(invalid());}
+    let folder=directory.join("logs").join(day);crate::layout::normal_directory(&folder)?;
+    let _guard=WRITER.lock().map_err(|_|Error::new("AuditUnavailable","audit-read","Audit writer unavailable"))?;
+    let mut position=cursor.map(|c|if c.len()>1024 {Err(invalid())}else{serde_json::from_str::<Cursor>(c).map_err(|_|invalid())}).transpose()?;
+    if position.as_ref().is_some_and(|c|c.day!=day||c.category!=category||c.rotation>5||c.head_len>256){return Err(invalid());}
+    let first=position.as_ref().map_or(0,|c|c.rotation);
+    let mut remaining=PAGE_BYTES;let mut rows=Vec::new();let mut next=None;
+    for rotation in first..=5 {
+        let name=if rotation==0{format!("{category}.jsonl")}else{format!("{category}.{rotation}.jsonl")};let path=folder.join(name);
+        if !path.exists(){if position.is_some(){return Err(invalid());}continue;}
+        if !regular_metadata(&path)?.is_file(){return Err(invalid());}
+        let mut file=std::fs::File::open(&path).map_err(|e|Error::io("audit-read",e))?;
+        let len=file.metadata().map_err(|e|Error::io("audit-read",e))?.len();
+        let (end,head_len,identity)=if let Some(c)=position.take(){
+            if c.offset>len||c.head_len as u64>len||head(&mut file,c.head_len)?!=c.head{return Err(Error::new("LogChanged","audit-read","Журнал изменился или очищен. Откройте последнюю страницу."));}
+            (c.offset,c.head_len,c.head)
+        }else{let count=len.min(256) as usize;(len,count,head(&mut file,count)?)};
+        let start=end.saturating_sub(remaining);file.seek(SeekFrom::Start(start)).map_err(|e|Error::io("audit-read",e))?;
+        let mut bytes=Vec::new();file.take(end-start).read_to_end(&mut bytes).map_err(|e|Error::io("audit-read",e))?;
+        remaining=remaining.saturating_sub(bytes.len() as u64);
+        let complete_start=if start==0{0}else{bytes.iter().position(|b|*b==b'\n').map_or(bytes.len(),|n|n+1)};
+        let mut offset=end;let mut stopped=false;
+        for line in bytes[complete_start..].split_inclusive(|b|*b==b'\n').rev() {
+            offset=offset.saturating_sub(line.len() as u64);
+            let text=String::from_utf8_lossy(line).trim_end_matches(['\n','\r']).to_owned();
+            let matches=level=="ALL"||serde_json::from_str::<LogEvent>(&text).is_ok_and(|e|e.level==level);
+            if !text.is_empty()&&matches {rows.push(text);}
+            if rows.len()>=500 {stopped=true;break;}
+        }
+        if !stopped {offset=if complete_start>0{start+complete_start as u64}else{0};if offset==end&&start>0{offset=start;}}
+        if offset>0 || remaining==0 || rows.len()>=500 {
+            // Even offset zero is a valid continuation into legacy rotated files.
+            if offset>0||rotation<5 {next=Some(serde_json::to_string(&Cursor{day:day.into(),category:category.into(),rotation,offset,head_len,head:identity}).map_err(|_|invalid())?);}
+            break;
+        }
+    }
+    rows.reverse();Ok(Page{text:rows.join("\n"),next})
+}
+pub fn read(directory:&Path,day:&str,category:&str)->Result<String>{Ok(page(directory,day,category,None,"ALL")?.text)}
 #[cfg(test)]
 mod tests {
     #[test]
@@ -365,29 +348,17 @@ mod tests {
         assert!(tail.lines().all(|s| s == "Проверка"));
     }
     #[test]
-    fn audit_rotates_without_losing_the_new_event() {
-        let temp = tempfile::tempdir().unwrap();
-        let folder = temp.path().join("logs").join(super::date(0));
-        std::fs::create_dir_all(&folder).unwrap();
-        std::fs::write(folder.join("main.jsonl"), vec![b' '; super::LIMIT as usize]).unwrap();
-        let event = crate::store::LogEvent {
-            id: "fixture".into(),
-            timestamp: 0,
-            level: "INFO".into(),
-            subsystem: "Test".into(),
-            stage: "rotation".into(),
-            code: "Rotated".into(),
-            message: "Newest event".into(),
-        };
-        super::append(temp.path(), &event).unwrap();
-        assert_eq!(
-            folder.join("main.1.jsonl").metadata().unwrap().len(),
-            super::LIMIT
-        );
-        let saved: crate::store::LogEvent =
-            serde_json::from_str(&std::fs::read_to_string(folder.join("main.jsonl")).unwrap())
-                .unwrap();
-        assert_eq!(saved.id, "fixture");
+    fn append_does_not_rotate_away_today_and_prunes_only_expired_managed_files() {
+        let temp=tempfile::tempdir().unwrap();let now=crate::store::now();
+        let folder=temp.path().join("logs").join(super::date(now));std::fs::create_dir_all(&folder).unwrap();
+        let old=temp.path().join("logs").join(super::date(now-6*86400));std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("main.jsonl"),"expire").unwrap();std::fs::write(old.join("notes.txt"),"keep").unwrap();
+        std::fs::write(folder.join("main.jsonl"),vec![b' ';8*1024*1024]).unwrap();
+        let event=crate::store::LogEvent{id:"fixture".into(),timestamp:now,level:"INFO".into(),subsystem:"Test".into(),stage:"append".into(),code:"Appended".into(),message:"Newest event".into()};
+        super::append(temp.path(),&event).unwrap();
+        super::prune_at(&temp.path().join("logs"),now);
+        assert!(!folder.join("main.1.jsonl").exists());assert!(folder.join("main.jsonl").metadata().unwrap().len()>8*1024*1024);
+        assert!(!old.join("main.jsonl").exists());assert!(old.join("notes.txt").exists());
     }
     #[test]
     fn file_audit_survives_activity_clear_and_ignores_legacy_threshold() {
@@ -493,4 +464,25 @@ mod rotation_reader_tests {
         let text=super::read(dir.path(),"2026-10-25","core").unwrap();
         assert_eq!(text.lines().count(),500);assert!(text.ends_with("old1\nold2\ncurrent"));
     }
+}
+
+#[cfg(test)]
+mod paging_tests {
+ #[test]
+ fn pages_visit_every_line_across_legacy_rotations_and_exact_filters() {
+  let d=tempfile::tempdir().unwrap();let folder=d.path().join("logs/2026-11-04");std::fs::create_dir_all(&folder).unwrap();
+  for (name,start,end) in [("core.1.jsonl",0,700),("core.jsonl",700,1900)] {std::fs::write(folder.join(name),(start..end).map(|i|format!("{{\"id\":\"{i}\",\"timestamp\":1,\"level\":\"{}\",\"subsystem\":\"Core\",\"stage\":\"test\",\"code\":\"Test\",\"message\":\"строка\"}}\n",if i%2==0{"ERROR"}else{"INFO"})).collect::<String>()).unwrap();}
+  for (level,count) in [("ALL",1900),("ERROR",950)] {
+   let mut cursor=None;let mut ids=std::collections::HashSet::new();let mut pages=0;
+   loop {let page=super::page(d.path(),"2026-11-04","core",cursor.as_deref(),level).unwrap();for line in page.text.lines(){let v:serde_json::Value=serde_json::from_str(line).unwrap();assert!(ids.insert(v["id"].as_str().unwrap().to_owned()));}pages+=1;cursor=page.next;if cursor.is_none(){break;}assert!(pages<20);}
+   assert_eq!(ids.len(),count);
+  }
+ }
+ #[test]
+ fn cursor_detects_replaced_file_and_rejects_cross_category() {
+  let d=tempfile::tempdir().unwrap();let folder=d.path().join("logs/2026-11-04");std::fs::create_dir_all(&folder).unwrap();let path=folder.join("core.jsonl");std::fs::write(&path,"old\n".repeat(800)).unwrap();
+  let page=super::page(d.path(),"2026-11-04","core",None,"ALL").unwrap();let cursor=page.next.unwrap();
+  assert!(super::page(d.path(),"2026-11-04","main",Some(&cursor),"ALL").is_err());
+  std::fs::write(&path,"new\n".repeat(800)).unwrap();assert_eq!(super::page(d.path(),"2026-11-04","core",Some(&cursor),"ALL").err().unwrap().code,"LogChanged");
+ }
 }

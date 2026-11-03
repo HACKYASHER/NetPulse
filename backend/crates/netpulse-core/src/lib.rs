@@ -1,5 +1,6 @@
 //! Native local-only application core. Credentials never cross the GUI boundary.
 mod connection_monitor;
+mod bounded_io;
 pub mod core_releases;
 pub mod core_updates;
 pub mod diagnostics;

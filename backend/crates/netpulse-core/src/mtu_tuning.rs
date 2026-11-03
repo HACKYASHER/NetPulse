@@ -237,8 +237,7 @@ pub fn save_recovery(directory:&std::path::Path,original:&crate::model::Preferen
 pub fn recover(store:&crate::store::Store)->crate::Result<()> {
  let path=store.data_directory().join("mtu-tuning-recovery.json");
  if !path.exists(){return Ok(())}
- let bytes=std::fs::read(&path).map_err(|e|crate::Error::io("mtu-recovery",e))?;
- if bytes.len()>2*1024*1024{return Err(crate::Error::new("MtuRecovery","mtu-recovery","Recovery document too large"))}
+ let bytes=crate::bounded_io::read(&path,2*1024*1024,crate::Error::new("MtuRecovery","mtu-recovery","Recovery document too large"))?;
  let record:Recovery=serde_json::from_slice(&bytes).map_err(|_|crate::Error::new("MtuRecovery","mtu-recovery","Invalid recovery document"))?;
  record.original.validate()?;record.expected.validate()?;
  let mut current=store.preferences()?;

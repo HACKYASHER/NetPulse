@@ -42,7 +42,7 @@ def main():
     qt=args.qt.resolve();env['PATH']=str(qt/'bin')+os.pathsep+env['PATH']
     target=args.cargo_target.resolve();env['CARGO_TARGET_DIR']=str(target)
     out=ROOT/'release/NetPulse';out.mkdir(parents=True,exist_ok=True)
-    if not args.skip_backend:run(['cargo','build','--release','-p','netpulse-host','-p','netpulse-service'],env,ROOT/'backend')
+    if not args.skip_backend:run(['cargo','build','--locked','--release','-p','netpulse-host','-p','netpulse-service'],env,ROOT/'backend')
     for exe in ['netpulsed.exe','NetPulseService.exe']:
         shutil.copy2(target/'release'/exe,out/exe)
     run(['cmake','-S',ROOT,'-B',ROOT/'.build/qt','-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_CXX_FLAGS_DEBUG=/Z7 /Od /Ob0 /RTC1',f'-DCMAKE_PREFIX_PATH={qt}'],env)
@@ -59,11 +59,13 @@ def main():
         for name in ['msvcp140.dll','vcruntime140.dll','vcruntime140_1.dll','msvcp140_1.dll','msvcp140_2.dll','concrt140.dll']:
             source=Path(os.environ['WINDIR'])/'System32'/name
             if source.is_file():shutil.copy2(source,out/name)
-    shutil.copytree(ROOT/'resources/cores',out/'cores',dirs_exist_ok=True)
+    cores=out/'cores';cores.mkdir(exist_ok=True)
+    for name in ['sing-box.exe','libcronet.dll','xray.exe','source-manifest.json']:
+        shutil.copy2(ROOT/'resources/cores'/name,cores/name)
+    shutil.copytree(ROOT/'resources/cores/licenses',cores/'licenses',dirs_exist_ok=True)
     shutil.copytree(ROOT/'licenses',out/'licenses',dirs_exist_ok=True)
     shutil.copy2(ROOT/'LICENSE.txt',out/'LICENSE.txt')
-    for name in ['README.md','ARCHITECTURE.md']:
-        if (ROOT/name).is_file():shutil.copy2(ROOT/name,out/name)
+
     print('Portable application: '+str(out/'NetPulse.exe'),flush=True)
 
 if __name__=='__main__':main()

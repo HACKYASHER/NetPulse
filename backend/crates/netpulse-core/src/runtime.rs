@@ -11,10 +11,10 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-pub const XRAY_VERSION: &str = "26.10.21";
-pub const XRAY_SHA256: &str = "c77a00eb84fb93ae044c2d771a1cabcc033b81e487253fbc35b12df6879c1e15";
+pub const XRAY_VERSION: &str = "26.10.31";
+pub const XRAY_SHA256: &str = "d5b558191cccb1e92a5772b68b8cab67717b26f634b0f15153215f65ae982a7e";
 pub const XRAY_ARCHIVE_SHA256: &str =
-    "fc58c39ee2f2717b4c54d28d374362389e5319b20ae44aea76ea45a5243ec827";
+    "2e04a9995a6f2ad1b28c0bb25c708ecb2695e43a1c9c7889c4b6ac2b48cf7a6a";
 pub fn free_port() -> Result<u16> {
     Ok(std::net::TcpListener::bind("127.0.0.1:0")
         .map_err(|e| Error::io("runtime-port", e))?
@@ -53,7 +53,7 @@ pub fn verify_xray(path: &Path) -> Result<()> {
         return Ok(());
     }
     let actual=crate::core_releases::hash(path)?;
-    if [XRAY_SHA256,"a743b8c2ce49cb33d6c1cf764c780bf1a475d746ad7485e7c3fcfe6458511c92","15c2d007954ac53ba69b80ec91242786b3c0b71d52649165b4ca1d5cc96ef8f1"].contains(&actual.as_str()) {return Ok(());}
+    if [XRAY_SHA256,"c77a00eb84fb93ae044c2d771a1cabcc033b81e487253fbc35b12df6879c1e15","a743b8c2ce49cb33d6c1cf764c780bf1a475d746ad7485e7c3fcfe6458511c92","15c2d007954ac53ba69b80ec91242786b3c0b71d52649165b4ca1d5cc96ef8f1"].contains(&actual.as_str()) {return Ok(());}
     Err(Error::new("EngineHashMismatch","xray-verify","Xray executable differs from approved official releases"))
 }
 
@@ -409,7 +409,7 @@ pub fn xray_config(profile: &Profile, port: u16, password: &str) -> Result<Value
 }
 pub fn install_xray(data_dir: &Path) -> Result<()> {
     let response = crate::network::client(Duration::from_secs(120))?
-        .get("https://github.com/XTLS/Xray-core/releases/download/v26.10.21/Xray-windows-64.zip")
+        .get(format!("https://github.com/XTLS/Xray-core/releases/download/v{XRAY_VERSION}/Xray-windows-64.zip"))
         .send()
         .map_err(|_| {
             Error::new(

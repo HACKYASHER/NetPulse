@@ -256,7 +256,7 @@ pub fn scan() -> Result<Vec<Application>> {
     if n > 0 && (n as usize) < system.len() {
         let exe = std::path::PathBuf::from(String::from_utf16_lossy(&system[..n as usize]))
             .join(r"WindowsPowerShell\v1.0\powershell.exe");
-        let script = r#"$ErrorActionPreference='SilentlyContinue'; $w=New-Object -ComObject WScript.Shell; $roots=@([Environment]::GetFolderPath('StartMenu'),[Environment]::GetFolderPath('CommonStartMenu')); $items=@(foreach($root in $roots){Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse | Select-Object -First 2000 | ForEach-Object {$link=$w.CreateShortcut($_.FullName); if($link.TargetPath.EndsWith('.exe',[StringComparison]::OrdinalIgnoreCase)){[PSCustomObject]@{name=$_.BaseName;path=$link.TargetPath}}}}); ConvertTo-Json -InputObject $items -Compress"#;
+        let script = r#"[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $OutputEncoding=[Console]::OutputEncoding; $ErrorActionPreference='SilentlyContinue'; $w=New-Object -ComObject WScript.Shell; $roots=@([Environment]::GetFolderPath('StartMenu'),[Environment]::GetFolderPath('CommonStartMenu')); $items=@(foreach($root in $roots){Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse | Select-Object -First 2000 | ForEach-Object {$link=$w.CreateShortcut($_.FullName); if($link.TargetPath.EndsWith('.exe',[StringComparison]::OrdinalIgnoreCase)){[PSCustomObject]@{name=$_.BaseName;path=$link.TargetPath}}}}); ConvertTo-Json -InputObject $items -Compress"#;
         use std::os::windows::process::CommandExt;
         if let Ok(mut child) = std::process::Command::new(exe)
             .args(["-NoProfile", "-NonInteractive", "-Command", script])

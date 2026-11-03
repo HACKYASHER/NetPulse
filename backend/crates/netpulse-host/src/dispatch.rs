@@ -7,6 +7,7 @@ fn encode<T: Serialize>(value:T) -> Result<serde_json::Value> {
     serde_json::to_value(value).map_err(|_| Error::new("SerializationError","ipc","Could not encode response"))
 }
 async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
+    ensure_open(&state.closing,method)?;
     if state.startup_smoke&&matches!(method,"manage_service"|"install_client_update"){return Err(Error::new("VerificationOnly","verification","Обслуживание системы отключено в проверочном сеансе."));}
     if state.runtime_preparing.load(std::sync::atomic::Ordering::Acquire)&&blocked_during_runtime_change(method){return Err(Error::new("RuntimePreparing","runtime-operation","Дождитесь завершения проверки или обновления ядер."));}
     match method {
@@ -17,6 +18,7 @@ async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> 
         "connect" => encode(connect(host::State(state), argument::<String>(&params, "id")?).await?),
         "disconnect" => encode(disconnect(host::State(state)).await?),
         "log_days" => encode(log_days(host::State(state)).await?),
+        "log_page" => encode(log_page(host::State(state),argument::<String>(&params,"day")?,argument::<String>(&params,"category")?,params.get("cursor").and_then(|v|v.as_str()).map(str::to_owned),argument::<String>(&params,"level")?).await?),
         "log_read" => encode(log_read(host::State(state), argument::<String>(&params, "day")?, argument::<String>(&params, "category")?).await?),
         "profile_transport" => encode(profile_transport(host::State(state), argument::<String>(&params, "id")?).await?),
         "save_profile_transport" => encode(save_profile_transport(host::State(state), argument::<String>(&params, "id")?, argument::<Option<netpulse_core::transport_options::ProfileTransport>>(&params, "value")?).await?),
@@ -31,13 +33,13 @@ async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> 
         "copy_log_text" => encode(copy_log_text(argument::<String>(&params, "text")?)?),
         "copy_event" => encode(copy_event(host::State(state), argument::<String>(&params, "id")?).await?),
         "copy_ip" => encode(copy_ip(argument::<String>(&params, "ip")?)?),
-        "import_file" => encode(import_file(host::State(state), argument::<bool>(&params, "qr")?).await?),
+        "import_file" => encode(import_file(host::State(state), argument::<bool>(&params, "qr")?,argument(&params,"path")?).await?),
         "delete_profile" => encode(delete_profile(host::State(state), argument::<String>(&params, "id")?).await?),
         "add_subscription" => encode(add_subscription(host::State(state), argument::<String>(&params, "name")?, argument::<String>(&params, "url")?, argument::<Option<bool>>(&params, "protected")?).await?),
         "copy_subscription_url" => encode(copy_subscription_url(host::State(state), argument::<String>(&params, "id")?).await?),
         "save_subscription" => encode(save_subscription(host::State(state), argument::<String>(&params, "id")?, argument::<String>(&params, "name")?, argument::<u32>(&params, "interval_hours")?, argument::<bool>(&params, "protected")?, argument::<Option<bool>>(&params, "lock_configuration")?).await?),
-        "import_routing" => encode(import_routing().await?),
-        "export_routing" => encode(export_routing(argument::<netpulse_core::routing::RoutingSettings>(&params, "routing")?).await?),
+        "import_routing" => encode(import_routing(argument(&params,"path")?).await?),
+        "export_routing" => encode(export_routing(argument::<netpulse_core::routing::RoutingSettings>(&params, "routing")?,argument(&params,"path")?).await?),
         "update_subscription" => encode(update_subscription(host::State(state), argument::<String>(&params, "id")?).await?),
         "delete_subscription" => encode(delete_subscription(host::State(state), argument::<String>(&params, "id")?).await?),
         "save_preferences" => encode(save_preferences(host::State(state), argument::<Preferences>(&params, "preferences")?).await?),
@@ -63,15 +65,15 @@ async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> 
         "save_application_catalog" => encode(save_application_catalog(host::State(state), argument::<Vec<inventory::Application>>(&params, "applications")?).await?),
         "scan_applications" => encode(scan_applications().await?),
         "application_icon" => encode(application_icon(argument::<String>(&params, "path")?).await?),
-        "choose_exe" => encode(choose_exe().await?),
+        "choose_exe" => encode(choose_exe(argument(&params,"path")?).await?),
         "public_ip" => encode(public_ip(host::State(state)).await?),
         "public_ips" => encode(public_ips(host::State(state)).await?),
         "install_engine" => encode(install_engine(host::State(state)).await?),
         "clear_logs" => encode(clear_logs(host::State(state)).await?),
         "clear_file_logs" => encode(clear_file_logs(host::State(state)).await?),
         "logs" => encode(logs(host::State(state)).await?),
-        "export_data" => encode(export_data(host::State(state), argument::<String>(&params, "kind")?).await?),
-        "restore_data" => encode(restore_data(host::State(state), argument::<bool>(&params, "backup")?).await?),
+        "export_data" => encode(export_data(host::State(state), argument::<String>(&params, "kind")?,argument(&params,"path")?).await?),
+        "restore_data" => encode(restore_data(host::State(state), argument::<bool>(&params, "backup")?,argument(&params,"path")?).await?),
         "delete_local_data" => encode(delete_local_data(host::State(state)).await?),
         "ui_event" => encode(actions::ui_event(host::State(state), argument::<String>(&params, "action")?, argument::<String>(&params, "target")?).await?),
         "open_log_folder" => encode(actions::open_log_folder(host::State(state)).await?),

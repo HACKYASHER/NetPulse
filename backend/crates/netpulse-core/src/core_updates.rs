@@ -100,9 +100,12 @@ pub fn ensure_bundled(resources: &Path, data: &Path) -> Result<()> {
     {
         return Ok(());
     }
-    activate_bundled(resources, data)
+    activate_runtime(resources, data,true)
 }
 pub fn activate_bundled(resources: &Path, data: &Path) -> Result<()> {
+    activate_runtime(resources,data,false)
+}
+fn activate_runtime(resources:&Path,data:&Path,preserve_approved:bool)->Result<()> {
     let source = resources.join("cores");
     engine::verify_engine(&source.join("sing-box.exe"))?;
     runtime::verify_xray(&source.join("xray.exe"))?;
@@ -110,8 +113,12 @@ pub fn activate_bundled(resources: &Path, data: &Path) -> Result<()> {
     std::fs::create_dir(&staged).map_err(|e| Error::io("core-stage", e))?;
     let result = (|| {
         for name in ["sing-box.exe", "libcronet.dll", "xray.exe"] {
-            std::fs::copy(source.join(name), staged.join(name))
+            let engine=if name=="xray.exe"{"xray"}else{"sing-box"};
+            let previous=data.join("engine");
+            let keep=preserve_approved&&crate::core_releases::approval(&previous,engine)?.is_some();
+            std::fs::copy(if keep{previous.join(name)}else{source.join(name)}, staged.join(name))
                 .map_err(|e| Error::io("core-stage", e))?;
+            if keep{let manifest=crate::core_releases::manifest_name(engine);std::fs::copy(previous.join(&manifest),staged.join(manifest)).map_err(|e|Error::io("core-stage",e))?;}
         }
         engine::verify_engine(&staged.join("sing-box.exe"))?;
         runtime::verify_xray(&staged.join("xray.exe"))?;
@@ -128,7 +135,7 @@ pub fn activate_bundled(resources: &Path, data: &Path) -> Result<()> {
         Ok(())
     })();
     if staged.exists() {
-        for name in ["sing-box.exe", "libcronet.dll", "xray.exe"] {
+        for name in ["sing-box.exe", "libcronet.dll", "xray.exe","sing-box-release.json","xray-release.json"] {
             let _ = std::fs::remove_file(staged.join(name));
         }
         let _ = std::fs::remove_dir(staged);
@@ -173,8 +180,8 @@ fn move_directory(from: &Path, to: &Path) -> std::io::Result<()> {
     }
 }
 pub fn rollback(data: &Path) -> Result<()> {
-    let raw = std::fs::read(data.join("core-rollback.json"))
-        .map_err(|e| Error::io("core-rollback", e))?;
+    let raw = crate::bounded_io::read(&data.join("core-rollback.json"),4096,
+        Error::new("CoreRollbackInvalid","core-rollback","Previous runtime record exceeds its limit"))?;
     let name: String = serde_json::from_slice(&raw).map_err(|_| {
         Error::new(
             "CoreRollbackInvalid",
@@ -182,7 +189,7 @@ pub fn rollback(data: &Path) -> Result<()> {
             "Invalid previous runtime record",
         )
     })?;
-    if !name.starts_with("core-previous-") || name.contains(['/', '\\']) {
+    if !previous_name(&name) {
         return Err(Error::new(
             "CoreRollbackInvalid",
             "core-rollback",
@@ -251,7 +258,31 @@ fn save_pointer(data: &Path, directory: &Path) -> Result<()> {
     if result.is_err() {
         let _ = std::fs::remove_file(staged);
     }
+    if result.is_ok(){let _=cleanup_previous(data);}
     result
+}
+
+fn previous_name(name:&str)->bool {name.strip_prefix("core-previous-").is_some_and(|s|uuid::Uuid::parse_str(s).is_ok())}
+/// Keep the current rollback bundle. Retire only exact managed files in older
+/// UUID directories, preserving unknown notes and rejecting linked folders.
+fn cleanup_previous(data:&Path)->Result<usize> {
+    use std::os::windows::fs::MetadataExt;
+    crate::layout::normal_directory(data)?;
+    let bytes=crate::bounded_io::read(&data.join("core-rollback.json"),4096,Error::new("CoreRollbackInvalid","core-cleanup","Rollback pointer exceeds its limit"))?;
+    let keep:String=serde_json::from_slice(&bytes).map_err(|_|Error::new("CoreRollbackInvalid","core-cleanup","Invalid rollback pointer"))?;
+    if !previous_name(&keep){return Err(Error::new("CoreRollbackInvalid","core-cleanup","Invalid rollback directory"));}
+    let retained=data.join(&keep);crate::layout::normal_directory(&retained)?;
+    if !retained.is_dir()||engine::verify_engine(&retained.join("sing-box.exe")).is_err()||runtime::verify_xray(&retained.join("xray.exe")).is_err(){return Ok(0);}
+    let mut removed=0;
+    for entry in std::fs::read_dir(data).map_err(|e|Error::io("core-cleanup",e))? {
+        let entry=entry.map_err(|e|Error::io("core-cleanup",e))?;let name=entry.file_name().to_string_lossy().into_owned();
+        if name==keep||!previous_name(&name)||crate::layout::normal_directory(&entry.path()).is_err(){continue;}
+        for name in ["sing-box.exe","libcronet.dll","xray.exe","sing-box-release.json","xray-release.json"] {
+            let path=entry.path().join(name);
+            if path.symlink_metadata().is_ok_and(|m|m.is_file()&&m.file_attributes()&0x400==0){std::fs::remove_file(path).map_err(|e|Error::io("core-cleanup",e))?;removed+=1;}
+        }
+        let _=std::fs::remove_dir(entry.path());
+    }Ok(removed)
 }
 
 #[cfg(test)]

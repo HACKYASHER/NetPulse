@@ -6,10 +6,31 @@ RELEASE=ROOT/'release';PAYLOAD=RELEASE/'NetPulse'
 
 def quote(value):return str(value).replace('$','$$').replace('"','$\\"')
 def validate_payload(directory):
+    if directory.is_symlink() or directory.is_junction():raise RuntimeError('Payload root must not be linked')
     for path in directory.rglob('*'):
+        if path.is_symlink() or path.is_junction():raise RuntimeError('Linked file or folder in payload: '+str(path))
         relative=path.relative_to(directory)
+        if relative.parts[0].lower()=='docs' or relative.as_posix().lower().startswith('cores/netpulse-build'):raise RuntimeError('Development documentation is not part of the installed runtime: '+str(relative))
         if relative.parts[0].lower()=='data' or path.name.lower()=='client.lock' or path.name.lower().endswith(('.db','.db-wal','.db-shm')):
             raise RuntimeError('Personal data must never be packaged: '+relative.as_posix())
+
+def clean_development_payload(directory):
+    # Remove only filenames proven to belong to the previous generated payload.
+    manifest=directory/'installation-files.txt'
+    if not manifest.is_file():return
+    if manifest.stat().st_size>1024*1024:raise RuntimeError('Previous payload manifest is too large')
+    parents=set()
+    for name in manifest.read_text(encoding='utf-8').splitlines():
+        relative=Path(name);key=name.replace('\\','/').lower()
+        if relative.is_absolute() or '..' in relative.parts or ':' in name:raise RuntimeError('Unsafe previous payload manifest')
+        if not (key.startswith(('docs/','cores/netpulse-build/')) or key in ['readme.md','readme.ru.md','architecture.md','verification.md','verification.json']):continue
+        target=directory/relative
+        if not target.resolve().is_relative_to(directory.resolve()) or any(p.is_symlink() or p.is_junction() for p in [target,*target.parents] if p.is_relative_to(directory)):raise RuntimeError('Linked obsolete payload file')
+        if target.is_file():target.unlink()
+        parents.update(p for p in target.parents if p!=directory and p.is_relative_to(directory))
+    for parent in sorted(parents,key=lambda p:len(p.parts),reverse=True):
+        try:parent.rmdir()
+        except OSError:pass
 
 def main():
     parser=argparse.ArgumentParser()
@@ -17,6 +38,7 @@ def main():
     parser.add_argument('--archives-only',action='store_true',help='Refresh archives and hashes without recompressing the installer')
     parser.add_argument('--installer-only',action='store_true',help='Build the installer for maintenance tests before final archiving')
     options=parser.parse_args()
+    clean_development_payload(PAYLOAD)
     validate_payload(PAYLOAD)
     # The Qt build keeps the QML sources embedded in the executable. Refuse a
     # stale payload if an interface file was edited after that build.
@@ -24,11 +46,11 @@ def main():
         embedded=ROOT/'.build/qt/NetPulse/qml'/source.name
         if not embedded.is_file() or embedded.read_bytes()!=source.read_bytes():
             raise RuntimeError('Rebuild NetPulse before packaging changed QML: '+source.name)
-    for name in ['README.md','README.ru.md','ARCHITECTURE.md','THIRD-PARTY.md','VERIFICATION.md','VERIFICATION.json']:
+    for name in ['THIRD-PARTY.md']:
         if (ROOT/name).is_file():shutil.copy2(ROOT/name,PAYLOAD/name)
     if (ROOT/'VERIFICATION.json').is_file():shutil.copy2(ROOT/'VERIFICATION.json',RELEASE/'VERIFICATION.json')
     shutil.copytree(ROOT/'licenses',PAYLOAD/'licenses',dirs_exist_ok=True)
-    shutil.copytree(ROOT/'docs',PAYLOAD/'docs',dirs_exist_ok=True)
+
     # The normal user's first launch uses this bounded list to remove the old
     # per-user program payload, leaving unknown/personal files untouched.
     manifest=sorted(p.relative_to(PAYLOAD).as_posix() for p in PAYLOAD.rglob('*') if p.is_file())
@@ -54,11 +76,11 @@ Var ExistingDirectory
 Var ExistingVersion
 Name "NetPulse"
 Caption "NetPulse"
-VIProductVersion "1.0.6.0"
+VIProductVersion "1.0.7.0"
 VIAddVersionKey "ProductName" "NetPulse"
 VIAddVersionKey "FileDescription" "NetPulse VPN client installer"
-VIAddVersionKey "ProductVersion" "1.0.6"
-VIAddVersionKey "FileVersion" "1.0.6"
+VIAddVersionKey "ProductVersion" "1.0.7"
+VIAddVersionKey "FileVersion" "1.0.7"
 VIAddVersionKey "LegalCopyright" "NetPulse contributors, GPL-3.0-or-later"
 OutFile "@OUTPUT@"
 InstallDir "$PROGRAMFILES64\NetPulse"
@@ -220,7 +242,7 @@ Section "NetPulse"
   Abort
   files_protected:
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayName" "NetPulse"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.6"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "DisplayVersion" "1.0.7"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "Publisher" "NetPulse"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "InstallLocation" "$INSTDIR"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulseQt" "UninstallString" '"$INSTDIR\Uninstall.exe"'
@@ -355,8 +377,8 @@ SectionEnd
     if not source_archive.is_file():raise RuntimeError('Run scripts/fetch-engine-sources.py before packaging')
     with zipfile.ZipFile(source_archive) as source_zip:
         source_manifest=json.loads(source_zip.read('manifest.json'))
-        if {(r['name'],r['tag']) for r in source_manifest['roots']}!={('sing-box','v1.14.4'),('xray','v26.10.21')}:raise RuntimeError('Engine sources do not match the bundled versions')
-    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.6','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
+        if {(r['name'],r['tag']) for r in source_manifest['roots']}!={('sing-box','v1.14.4'),('xray','v26.10.31')}:raise RuntimeError('Engine sources do not match the bundled versions')
+    marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.7','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
     (RELEASE/'netpulse-qt-update-v1.json').write_text(json.dumps(marker,indent=2)+'\n',encoding='utf-8')
     outputs=[RELEASE/'netpulse-qt-update-v1.json',RELEASE/'NetPulse-Setup.exe',RELEASE/'NetPulse-Portable.zip',RELEASE/'NetPulse-Source.zip',PAYLOAD/'NetPulse.exe',PAYLOAD/'netpulsed.exe',PAYLOAD/'NetPulseService.exe']
     outputs += [p for p in [RELEASE/'NetPulse-Engine-Sources.zip',RELEASE/'VERIFICATION.json'] if p.is_file()]

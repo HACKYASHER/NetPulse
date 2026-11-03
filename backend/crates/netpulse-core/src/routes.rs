@@ -1,4 +1,30 @@
 //! Inspect IPv4/IPv6 routes through IP Helper. Never flush a system route table.
+#[cfg(test)]
+mod mtu_update_tests {
+ use super::*;use std::cell::RefCell;
+ fn rows()->[MIB_IPINTERFACE_ROW;2] {
+  let mut a=MIB_IPINTERFACE_ROW::default();a.Family=AF_INET;a.NlMtu=1500;a.Metric=37;a.SitePrefixLength=24;
+  let mut b=a;b.Family=AF_INET6;b.SitePrefixLength=64;[a,b]
+ }
+ #[test]
+ fn changes_only_mtu_and_required_ipv4_prefix_field() {
+  let initial=rows();let state=RefCell::new(initial);
+  update_mtu_rows(&initial,1441,|family|Ok(state.borrow()[usize::from(family==AF_INET6)]),|row|{state.borrow_mut()[usize::from(row.Family==AF_INET6)]=*row;Ok(())}).unwrap();
+  assert_eq!(state.borrow()[0].NlMtu,1441);assert_eq!(state.borrow()[1].NlMtu,1441);assert_eq!(state.borrow()[0].Metric,37);assert_eq!(state.borrow()[0].SitePrefixLength,0);assert_eq!(state.borrow()[1].SitePrefixLength,64);
+ }
+ #[test]
+ fn second_family_failure_rolls_back_the_first_without_restart() {
+  let initial=rows();let state=RefCell::new(initial);
+  let error=update_mtu_rows(&initial,1441,|family|Ok(state.borrow()[usize::from(family==AF_INET6)]),|row|{if row.Family==AF_INET6{return Err(Error::new("FixtureFailure","test","owned fixture"));}state.borrow_mut()[0]=*row;Ok(())}).unwrap_err();
+  assert_eq!(error.code,"FixtureFailure");assert_eq!(state.borrow()[0].NlMtu,1500);assert_eq!(state.borrow()[1].NlMtu,1500);
+ }
+ #[test]
+ fn refuses_reused_luid_with_a_different_guid() {
+  let interface=Interface{luid:12,index:3,guid:"owned".into(),alias:"NetPulse".into(),up:true,description:"Wintun".into(),kind:53};
+  let owned=NetworkView{interfaces:vec![interface.clone()],routes:vec![]};let mut current=NetworkView{interfaces:vec![interface],routes:vec![]};
+  assert!(owned_interface(&owned,&current).is_ok());current.interfaces[0].guid="foreign".into();assert!(owned_interface(&owned,&current).is_err());
+ }
+}
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use windows_sys::Win32::{NetworkManagement::IpHelper::*, Networking::WinSock::*};
@@ -213,6 +239,60 @@ pub fn capture_owned() -> Result<NetworkView> {
 pub struct RouteFamilies {
     pub ipv4: bool,
     pub ipv6: bool,
+}
+fn owned_interface<'a>(owned:&NetworkView,current:&'a NetworkView)->Result<&'a Interface> {
+    let matches=current.interfaces.iter().filter(|i|i.up&&i.alias=="NetPulse"&&owned.interfaces.iter().any(|o|o.alias=="NetPulse"&&o.luid==i.luid&&o.guid==i.guid&&o.index==i.index)).collect::<Vec<_>>();
+    if matches.len()!=1 {return Err(Error::new("TunOwnershipChanged","mtu-update","Виртуальный адаптер изменился; MTU не изменён"));}
+    Ok(matches[0])
+}
+fn update_mtu_rows(rows:&[MIB_IPINTERFACE_ROW],mtu:u32,mut read:impl FnMut(u16)->Result<MIB_IPINTERFACE_ROW>,mut write:impl FnMut(&MIB_IPINTERFACE_ROW)->Result<()>)->Result<()> {
+    let mut changed=Vec::<MIB_IPINTERFACE_ROW>::new();
+    for original in rows {
+        if original.NlMtu==mtu {continue;}
+        let result=(||{
+            let mut row=read(original.Family)?;
+            if row.NlMtu!=original.NlMtu{return Err(Error::new("TunMtuChanged","mtu-update","MTU изменён другой операцией; проверка остановлена"));}
+            row.NlMtu=mtu;if row.Family==AF_INET{row.SitePrefixLength=0;}
+            write(&row)?;changed.push(*original);
+            if read(original.Family)?.NlMtu!=mtu{return Err(Error::new("MtuUpdateFailed","mtu-update","Windows не подтвердила MTU виртуального адаптера"));}
+            Ok(())
+        })();
+        if let Err(error)=result {
+            let mut rollback_failed=false;
+            for old in changed.iter().rev() {
+                match read(old.Family) {
+                    Ok(mut current) if current.NlMtu==mtu=>{current.NlMtu=old.NlMtu;if current.Family==AF_INET{current.SitePrefixLength=0;}if write(&current).is_err()||!read(old.Family).is_ok_and(|r|r.NlMtu==old.NlMtu){rollback_failed=true;}},
+                    Ok(current) if current.NlMtu==old.NlMtu=>(),
+                    _=>rollback_failed=true,
+                }
+            }
+            if rollback_failed{return Err(Error::new("MtuRestoreFailed","mtu-update","Не удалось подтвердить восстановление MTU. Чужие изменения сохранены; переподключитесь перед новым тестом."));}
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+/// Change only this session's captured adapter; never touch physical interfaces.
+pub fn set_owned_mtu(owned:&NetworkView,families:RouteFamilies,mtu:u16)->Result<()> {
+    if !(1280..=9000).contains(&mtu){return Err(Error::new("InvalidMtu","mtu-update","MTU must be 1280–9000"));}
+    let identity=owned_interface(owned,&inspect()?)?.clone();
+    let read=|family:u16|->Result<MIB_IPINTERFACE_ROW>{
+        let current=inspect()?;let interface=owned_interface(owned,&current)?;
+        if interface.luid!=identity.luid{return Err(Error::new("TunOwnershipChanged","mtu-update","Виртуальный адаптер изменился"));}
+        let mut row=MIB_IPINTERFACE_ROW::default();unsafe{InitializeIpInterfaceEntry(&mut row)};
+        row.Family=family;row.InterfaceLuid.Value=identity.luid;
+        let code=unsafe{GetIpInterfaceEntry(&mut row)};
+        if code!=0{return Err(Error::new("MtuReadFailed","mtu-update",format!("Windows не прочитала MTU ({code})")));}
+        Ok(row)
+    };
+    let write=|row:&MIB_IPINTERFACE_ROW|->Result<()> {
+        let current=inspect()?;owned_interface(owned,&current)?;
+        let mut update=*row;let code=unsafe{SetIpInterfaceEntry(&mut update)};
+        if code!=0{return Err(Error::new("MtuUpdateFailed","mtu-update",format!("Windows не изменила MTU ({code})")));}Ok(())
+    };
+    let mut rows=Vec::new();if families.ipv4{rows.push(read(AF_INET)?);}if families.ipv6{rows.push(read(AF_INET6)?);}
+    if rows.is_empty(){return Err(Error::new("TunRequired","mtu-update","TUN не готов"));}
+    update_mtu_rows(&rows,u32::from(mtu),read,write)
 }
 pub fn default_routes_present(view: &NetworkView, families: RouteFamilies) -> bool {
     if !families.ipv4 && !families.ipv6 {

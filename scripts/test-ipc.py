@@ -200,6 +200,21 @@ def run(directory):
         rejected=host.wait(host.send('log_read',day='../outside',category='main'))
         assert 'error' in rejected
         checks.append('audit reads work and path traversal is rejected')
+        page=host.call('log_page',day=days[0],category='main',cursor=None,level='ALL')
+        assert isinstance(page['text'],str) and 'next' in page
+        assert host.wait(host.send('log_page',day=days[0],category='main',cursor=None,level='INVALID'))['error']
+        exported=directory/'owned-settings.json'
+        assert host.call('export_data',kind='settings',path=str(exported)) is True
+        assert json.loads(exported.read_text(encoding='utf-8'))['theme']=='light'
+        assert host.call('restore_data',backup=False,path=str(exported)) is True
+        rules=directory/'owned-routing.json'
+        routing={'version':1,'route_mode':'whitelist','applications':['fixture.exe'],'application_groups':[],'bypass_domains':[],'routing_rules':[]}
+        assert host.call('export_routing',routing=routing,path=str(rules)) is True
+        restored_rules=host.call('import_routing',path=str(rules));assert restored_rules['applications']==['fixture.exe']
+        assert host.wait(host.send('import_file',qr=False,path='relative.txt'))['error']['code']=='InvalidSelectedPath'
+        imported_file=directory/'owned-import.txt';imported_file.write_text('socks5://127.0.0.1:1080#Owned%20file',encoding='utf-8')
+        assert host.call('import_file',qr=False,path=str(imported_file))['imported']==1
+        checks.append('Qt-selected absolute paths round-trip settings and routing; log paging rejects invalid filters')
         host.close()
         host=Host(directory)
         boot=host.call('bootstrap');assert boot['preferences']['theme']=='light'

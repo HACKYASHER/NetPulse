@@ -153,7 +153,7 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         process_id: None,
     };
     status.set_service_status(make_status(ServiceState::StartPending))?;
-    let controller = Arc::new(Mutex::new(service::Controller::default()));
+    let controller = Arc::new(Mutex::new(service::Controller::with_shutdown_signal(stop.clone())));
     let sid = service::owner_sid()?;
     let engine = service::protected_directory()?.join("sing-box.exe");
     netpulse_core::engine::verify_engine(&engine)?;

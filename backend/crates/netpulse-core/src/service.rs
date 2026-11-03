@@ -22,7 +22,35 @@ use windows_sys::Win32::{
 };
 pub const SERVICE_NAME: &str = "NetPulseCoreQt";
 pub const MAX_FRAME: usize = 256 * 1024;
+fn bundle_hashes(directory:&Path)->Result<[String;3]> {
+    Ok([crate::core_releases::hash(&directory.join("sing-box.exe"))?,crate::core_releases::hash(&directory.join("libcronet.dll"))?,crate::core_releases::hash(&directory.join("xray.exe"))?])
+}
+fn verify_bundle_identity(directory:&Path,expected:&[String;3])->Result<()> {
+    if expected.iter().any(|s|s.len()!=64||!s.bytes().all(|b|b.is_ascii_hexdigit()))||bundle_hashes(directory)?!=*expected {
+        return Err(Error::new("ServiceRuntimeOutdated","tun-start","Ядра службы TUN отличаются от выбранного комплекта. Откройте «Настройки → Служба TUN» и обновите службу. Подключение остановлено без подмены ядра."));
+    }Ok(())
+}
+#[cfg(test)]
+mod bundle_identity_tests {
+ #[test]
+ fn service_cannot_silently_use_a_different_core_bundle() {
+  let d=tempfile::tempdir().unwrap();for name in ["sing-box.exe","libcronet.dll","xray.exe"]{std::fs::write(d.path().join(name),name).unwrap();}
+  let expected=super::bundle_hashes(d.path()).unwrap();super::verify_bundle_identity(d.path(),&expected).unwrap();std::fs::write(d.path().join("xray.exe"),"different approved version").unwrap();assert_eq!(super::verify_bundle_identity(d.path(),&expected).unwrap_err().code,"ServiceRuntimeOutdated");
+ }
+}
 pub const PARAMETERS: &str = r"SYSTEM\CurrentControlSet\Services\NetPulseCoreQt\Parameters";
+fn validate_session_mtu(mtu:u16,maximum:u64)->Result<()> {
+    if !(1280..=9000).contains(&mtu)||u64::from(mtu)>maximum {
+        return Err(Error::new("MtuSessionLimit","mtu-update",format!("Для проверки без переподключения MTU должен быть от 1280 до {maximum}. Для большего значения сначала сохраните MTU и переподключитесь.")));
+    }Ok(())
+}
+#[cfg(test)]
+mod session_mtu_tests {
+ #[test]
+ fn candidate_cannot_exceed_original_userspace_buffer() {
+  assert!(super::validate_session_mtu(1440,1500).is_ok());assert!(super::validate_session_mtu(1500,1500).is_ok());assert!(super::validate_session_mtu(1472,1400).is_err());assert!(super::validate_session_mtu(1279,1500).is_err());
+ }
+}
 pub fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
 }
@@ -239,14 +267,11 @@ pub fn recover_routes() -> Result<()> {
     if !path.exists() {
         return Ok(());
     }
-    let bytes = std::fs::read(path).map_err(|e| Error::io("tun-journal", e))?;
-    if bytes.len() > 1024 * 1024 {
-        return Err(Error::new(
+    let bytes = crate::bounded_io::read(&path,1024*1024,Error::new(
             "TunJournalInvalid",
             "tun-recovery",
             "Owned route journal is too large",
-        ));
-    }
+        ))?;
     let owned: routes::NetworkView = serde_json::from_slice(&bytes).map_err(|_| {
         Error::new(
             "TunJournalInvalid",
@@ -314,7 +339,7 @@ fn elevated_maintenance(installer:&Path,engine_directory:&Path,install:bool,upgr
 fn readable_service_component(path: &Path) -> Result<()> {
     use std::os::windows::fs::MetadataExt;
     let unavailable = |code:i32| {
-        if matches!(code,2|3) {Error::new("ServiceComponentsMissing","service-files",format!("Не найден компонент службы: {} (Windows {code}). В разделе «Сеть → Служба TUN» нажмите «Восстановить службу» или повторно запустите установщик NetPulse. Если файл был удалён антивирусом, сначала проверьте его отчёт.",path.display()))}
+        if matches!(code,2|3) {Error::new("ServiceComponentsMissing","service-files",format!("Не найден компонент службы: {} (Windows {code}). В разделе «Настройки → Служба TUN» нажмите «Восстановить службу» или повторно запустите установщик NetPulse. Если файл был удалён антивирусом, сначала проверьте его отчёт.",path.display()))}
         else {Error::new("ServiceComponentsUnavailable","service-files",format!("Компонент службы недоступен: {} (Windows {code}). Проверьте права доступа и отчёт антивируса; операция остановлена.",path.display()))}
     };
     let metadata = std::fs::symlink_metadata(path).map_err(|e|unavailable(e.raw_os_error().unwrap_or(0)))?;
@@ -478,6 +503,7 @@ pub enum Request {
         session: String,
     },
     Start {
+        runtime_hashes:[String;3],
         profile: Box<Profile>,
         preferences: Box<Preferences>,
         session: String,
@@ -489,6 +515,7 @@ pub enum Request {
     Stop {
         session: String,
     },
+    SetMtu {session:String,mtu:u16},
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ServiceStatus {
@@ -796,7 +823,13 @@ pub struct ServiceEngine {
     active: bool,
 }
 impl ServiceEngine {
+    pub fn set_mtu(&mut self,mtu:u16)->Result<()> {
+        if !self.active{return Err(Error::new("TunRequired","mtu-update","Подключение TUN остановлено"));}
+        let status=call_once(&Request::SetMtu{session:self.session.clone(),mtu},Duration::from_secs(5))?;
+        if !status.owned_by_caller||status.engine_pid!=Some(self.pid){return Err(Error::new("LeaseMismatch","mtu-update","Подключение TUN изменилось"));}Ok(())
+    }
     pub fn start(
+        engine_path:&Path,
         profile: &Profile,
         prefs: &Preferences,
         api_port: u16,
@@ -815,6 +848,7 @@ impl ServiceEngine {
         let session = uuid::Uuid::new_v4().to_string();
         let status = call_once(
             &Request::Start {
+                runtime_hashes:bundle_hashes(engine_path.parent().ok_or_else(||Error::new("EngineMissing","tun-start","Не найдена папка ядер"))?)?,
                 profile: Box::new(profile.clone()),
                 preferences: Box::new(prefs.clone()),
                 session: session.clone(),
@@ -1202,6 +1236,7 @@ impl TunHealth {
 }
 #[derive(Default)]
 pub struct Controller {
+    stopping: std::sync::Arc<std::sync::atomic::AtomicBool>,
     engine: Option<EngineGroup>,
     plan: Option<RuntimePlan>,
     owner: Option<Handle>,
@@ -1212,6 +1247,15 @@ pub struct Controller {
     tun_health: TunHealth,
 }
 impl Controller {
+    pub fn with_shutdown_signal(stopping:std::sync::Arc<std::sync::atomic::AtomicBool>)->Self {
+        let mut controller=Self::default();controller.stopping=stopping;controller
+    }
+    fn ensure_running(&self)->Result<()> {
+        if self.stopping.load(std::sync::atomic::Ordering::Acquire) {
+            return Err(Error::new("ServiceClosing","service-request","Служба TUN останавливается; новые подключения отменены"));
+        }
+        Ok(())
+    }
     fn inspect_tun(owned: &routes::NetworkView, families: routes::RouteFamilies) -> Result<bool> {
         let mut current = routes::capture_owned()?;
         current.interfaces.retain(|i| {
@@ -1283,7 +1327,7 @@ impl Controller {
         if let Some(e) = failure {
             return Err(e);
         }
-        remove_journal()?;
+        if self.owned.is_some(){remove_journal()?;}
         self.owned = None;
         self.tun_health = TunHealth::default();
         self.error = None;
@@ -1316,9 +1360,18 @@ impl Controller {
         process: Handle,
         engine_path: &Path,
     ) -> Result<ServiceStatus> {
+        self.ensure_running()?;
         self.poll();
         match request {
             Request::Status {} => (),
+            Request::SetMtu{session,mtu}=>{
+                if self.owner_pid!=pid||self.session!=session||self.engine.is_none(){return Err(Error::new("LeaseMismatch","mtu-update","MTU принадлежит другому подключению"));}
+                let plan=self.plan.as_ref().ok_or_else(||Error::new("TunRequired","mtu-update","TUN не готов"))?;
+                let maximum=plan.config["inbounds"].as_array().and_then(|v|v.iter().find(|v|v["type"]=="tun")).and_then(|v|v["mtu"].as_u64()).unwrap_or(0);
+                validate_session_mtu(mtu,maximum)?;
+                let owned=self.owned.as_ref().ok_or_else(||Error::new("TunRequired","mtu-update","TUN не готов"))?;
+                routes::set_owned_mtu(owned,plan.tun_route_families(),mtu)?;
+            }
             Request::Diagnostic { session } => {
                 if self.owner_pid != pid || self.session != session {
                     return Err(Error::new(
@@ -1353,6 +1406,7 @@ impl Controller {
                 self.error = None;
             }
             Request::Start {
+                runtime_hashes,
                 profile,
                 preferences,
                 session,
@@ -1397,6 +1451,7 @@ impl Controller {
                 }
                 profile.validate()?;
                 preferences.validate()?;
+                verify_bundle_identity(engine_path.parent().ok_or_else(||Error::new("EngineMissing","tun-start","Не найдена папка ядер службы"))?,&runtime_hashes)?;
                 routes::ensure_no_tun_conflict()?;
                 let plan = RuntimePlan::new(
                     engine_path,
@@ -1408,6 +1463,7 @@ impl Controller {
                     probe_ports,
                 )?;
                 plan.validate(engine_path)?;
+                self.ensure_running()?;
                 let families = plan.tun_route_families();
                 self.engine = Some(plan.start(engine_path)?);
                 self.plan = Some(plan);
@@ -1417,6 +1473,7 @@ impl Controller {
                 self.error = None;
                 let result = (|| {
                     for _ in 0..100 {
+                        self.ensure_running()?;
                         let owned = routes::capture_owned()?;
                         if routes::default_routes_present(&owned, families) {
                             save_owned(&owned)?;
@@ -1445,6 +1502,7 @@ impl Controller {
         Ok(self.snapshot(pid))
     }
     pub fn shutdown(&mut self) -> Result<()> {
+        self.stopping.store(true,std::sync::atomic::Ordering::Release);
         self.stop()
     }
 }
@@ -1456,6 +1514,16 @@ impl Drop for Controller {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn scm_shutdown_rejects_queued_requests_before_route_or_engine_operations() {
+        let stopping=std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut controller=Controller::with_shutdown_signal(stopping.clone());
+        assert!(controller.ensure_running().is_ok());
+        stopping.store(true,std::sync::atomic::Ordering::Release);
+        assert_eq!(controller.handle(Request::Status{},0,Handle(std::ptr::null_mut()),Path::new("must-not-run.exe")).unwrap_err().code,"ServiceClosing");
+        // An idle controller owns no journal and Drop must not touch one.
+        drop(controller);
+    }
     #[test] fn repair_requires_the_current_installation_owner_and_stopped_service() {
         let temporary=tempfile::tempdir().unwrap();let canonical=temporary.path().join("service");let other=temporary.path().join("other");
         assert!(super::validate_repair_identity(&canonical,&canonical,"owner","owner",false).is_ok());assert!(!canonical.exists());

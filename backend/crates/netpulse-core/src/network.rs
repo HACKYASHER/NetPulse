@@ -353,11 +353,11 @@ impl NetworkCore {
         if !(1280..=9000).contains(&mtu) {
             return Err(Error::new("InvalidMtu", "mtu-tuning", "MTU must be 1280–9000"));
         }
-        let profile = self.active.clone().filter(|_| self.engine.is_some() && self.prefs.effective_tun())
-            .ok_or_else(|| Error::new("TunRequired", "mtu-tuning", "Подключитесь в режиме TUN"))?;
-        let mut trial = self.prefs.clone();
-        trial.mtu = mtu;
-        self.connect_with(profile, &trial)
+        if !self.prefs.effective_tun(){return Err(Error::new("TunRequired","mtu-tuning","Подключитесь в режиме TUN"));}
+        let Some(ManagedEngine::Service(engine))=self.engine.as_mut() else{return Err(Error::new("TunRequired","mtu-tuning","Подключитесь в режиме TUN"));};
+        engine.set_mtu(mtu)?;
+        self.prefs.mtu=mtu;
+        Ok(())
     }
     pub fn apply_preferences(&mut self, prefs: Preferences) -> Result<()> {
         let mut prefs = prefs.normalized();
@@ -573,6 +573,7 @@ impl NetworkCore {
             #[cfg(windows)]
             {
                 ManagedEngine::Service(crate::service::ServiceEngine::start(
+                    &self.engine_path,
                     &profile,
                     prefs,
                     port,

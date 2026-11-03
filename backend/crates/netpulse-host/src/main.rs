@@ -34,15 +34,15 @@ fn prepare(directory: &Path, resources: &Path, isolated: bool) -> Result<AppStat
     });
     let state=AppState {
         core, data_dir:directory.to_path_buf(), diagnostics:Arc::new(netpulse_core::diagnostics::Jobs::default()),
-        runtime_preparing:preparing,startup_smoke:isolated,
+        runtime_preparing:preparing,startup_smoke:isolated,closing:Arc::new(std::sync::atomic::AtomicBool::new(false)),
     };
     if let Ok(mut c)=state.core.lock() {
         c.observe(|state| { let _=host::AppHandle.emit("connection-state",state); });
     }
     if !isolated {
-        actions::subscription_monitor(host::AppHandle,state.core.clone(),state.runtime_preparing.clone());
-        actions::selection_monitor(host::AppHandle,state.core.clone(),state.diagnostics.clone(),state.runtime_preparing.clone());
-        let core=state.core.clone();let preparing=state.runtime_preparing.clone();
+        actions::subscription_monitor(host::AppHandle,state.core.clone(),state.runtime_preparing.clone(),state.closing.clone());
+        actions::selection_monitor(host::AppHandle,state.core.clone(),state.diagnostics.clone(),state.runtime_preparing.clone(),state.closing.clone());
+        let core=state.core.clone();let preparing=state.runtime_preparing.clone();let closing=state.closing.clone();
         std::thread::spawn(move || {
             while preparing.load(std::sync::atomic::Ordering::Acquire) {
                 std::thread::sleep(std::time::Duration::from_millis(100));
@@ -50,7 +50,7 @@ fn prepare(directory: &Path, resources: &Path, isolated: bool) -> Result<AppStat
             if let Ok(mut c)=core.lock() {
                 let _=c.guarded(|c| {
                     let p=c.store.preferences()?;
-                    if !preparing.load(std::sync::atomic::Ordering::Acquire) && p.auto_reconnect && (p.tun || p.system_proxy) && c.snapshot().engine_pid.is_none()
+                    if !closing.load(std::sync::atomic::Ordering::Acquire) && !preparing.load(std::sync::atomic::Ordering::Acquire) && p.auto_reconnect && (p.tun || p.system_proxy) && c.snapshot().engine_pid.is_none()
                         && let Some(id)=p.selected_profile { c.connect(&id)?; }
                     Ok(())
                 });
@@ -129,7 +129,7 @@ fn run() -> Result<()> {
         .map_err(|e|Error::io("async-runtime",e))?;
     let semaphore=Arc::new(tokio::sync::Semaphore::new(8));
     let mut stdin=std::io::stdin().lock();
-    loop {
+    let input_result=(|| -> Result<()> {loop {
         let mut line=Vec::new();
         let count=(&mut stdin).take(MAX_REQUEST+1).read_until(b'\n',&mut line).map_err(|e|Error::io("ipc-read",e))?;
         if count==0 { break; }
@@ -154,11 +154,14 @@ fn run() -> Result<()> {
             let result=dispatch(&state,&request.method,request.params).await;
             respond(request.id,result);
         });
+    } Ok(())})();
+    if let Ok(mut c)=state.core.lock() {
+        state.closing.store(true,std::sync::atomic::Ordering::Release);
+        state.diagnostics.cancel_all();
+        c.disconnect()?;
     }
-    state.diagnostics.cancel_all();
-    if let Ok(mut c)=state.core.lock() { c.disconnect()?; }
     runtime.shutdown_timeout(std::time::Duration::from_secs(10));
-    Ok(())
+    input_result
 }
 fn respond(id:u64,result:Result<serde_json::Value>) {
     let value=match result {

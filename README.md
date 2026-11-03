@@ -9,11 +9,11 @@ C++ / Qt Quick desktop interface with a separate Rust network controller,
 sing-box and Xray. Use System Proxy for proxy-aware applications or TUN for
 traffic capture through a virtual network adapter.
 
-**Current release: 1.0.6 · Windows x64**
+**Current release: 1.0.7 · Windows x64**
 
-[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.6/NetPulse-Setup.exe)
-· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.6/NetPulse-Portable.zip)
-· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.6)
+[Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.7/NetPulse-Setup.exe)
+· [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.7/NetPulse-Portable.zip)
+· [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.7)
 · [Русская инструкция](README.ru.md)
 
 ![NetPulse desktop interface](docs/images/overview.png)
@@ -21,23 +21,26 @@ traffic capture through a virtual network adapter.
 ## Features
 
 - **Overview:** country flags, transport engine selection, a connection-mode
-  picker, automatic HTTPS latency and copyable VPN/direct public IP results.
+  picker, manual latency refresh and copyable VPN/direct public IP results.
 - **Servers and subscriptions:** one compact grouped list, pinned servers,
   context-menu actions, protected URLs and refresh on startup and by interval.
 - **Routing:** EXE-name rules that survive application moves and updates,
   application icons, complete saved lists, JSON import/export, domain suffix
   exceptions and custom direct/proxy/block routes. New rule lists start empty.
-- **Network:** separate Connection, DNS, MTU, SNI/TLS, Transport, TUN Service
-  Engines and Sniffing tabs, with explanations for settings.
+- **Network:** separate Connection, DNS, MTU, SNI/TLS, Transport and Sniffing
+  tabs. TUN Service and Engines are in Settings.
 - **Diagnostics:** Proxy GET/HEAD, TCP and ICMP latency; keepalive by default;
   bounded HTTPS speed tests and persistent measurement history.
 - **MTU:** presets and a sequential comparison of every value in a chosen
   range, with repeated latency/loss probes, baseline controls, restoration of
-  the original setting and an explicit Apply recommendation action.
+  the original setting and an explicit Apply recommendation action. The test
+  changes only the owned adapter MTU, without reconnecting the VPN.
 - **Playground:** grouped processes, observed sockets and engine traffic,
   per-application connection events, automatic refresh and routing controls.
 - **Activity:** selectable journal/date, severity colours, copying and optional
-  follow-to-latest mode. Dark/light/system themes and English/Russian UI.
+  follow-to-latest mode, a default All view filter and access to older pages.
+  Logs are kept for five days. Filtering does not restart VPN.
+  Dark/light/system themes and English/Russian UI.
 - **Updates and cleanup:** official verified engine updates and rollback,
   native client update checks on startup/every six hours, automatic disposal of
   managed download archives and interrupted downloads.
@@ -157,6 +160,6 @@ the supplied sources. See [third-party components](THIRD-PARTY.md) and `licenses
 Developed by **HACKYASHER**, with assistance from OpenAI Codex.
 
 
-Bundled engines: official Xray **26.10.21**, official sing-box **1.14.4**, unchanged from the upstream Windows release. For source builds, run `scripts/fetch-cores.py` and `scripts/fetch-engine-sources.py` before building and packaging.
+Bundled engines: official Xray **26.10.31**, official sing-box **1.14.4**, unchanged from the upstream Windows release. For source builds, run `scripts/fetch-cores.py` and `scripts/fetch-engine-sources.py` before building and packaging.
 
-[NetPulse 1.0.6 audit and limits](docs/SECURITY-AUDIT-1.0.6.ru.md) · [Patched engine provenance](docs/SING-BOX-NETPULSE-BUILD.md).
+[NetPulse 1.0.7 audit and limits](docs/SECURITY-AUDIT-1.0.7.ru.md) · [Patched engine provenance](docs/SING-BOX-NETPULSE-BUILD.md).

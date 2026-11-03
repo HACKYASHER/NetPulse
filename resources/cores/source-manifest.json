@@ -9,9 +9,9 @@
     },
     {
       "name": "xray",
-      "tag": "v26.10.21",
-      "file": "xray-v26.10.21-source.tar.gz",
-      "sha256": "44ef4874529a03848c90f1fdcfb763350fbc5f1de741ec90e0024d651df25650",
+      "tag": "v26.10.31",
+      "file": "xray-v26.10.31-source.tar.gz",
+      "sha256": "be44f95d497ad4ba6e9d1dcfbbd71e8e51f812aff077d4c15c9947eff5e3046a",
       "repository": "https://github.com/XTLS/Xray-core"
     }
   ],
@@ -571,10 +571,10 @@
     },
     {
       "module": "github.com/pires/go-proxyproto",
-      "version": "v0.15.0",
-      "h1": "h1:dTshmNbFm/D+0+sbrxUuddPOZ5Y0B7c5NhtsBkm6LqI=",
-      "archive": "20a35fd64abb9f801f3ae84e4870d47da0b1c603a3c31667c73aceca65c0b584.zip",
-      "sha256": "2237420b2bf86755a4ef462d7b9eff2d66f87756dc8d247bb7a47e0c8702094a"
+      "version": "v0.16.0",
+      "h1": "h1:9KYT/fM3wpjT8bdMEj/7FBcoiUG1KyzEjRYnPu+vz7A=",
+      "archive": "6e4762b969cb8fefd82108b37f710bd818f8d0cbfb246d8b5ccbb226a66de21a.zip",
+      "sha256": "f32871a7ca8d6a0d09f700962bc9489f98f410cb0c32581e6da7b67d2eaba309"
     },
     {
       "module": "github.com/pkg/sftp",

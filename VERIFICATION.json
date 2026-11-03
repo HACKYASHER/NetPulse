@@ -1,21 +1,25 @@
 {
-  "version": "1.0.6",
+  "version": "1.0.7",
   "status": "release",
   "release_channel": "stable",
   "github_prerelease": false,
-  "validation_date": "2026-10-31",
+  "validation_date": "2026-11-04",
   "result": "passed_with_environment_limits",
+  "review_skill": {
+    "name": "code-review-skill",
+    "commit": "4850184dfd7765ea7b3c5c4e9b6cf8e0815ee7cb",
+    "source": "https://github.com/awesome-skills/code-review-skill"
+  },
   "core_tests": {
-    "passed": 142,
+    "passed": 161,
     "failed": 0,
-    "total": 144,
     "blocked_by_environment": [
       "icmp::tests::owned_ipv4_and_ipv6_echo",
       "runtime::tests::prefer_ipv4_preserves_ipv6_only_names_without_using_external_dns"
     ]
   },
   "controller_tests": {
-    "passed": 5,
+    "passed": 7,
     "failed": 0
   },
   "service_file_tests": {
@@ -25,31 +29,126 @@
   "transport_integration": {
     "passed": 2,
     "failed": 0,
-    "checks": [
-      "TLS SNI and peer certificate preserved through CONNECT and SOCKS",
-      "8 MiB upload and download through official sing-box 1.14.4 to Xray gRPC/TLS"
-    ],
     "own_loopback_targets_only": true,
-    "internet_speed_benchmark": false
+    "checks": [
+      "TLS SNI/certificate passthrough over CONNECT/SOCKS",
+      "bulk upload/download through official sing-box and Xray gRPC/TLS"
+    ]
+  },
+  "native_ui_regressions": {
+    "passed": 6,
+    "failed": 0,
+    "checks": [
+      "dialog transient ownership",
+      "cancelled active server switch",
+      "per-frame IPC limits",
+      "split UTF8",
+      "oversized input release",
+      "malformed frame recovery"
+    ]
+  },
+  "qml_regressions": {
+    "passed": 19,
+    "failed": 0
+  },
+  "static_analysis": {
+    "exit_code": 0,
+    "diagnostics": {
+      "clippy::possible_missing_else": 4,
+      "clippy::type_complexity": 2,
+      "clippy::collapsible_if": 20,
+      "clippy::suspicious_assignment_formatting": 3,
+      "clippy::manual_range_contains": 1,
+      "clippy::field_reassign_with_default": 1,
+      "clippy::cloned_ref_to_slice_refs": 1
+    },
+    "errors": []
+  },
+  "dependency_audit": {
+    "date": "2026-11-04",
+    "rustsec": {
+      "database": {
+        "advisory-count": 1403,
+        "last-commit": "965bf9ad083b58e6340d65829d85217b18be9290",
+        "last-updated": "2026-11-03T21:34:28+01:00"
+      },
+      "lock_dependencies": 192,
+      "vulnerabilities": 0,
+      "warnings": {}
+    },
+    "go_binary_symbol_scan": {
+      "sing-box": {
+        "advisories": [
+          "GO-2026-4762",
+          "GO-2026-4945",
+          "GO-2026-5774",
+          "GO-2026-5775",
+          "GO-2026-5777",
+          "GO-2026-5932",
+          "GO-2026-6061",
+          "GO-2026-6179",
+          "GO-2026-6180",
+          "GO-2026-6237",
+          "GO-2026-6303",
+          "GO-2026-6348",
+          "GO-2026-6354",
+          "GO-2026-6355",
+          "GO-2026-6441",
+          "GO-2026-6443",
+          "GO-2026-6603",
+          "GO-2026-6610",
+          "GO-2026-6611",
+          "GO-2026-6612",
+          "GO-2026-6617",
+          "GO-2026-6629",
+          "GO-2026-6860",
+          "GO-2026-6866"
+        ],
+        "records": 1565,
+        "symbol_records": 1508
+      },
+      "xray": {
+        "advisories": [
+          "GO-2026-5932",
+          "GO-2026-6860",
+          "GO-2026-6866"
+        ],
+        "records": 24,
+        "symbol_records": 12
+      }
+    },
+    "bundled_engines": {
+      "sing-box": {
+        "version": "1.14.4",
+        "sha256": "8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9",
+        "archive_sha256": "99185d75d314a07dbba4a130c8ad986cbeb629a07927975636b341ca61f991df",
+        "origin": "unchanged official upstream Windows release",
+        "modified": false
+      },
+      "xray": {
+        "version": "26.10.31",
+        "sha256": "d5b558191cccb1e92a5772b68b8cab67717b26f634b0f15153215f65ae982a7e",
+        "archive_sha256": "2e04a9995a6f2ad1b28c0bb25c708ecb2695e43a1c9c7889c4b6ac2b48cf7a6a",
+        "origin": "unchanged official upstream Windows release",
+        "modified": false
+      }
+    },
+    "assessment": "Official binaries are retained unchanged at the user request. Advisory/symbol findings remain; this scan does not prove which exploit paths NetPulse exposes. No vulnerability-free or antivirus verdict is claimed."
   },
   "real_reality": {
-    "result": "passed",
-    "client_version": "1.0.6",
+    "clean_disconnect": true,
     "engine_selection": "auto",
-    "official_sing_box": "1.14.4",
-    "profiles_tested": 2,
     "https_samples_passed": 4,
-    "isolated_connection_check_passed": true,
-    "connection_check": "NetworkCore readiness without OS proxy/TUN",
-    "old_builtin_migrated_to_official": true,
-    "profile_records_unchanged": true,
+    "network_core_readiness": true,
     "production_profile_changed": false,
-    "system_proxy_changed": false,
-    "production_tun_changed": false
+    "profiles_tested": 2,
+    "result": "passed",
+    "system_network_changed": false,
+    "version": "1.0.7",
+    "profile_records_unchanged": true
   },
   "startup": {
     "result": "passed",
-    "version": "1.0.6",
     "checks": [
       "default profile with existing database starts from multiple working directories",
       "migration list contains only absolute noncurrent profiles",
@@ -62,11 +161,11 @@
       "existing profile is preserved"
     ],
     "production_profile_changed": false,
-    "system_network_changed": false,
-    "registry_modified": false
+    "system_network_changed": false
   },
   "controller_integration": {
-    "passed_groups": 15,
+    "result": "passed",
+    "groups": 16,
     "checks": [
       "offline engines verified; no connection on startup",
       "unknown and malformed requests rejected; channel remains usable",
@@ -81,9 +180,11 @@
       "10 concurrent responses correctly correlated",
       "real diagnostic job completes over owned loopback target",
       "audit reads work and path traversal is rejected",
+      "Qt-selected absolute paths round-trip settings and routing; log paging rejects invalid filters",
       "last per-server ping survives controller restart",
       "settings and profile persist after controller restart"
-    ]
+    ],
+    "system_network_changed": false
   },
   "layout": {
     "result": "passed",
@@ -110,7 +211,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "webview_used": false
     },
     {
@@ -125,7 +226,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "webview_used": false
     },
     {
@@ -140,7 +241,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "webview_used": false
     },
     {
@@ -155,7 +256,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "webview_used": false
     }
   ],
@@ -181,7 +282,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "webview_used": false
     },
     "simulated_service_failure_codes": [
@@ -197,7 +298,7 @@
     "simulated_success_clears_error": true,
     "tun_service_installed": false,
     "global_network_changed": false,
-    "verification_namespace": "NetPulseInstallTest8b0055a3fa974180966f1d022121a931"
+    "verification_namespace": "NetPulseInstallTest57372f58b7e146fda26039e064a746e7"
   },
   "service_self_test": {
     "protected_directory_lookup": true,
@@ -205,67 +306,32 @@
     "security_descriptor": true,
     "sid_validation": true,
     "system_changes": false,
-    "version": "1.0.6"
+    "version": "1.0.7"
   },
   "bundled_engines": {
     "sing-box": {
       "version": "1.14.4",
       "sha256": "8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9",
-      "origin": "official upstream Windows release",
-      "modified": false,
-      "archive_sha256": "99185d75d314a07dbba4a130c8ad986cbeb629a07927975636b341ca61f991df"
+      "archive_sha256": "99185d75d314a07dbba4a130c8ad986cbeb629a07927975636b341ca61f991df",
+      "origin": "unchanged official upstream Windows release",
+      "modified": false
     },
     "xray": {
-      "version": "26.10.21",
-      "sha256": "c77a00eb84fb93ae044c2d771a1cabcc033b81e487253fbc35b12df6879c1e15",
-      "official_binary": true
-    },
-    "engine_source_modules": 168
+      "version": "26.10.31",
+      "sha256": "d5b558191cccb1e92a5772b68b8cab67717b26f634b0f15153215f65ae982a7e",
+      "archive_sha256": "2e04a9995a6f2ad1b28c0bb25c708ecb2695e43a1c9c7889c4b6ac2b48cf7a6a",
+      "origin": "unchanged official upstream Windows release",
+      "modified": false
+    }
   },
-  "official_sing_box_audit": {
-    "component": "official sing-box 1.14.4",
-    "sha256": "8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9",
-    "mode": "binary symbol",
-    "advisories": [
-      "GO-2026-4762",
-      "GO-2026-4945",
-      "GO-2026-5774",
-      "GO-2026-5775",
-      "GO-2026-5777",
-      "GO-2026-5932",
-      "GO-2026-6061",
-      "GO-2026-6179",
-      "GO-2026-6180",
-      "GO-2026-6237",
-      "GO-2026-6303",
-      "GO-2026-6348",
-      "GO-2026-6354",
-      "GO-2026-6355",
-      "GO-2026-6441",
-      "GO-2026-6443",
-      "GO-2026-6603",
-      "GO-2026-6610",
-      "GO-2026-6611",
-      "GO-2026-6612",
-      "GO-2026-6617",
-      "GO-2026-6629",
-      "GO-2026-6860",
-      "GO-2026-6866"
-    ],
-    "finding_records": 1565,
-    "symbol_records": 1508,
-    "assessment": "Original upstream binary retained at the user request. Scanner findings remain; a binary-symbol scan does not by itself establish which inputs NetPulse exposes. No vulnerability-free claim."
-  },
-  "historical_component_audit": {
-    "report": "docs/SECURITY-AUDIT-1.0.6.ru.md",
-    "rust_and_qt_dependencies_unchanged": true,
-    "sing_box_replaced_by_official_binary": true
-  },
+  "engine_source_modules": 168,
+  "private_database_copies_retained": 0,
   "limitations": [
-    "The live Windows TUN service, routes, system proxy and production profile were not changed. Real profile checks used isolated local proxies and NetworkCore readiness without either OS mode.",
-    "The installer lifecycle test stubs service/layout operations in a separate namespace; this is not a live UAC/service upgrade test.",
-    "Two IPv6 tests remain excluded following the documented Windows 10013 environment diagnosis.",
-    "The official sing-box binary retains scanner findings in dependencies. It was restored unchanged at the user request; no vulnerability-free or antivirus verdict is claimed.",
-    "Real-network checks demonstrate the two tested REALITY profiles at test time; they do not guarantee all servers, transports or future availability."
+    "Live production TUN, system proxy, service installation and personal profile were not changed. REALITY checks used a private read-only database copy, isolated local proxies and NetworkCore readiness without OS routing modes; private copies were deleted.",
+    "Native in-place MTU changes were verified with owned-interface/partial-failure mocks and typed service validation. No live Windows TUN MTU was changed. Small HTTPS probes compare latency/loss/jitter, not internet download speed.",
+    "The installer lifecycle test stubs privileged layout/service actions in a separate namespace. This is not a live UAC or production service-upgrade test.",
+    "Two existing IPv6 tests remain excluded following the documented Windows 10013 environment diagnosis.",
+    "Official sing-box and Xray retain dependency scanner findings. Qt 6.8.3 and redistributed runtime are retained; this review is not a formal proof of every dependency or future server behavior.",
+    "No new antivirus scan verdict or production code-signing certificate was obtained. No antivirus exclusions or quarantine changes were made."
   ]
 }

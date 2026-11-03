@@ -148,6 +148,10 @@
       {
         "name": "qr",
         "type": "bool"
+      },
+      {
+        "name": "path",
+        "type": "String"
       }
     ]
   },
@@ -213,7 +217,12 @@
   },
   {
     "method": "import_routing",
-    "parameters": []
+    "parameters": [
+      {
+        "name": "path",
+        "type": "String"
+      }
+    ]
   },
   {
     "method": "export_routing",
@@ -221,6 +230,10 @@
       {
         "name": "routing",
         "type": "netpulse_core::routing::RoutingSettings"
+      },
+      {
+        "name": "path",
+        "type": "String"
       }
     ]
   },
@@ -441,7 +454,12 @@
   },
   {
     "method": "choose_exe",
-    "parameters": []
+    "parameters": [
+      {
+        "name": "path",
+        "type": "String"
+      }
+    ]
   },
   {
     "method": "public_ip",
@@ -473,6 +491,10 @@
       {
         "name": "kind",
         "type": "String"
+      },
+      {
+        "name": "path",
+        "type": "String"
       }
     ]
   },
@@ -482,6 +504,10 @@
       {
         "name": "backup",
         "type": "bool"
+      },
+      {
+        "name": "path",
+        "type": "String"
       }
     ]
   },
@@ -555,6 +581,27 @@
       },
       {
         "name": "goal",
+        "type": "String"
+      }
+    ]
+  },
+  {
+    "method": "log_page",
+    "parameters": [
+      {
+        "name": "day",
+        "type": "String"
+      },
+      {
+        "name": "category",
+        "type": "String"
+      },
+      {
+        "name": "cursor",
+        "type": "Option<String>"
+      },
+      {
+        "name": "level",
         "type": "String"
       }
     ]

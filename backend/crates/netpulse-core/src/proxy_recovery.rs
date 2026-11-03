@@ -188,14 +188,11 @@ impl Recovery {
 // Do not terminate an armed watchdog on drop: if restoration failed, it must
 // stay alive until its owning GUI exits and retry the compare-before-restore.
 pub fn run(path: &Path) -> Result<()> {
-    let raw = std::fs::read(path).map_err(|e| Error::io("proxy-recovery-read", e))?;
-    if raw.len() > 1024 * 1024 {
-        return Err(Error::new(
+    let raw = crate::bounded_io::read(path,1024*1024,Error::new(
             "RecoveryInvalid",
             "proxy-recovery",
             "Recovery journal exceeds its limit",
-        ));
-    }
+        ))?;
     let data = vault::open(&raw)?;
     let journal: Journal = serde_json::from_slice(&data).map_err(|_| {
         Error::new(
@@ -271,7 +268,11 @@ pub fn recover_stale(directory: &Path) -> Result<usize> {
         if entry.metadata().is_ok_and(|m| m.len() > 1024 * 1024) {
             continue;
         }
-        let raw = std::fs::read(&path).map_err(|e| Error::io("proxy-recovery-read", e))?;
+        let raw = match crate::bounded_io::read(&path,1024*1024,Error::new("RecoveryInvalid","proxy-recovery-read","Recovery journal exceeds its limit")) {
+            Ok(raw)=>raw,
+            Err(error) if error.code=="RecoveryInvalid"=>continue,
+            Err(error)=>return Err(error),
+        };
         let Ok(data) = vault::open(&raw) else {
             continue;
         };

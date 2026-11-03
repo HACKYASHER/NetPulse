@@ -26,7 +26,7 @@ ApplicationWindow {
     readonly property color accentColor: light ? "#6047ce" : "#aa9aff"
     property int page: 0
     property var titles: [tr("Обзор", "Overview"), tr("Серверы", "Servers"), tr("Маршрутизация", "Routing"), tr("Сеть", "Network"), tr("Диагностика", "Diagnostics"), "Playground", tr("Активность", "Activity"), tr("Настройки", "Settings")]
-    property var captions: [tr("Ваше подключение под контролем","Your connection, under control"),tr("Серверы и подписки","Servers and subscriptions"),tr("Выберите, куда направлять трафик","Choose where your traffic goes"),tr("DNS, MTU, транспорт и ядра","DNS, MTU, transport and engines"),tr("Измерения на реальных соединениях","Measurements over real connections"),tr("Процессы и их соединения","Processes and their connections"),tr("События приложения и сетевых компонентов","Application and network component events"),tr("Внешний вид, обновления и данные","Appearance, updates and data")]
+    property var captions: [tr("Ваше подключение под контролем","Your connection, under control"),tr("Серверы и подписки","Servers and subscriptions"),tr("Выберите, куда направлять трафик","Choose where your traffic goes"),tr("DNS, MTU, транспорт и Sniffing","DNS, MTU, transport and Sniffing"),tr("Измерения на реальных соединениях","Measurements over real connections"),tr("Процессы и их соединения","Processes and their connections"),tr("События приложения и сетевых компонентов","Application and network component events"),tr("Внешний вид, обновления и данные","Appearance, updates and data")]
 
     property var callbacks: ({})
     property var preferenceQueue: ({})
@@ -67,7 +67,7 @@ ApplicationWindow {
     property string smokeError: ""
     readonly property string displayError: backend.errorMessage || (smokeMode ? smokeError : "")
     readonly property bool activityFitsViewport: page !== 6 || (!!pageLoader.item && pageLoader.item.consoleFitsViewport && Math.abs(bodyScroll.contentHeight-bodyScroll.availableHeight)<1)
-    property var smokeSequence: [{page:0,name:"overview"},{page:1,name:"servers"},{page:2,name:"routing"},{page:3,tab:0,name:"connection"},{page:3,tab:1,name:"dns"},{page:3,tab:2,name:"mtu"},{page:3,tab:3,name:"tls"},{page:3,tab:4,name:"transport"},{page:3,tab:5,name:"service"},{page:3,tab:6,name:"engines"},{page:3,tab:7,name:"sniffing"},{page:4,name:"diagnostics"},{page:5,name:"playground"},{page:6,name:"activity"},{page:6,category:1,name:"core-log"},{page:6,name:"activity-small-error",error:true,width:1000,height:700},{page:6,name:"activity-large-error",error:true,width:1920,height:1000},{page:7,name:"settings"},{page:0,dialog:"server",name:"server-picker"},{page:0,dialog:"mode",name:"connection-mode"},{page:1,dialog:"import",name:"add-connection"},{page:4,dialog:"history",name:"measurement-history"}]
+    property var smokeSequence: [{page:0,name:"overview"},{page:1,name:"servers"},{page:2,name:"routing"},{page:3,tab:0,name:"connection"},{page:3,tab:1,name:"dns"},{page:3,tab:2,name:"mtu"},{page:3,tab:3,name:"tls"},{page:3,tab:4,name:"transport"},{page:7,tab:1,name:"service"},{page:7,tab:2,name:"engines"},{page:3,tab:5,name:"sniffing"},{page:4,name:"diagnostics"},{page:5,name:"playground"},{page:6,name:"activity"},{page:6,category:1,name:"core-log"},{page:6,name:"activity-small-error",error:true,width:1000,height:700},{page:6,name:"activity-large-error",error:true,width:1920,height:1000},{page:7,name:"settings"},{page:0,dialog:"server",name:"server-picker"},{page:0,dialog:"mode",name:"connection-mode"},{page:1,dialog:"import",name:"add-connection"},{page:4,dialog:"history",name:"measurement-history"}]
     property bool smokeFinished: false
     property var pages: [overviewPage, serversPage, routingPage, networkPage, diagnosticsPage, playgroundPage, activityPage, settingsPage]
     color: bgColor
@@ -91,9 +91,9 @@ ApplicationWindow {
         flushPreferences()
     }
     function flushPreferences() {
-        if (savingPreferences || Object.keys(preferenceQueue).length === 0) return
+        if (!backend.ready || savingPreferences || Object.keys(preferenceQueue).length === 0) return
         var patch = preferenceQueue; sentPreferences=patch; preferenceQueue = ({}); savingPreferences = true
-        if (!call("save_preferences", {preferences: Object.assign(clone(prefs), patch)}, function() { toast(tr("Настройки сохранены", "Settings saved")) })) savingPreferences = false
+        if (!call("save_preferences", {preferences: Object.assign(clone(prefs), patch)}, function() { toast(tr("Настройки сохранены", "Settings saved")) })) {preferenceQueue=Object.assign({},patch,preferenceQueue);sentPreferences=({});savingPreferences=false;preferenceRetry.restart()}
     }
     function toast(text) { notice = text; toastTimer.restart() }
     function bytes(value) {
@@ -245,7 +245,10 @@ ApplicationWindow {
     onVisibilityChanged: if (visibility === Window.Minimized && prefs.minimize_to_tray && !smokeMode) hide()
     Connections {
         target: backend
+        function onReadyChanged(){if(backend.ready)preferenceRetry.restart()}
         function onCompleted(id, method, result, error) {
+            if(method==="diagnostic_status"&&error.code==="DiagnosticNotFound"){jobTimer.stop();diagnosticId="";job=null}
+            if(method==="delete_local_data"&&!error.code){jobTimer.stop();diagnosticId="";job=null;activeProbe={id:"",ms:null};applications=[];backend.refresh()}
             if(method==="bootstrap"&&!error.code&&result) {
                 modelData=result
                 if(JSON.stringify(persistedPreferences)!==JSON.stringify(result.preferences))persistedPreferences=result.preferences
@@ -267,13 +270,16 @@ ApplicationWindow {
         }
     }
     Timer { interval: 6*60*60*1000; running: backend.ready && !smokeMode; repeat: true; onTriggered: checkUpdate(false) }
+    Timer {id:preferenceRetry;interval:500;onTriggered:flushPreferences()}
     Timer { id: toastTimer; interval: 4500; onTriggered: notice = "" }
     Timer {
         id: jobTimer; interval: 1000; repeat: true
         onTriggered: {
             if (!diagnosticId || busy("diagnostic_status")) return
             call("diagnostic_status", {id: diagnosticId}, function(result) {
+                var progressChanged=!job||job.completed!==result.completed
                 job = result
+                if(result.kind==="latency"&&progressChanged){(result.results||[]).forEach(function(r){if(r.profile_id===activeProbe.id)activeProbe={id:r.profile_id,ms:r.avg_ms===undefined?null:r.avg_ms,method:r.method||pingMethod()}});if(result.running)backend.refresh()}
                 if (!result.running) {
                     if(result.kind==="latency") (result.results||[]).forEach(function(r){if(r.id===activeProbe.id || r.profile_id===activeProbe.id)activeProbe={id:activeProbe.id,ms:r.avg_ms===undefined?null:r.avg_ms,method:r.method||pingMethod()}})
                     jobTimer.stop(); backend.refresh()
@@ -345,7 +351,7 @@ ApplicationWindow {
                     Layout.fillWidth: true; implicitHeight: 64
                     RowLayout { anchors.fill: parent; anchors.margins: 12; spacing: 9
                         Rectangle { width: 7; height: 7; radius: 4; color: modelData.engine_ready ? "#6bd9b0" : "#e0b86d" }
-                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.6"; font.pixelSize: 10; color: mutedColor } }
+                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.7"; font.pixelSize: 10; color: mutedColor } }
                     }
                 }
             }
@@ -521,11 +527,11 @@ ApplicationWindow {
             property int tab: 0
             spacing: 18
             RowLayout { Layout.fillWidth: true; spacing: 5
-                Repeater { model: [tr("Подключение","Connection"),"DNS","MTU","SNI / TLS",tr("Транспорт","Transport"),tr("Служба TUN","TUN service"),tr("Ядра","Engines"),"Sniffing"]
+                Repeater { model: [tr("Подключение","Connection"),"DNS","MTU","SNI / TLS",tr("Транспорт","Transport"),"Sniffing"]
                     delegate: ActionButton { appWindow: win; required property int index; required property string modelData; Layout.fillWidth: true; Layout.preferredWidth: 1; implicitWidth: 70; leftPadding: 6; rightPadding: 6; font.pixelSize: 11; text: modelData; primary: networkView.tab===index; onClicked: networkView.tab=index }
                 }
             }
-            Loader { active: networkView.tab===6; visible: active; Layout.fillWidth: true; sourceComponent: enginesPage }
+
             ColumnLayout { visible: networkView.tab!==6; Layout.fillWidth: true; spacing: 18
                 Card { visible: networkView.tab===0; Layout.fillWidth: true; implicitHeight: networkForm.implicitHeight+40
                     ColumnLayout { id: networkForm; anchors.fill: parent; anchors.margins: 20; spacing: 14
@@ -586,9 +592,9 @@ ApplicationWindow {
                         HelpText { text: tuningMethod.selectedValue==="https" ? tr("HTTPS проверяет реальные запросы через TUN. Сравнивает задержку, потери и джиттер, но не измеряет скорость скачивания. Для скорости используйте Speed Test после применения выбранного MTU.","HTTPS tests real requests through TUN. It compares latency, loss and jitter, but does not measure download speed. Use Speed Test after applying an MTU to compare throughput.") : tr("ICMP может не проходить через VLESS, Trojan и Hysteria2. Если узел не отвечает через TUN, тест остановится без изменения MTU. Для этих протоколов используйте HTTPS.","ICMP may not pass through VLESS, Trojan or Hysteria2. If the target does not reply through TUN, the test stops before changing MTU. Use HTTPS for these protocols.") }
                         RowLayout { Layout.fillWidth: true
                             Label { text: tr("От","From"); color: mutedColor }
-                            SpinBox { id: tuningMinimum; from: 1280; to: 1500; value: 1440; editable: true }
+                            SpinBox { id: tuningMinimum; from: 1280; to: Math.min(1500,win.prefs.mtu||1500); value: Math.min(1440,to); editable: true; enabled: !jobTimer.running }
                             Label { text: tr("До","To"); color: mutedColor }
-                            SpinBox { id: tuningMaximum; from: tuningMinimum.value; to: Math.min(1500,tuningMinimum.value+64); value: 1472; editable: true }
+                            SpinBox { id: tuningMaximum; from: tuningMinimum.value; to: Math.min(1500,win.prefs.mtu||1500,tuningMinimum.value+64); value: Math.min(1472,to); editable: true; enabled: !jobTimer.running }
                             Label { text: tr("Проверок","Probes"); color: mutedColor }
                             SpinBox { id: tuningSamples; from: 1; to: 5; value: 5; editable: true }
                         }
@@ -597,7 +603,7 @@ ApplicationWindow {
                             ActionButton { appWindow: win; text: tr("Отменить","Cancel"); visible: !!job&&job.kind==="mtu_tuning"&&job.running; enabled: !busy("cancel_diagnostic"); onClicked: call("cancel_diagnostic",{id:diagnosticId}) }
                             Label { visible: !!job&&job.kind==="mtu_tuning"; text: job?job.completed+" / "+job.total:""; color: mutedColor }
                         }
-                        HelpText { visible: !snapshot.tun_active; text: tr("Подключитесь к серверу в режиме TUN. Тест может прерывать соединения приложений и занять несколько минут.","Connect to your server in TUN mode. This test can interrupt application connections and take several minutes.") }
+                        HelpText { visible: !snapshot.tun_active; text: tr("Подключитесь к серверу в режиме TUN. Тест меняет MTU без переподключения и может занять несколько минут. Верхняя граница ограничена MTU, с которым запущено текущее ядро.","Connect to your server in TUN mode. This test changes MTU without reconnecting and can take several minutes. The upper bound is limited by the MTU used to start the current engine.") }
                         ProgressBar { visible: !!job&&job.kind==="mtu_tuning"&&job.running; Layout.fillWidth: true; from: 0; to: job?Math.max(1,job.total):1; value: job?job.completed:0 }
                         Repeater { model: job&&job.kind==="mtu_tuning"?job.results:[]
                             delegate: ColumnLayout { required property var modelData; Layout.fillWidth: true
@@ -657,7 +663,7 @@ ApplicationWindow {
                         ActionButton { appWindow: win; text: tr("Сохранить транспорт","Save transport"); onClicked: save({fragmentation:{enabled:fragToggle.checked,packets:fragPackets.text,length:fragLength.text,interval:fragInterval.text,max_split:fragSplit.text},multiplex:{enabled:muxToggle.checked,concurrency:muxConcurrency.value,xudp_concurrency:muxXudp.value,udp_443:muxUdp.currentText}}) }
                     }
                 }
-                Card { visible: networkView.tab===7; Layout.fillWidth: true; implicitHeight: sniffForm.implicitHeight+40
+                Card { visible: networkView.tab===5; Layout.fillWidth: true; implicitHeight: sniffForm.implicitHeight+40
                     ColumnLayout { id: sniffForm; anchors.fill: parent; anchors.margins: 20; spacing: 14
                         Component.onCompleted: {var f=prefs.sniffing||{};sniffEnabled.checked=f.enabled!==false;sniffHttp.checked=f.http!==false;sniffTls.checked=f.tls!==false;sniffQuic.checked=f.quic!==false;sniffTimeout.value=f.timeout_ms||300}
                         Label { text: "Sniffing"; color: textColor; font.pixelSize: 16; font.bold: true }
@@ -673,18 +679,7 @@ ApplicationWindow {
                         ActionButton { appWindow: win; text: tr("Сохранить Sniffing","Save Sniffing"); enabled: !savingPreferences&&!jobTimer.running&&!busy("quick_network")&&!busy("select_profile")&&!busy("connect"); onClicked: save({sniffing:{enabled:sniffEnabled.checked,http:sniffHttp.checked,tls:sniffTls.checked,quic:sniffQuic.checked,timeout_ms:sniffTimeout.value}}) }
                     }
                 }
-                Card { visible: networkView.tab===5; Layout.fillWidth: true; implicitHeight: serviceForm.implicitHeight+40
-                    ColumnLayout { id: serviceForm; anchors.fill: parent; anchors.margins: 20; spacing: 12
-                        Label { textFormat: Text.PlainText; text: tr("Служба TUN","TUN service"); color: textColor; font.pixelSize: 16; font.bold: true }
-                        Label { textFormat: Text.PlainText; text: modelData.service?(modelData.service.error?tr("Требует внимания","Needs attention"):modelData.service.installed?tr("Установлена","Installed"):tr("Не установлена","Not installed"))+(modelData.service.running?tr(" · работает"," · running"):""):"—"; color: mutedColor }
-                        HelpText { visible:!!(modelData.service&&modelData.service.error); text:modelData.service&&modelData.service.error?modelData.service.error.message:"" }
-                        HelpText { text: tr("Установка и восстановление требуют подтверждения Windows. Восстановление останавливает службу и возвращает отсутствующие компоненты из проверенного комплекта NetPulse. Если файлы удалены антивирусом, сначала проверьте его отчёт и результат проверки выпуска. Автоматическое подключение файлы не восстанавливает.","Installation and repair require Windows confirmation. Repair stops the service and restores missing components from the verified NetPulse bundle. If antivirus software removed files, check its report and the release analysis first. Connecting never restores missing files automatically.") }
-                        RowLayout {
-                            ActionButton { appWindow: win; text: modelData.service&&modelData.service.installed ? tr("Восстановить службу","Repair service") : tr("Установить службу","Install service"); enabled: !snapshot.engine_pid&&!busy("manage_service")&&!(modelData.service&&modelData.service.error&&["ServiceRegistrationDamaged","ServiceRestartRequired"].indexOf(modelData.service.error.code)>=0); onClicked: call("manage_service",{install:true,upgrade:!!(modelData.service&&modelData.service.installed),repair:!!(modelData.service&&modelData.service.installed)}) }
-                            ActionButton { appWindow: win; text: tr("Удалить службу","Remove service"); enabled: !snapshot.engine_pid&&!busy("manage_service")&&!!(modelData.service&&modelData.service.installed)&&!(modelData.service.error&&["ServiceRegistrationDamaged","ServiceRestartRequired"].indexOf(modelData.service.error.code)>=0); onClicked: call("manage_service",{install:false}) }
-                        }
-                    }
-                }
+
             }
         }
     }
@@ -986,11 +981,21 @@ ApplicationWindow {
     Component {
         id: settingsPage
         ColumnLayout {
+            id:settingsView
+            property int tab:0
+            spacing:18
+            RowLayout {Layout.fillWidth:true;spacing:6
+                Repeater {model:[tr("Общие","General"),tr("Служба TUN","TUN service"),tr("Ядра","Engines")]
+                    delegate:ActionButton {appWindow:win;required property int index;required property string modelData;Layout.fillWidth:true;text:modelData;primary:settingsView.tab===index;onClicked:settingsView.tab=index}
+                }
+            }
+            ColumnLayout {visible:settingsView.tab===0;Layout.fillWidth:true
+
             spacing: 18
             Card { Layout.fillWidth: true; implicitHeight: aboutColumn.implicitHeight+40
                 ColumnLayout { id: aboutColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
                     Label { textFormat: Text.PlainText; text: tr("О клиенте","About NetPulse"); color: textColor; font.pixelSize: 17; font.bold: true }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.6 · Windows x64"; color: textColor }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.7 · Windows x64"; color: textColor }
                     Label { textFormat: Text.PlainText; text: "Qt Quick · Rust · sing-box "+(modelData.engine_version||"—")+" · Xray "+(modelData.xray_version||"—"); color: mutedColor; font.pixelSize: 12 }
                     ActionButton { appWindow: win; text: "GitHub · NetPulse ↗"; onClicked: Qt.openUrlExternally("https://github.com/HACKYASHER/NetPulse") }
                 }
@@ -998,7 +1003,7 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: updateColumn.implicitHeight+40
                 ColumnLayout { id: updateColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
                     Label { textFormat: Text.PlainText; text: tr("Обновление клиента","Client updates"); color: textColor; font.pixelSize: 16; font.bold: true }
-                    Label { textFormat: Text.PlainText; text: tr("Проверка при запуске и каждые 6 часов, включая предварительные выпуски. При наличии обновления кнопка появится слева внизу.","Checks run on startup and every 6 hours, including prereleases. An update button appears at the bottom left when a new version is available."); color: mutedColor; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Label { textFormat: Text.PlainText; text: tr("Проверка при запуске и каждые 6 часов. Стабильный клиент получает только обычные релизы; предварительный выпуск — также новые предварительные версии. При наличии обновления кнопка появится слева внизу.","Checks run on startup and every 6 hours. Stable clients receive stable releases; prerelease clients may also receive newer prereleases. An update button appears at the bottom left when a new version is available."); color: mutedColor; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Label { textFormat: Text.PlainText; text: updateStatus; visible: text.length>0; color: mutedColor; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     ActionButton { appWindow: win; text: tr("Проверить обновления","Check for updates"); enabled: !busy("check_client_update"); onClicked: checkUpdate(true) }
                 }
@@ -1034,10 +1039,30 @@ ApplicationWindow {
                     }
                     HelpText { text: tr("Временные архивы ядер очищаются после установки и при следующем запуске. Незавершённые загрузки и установщики уже установленной версии тоже удаляются; предыдущий комплект ядер остаётся для отката.","Temporary engine archives are cleared after installation and on startup. Interrupted downloads and installers for the installed version are also removed; the previous engine bundle remains for rollback.") }
                     ActionButton { appWindow: win; text: tr("Редактор всех параметров…", "Edit all preferences…"); onClicked: editJson(tr("Параметры NetPulse", "NetPulse preferences"), JSON.stringify(prefs, null, 2), "save_preferences") }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.6  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.7  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
                 }
             }
+
+            }
+            Loader {active:settingsView.tab===1;visible:active;Layout.fillWidth:true;sourceComponent:servicePage}
+            Loader {active:settingsView.tab===2;visible:active;Layout.fillWidth:true;sourceComponent:enginesPage}
         }
+    }
+
+    Component {
+        id:servicePage
+                Card { Layout.fillWidth: true; implicitHeight: serviceForm.implicitHeight+40
+                    ColumnLayout { id: serviceForm; anchors.fill: parent; anchors.margins: 20; spacing: 12
+                        Label { textFormat: Text.PlainText; text: tr("Служба TUN","TUN service"); color: textColor; font.pixelSize: 16; font.bold: true }
+                        Label { textFormat: Text.PlainText; text: modelData.service?(modelData.service.error?tr("Требует внимания","Needs attention"):modelData.service.installed?tr("Установлена","Installed"):tr("Не установлена","Not installed"))+(modelData.service.running?tr(" · работает"," · running"):""):"—"; color: mutedColor }
+                        HelpText { visible:!!(modelData.service&&modelData.service.error); text:modelData.service&&modelData.service.error?modelData.service.error.message:"" }
+                        HelpText { text: tr("Установка и восстановление требуют подтверждения Windows. Восстановление останавливает службу и возвращает отсутствующие компоненты из проверенного комплекта NetPulse. Если файлы удалены антивирусом, сначала проверьте его отчёт и результат проверки выпуска. Автоматическое подключение файлы не восстанавливает.","Installation and repair require Windows confirmation. Repair stops the service and restores missing components from the verified NetPulse bundle. If antivirus software removed files, check its report and the release analysis first. Connecting never restores missing files automatically.") }
+                        RowLayout {
+                            ActionButton { appWindow: win; text: modelData.service&&modelData.service.installed ? tr("Восстановить службу","Repair service") : tr("Установить службу","Install service"); enabled: !snapshot.engine_pid&&!busy("manage_service")&&!(modelData.service&&modelData.service.error&&["ServiceRegistrationDamaged","ServiceRestartRequired"].indexOf(modelData.service.error.code)>=0); onClicked: call("manage_service",{install:true,upgrade:!!(modelData.service&&modelData.service.installed),repair:!!(modelData.service&&modelData.service.installed)}) }
+                            ActionButton { appWindow: win; text: tr("Удалить службу","Remove service"); enabled: !snapshot.engine_pid&&!busy("manage_service")&&!!(modelData.service&&modelData.service.installed)&&!(modelData.service.error&&["ServiceRegistrationDamaged","ServiceRestartRequired"].indexOf(modelData.service.error.code)>=0); onClicked: call("manage_service",{install:false}) }
+                        }
+                    }
+                }
     }
 
     Component {
@@ -1052,7 +1077,10 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: coreForm.implicitHeight+40
                 ColumnLayout { id: coreForm; anchors.fill: parent; anchors.margins: 20; spacing: 14
                     Label { textFormat: Text.PlainText; text: tr("Ядра и обновления","Engines and updates"); color: textColor; font.pixelSize: 17; font.bold: true }
-                    HelpText { text: tr("В комплект входит sing-box 1.14.4-netpulse.1: отдельная сборка NetPulse на основе 1.14.4 с исправленными зависимостями. Xray 26.10.21 — официальный выпуск. Восстановление встроенных ядер возвращает этот комплект.","The bundle includes sing-box 1.14.4-netpulse.1, a separate NetPulse build based on 1.14.4 with patched dependencies. Xray 26.10.21 is the official release. Restoring bundled engines restores this set.") }
+                    HelpText { text: tr("Встроены официальные стабильные ядра: sing-box 1.14.4 и Xray 26.10.31. Восстановление возвращает эти версии из проверенного комплекта установщика.","Bundled official stable engines: sing-box 1.14.4 and Xray 26.10.31. Restore returns these versions from the verified installer bundle.") }
+                    Rectangle {Layout.fillWidth:true;implicitHeight:antivirusWarning.implicitHeight+24;radius:8;color:light?"#fff4cd":"#3a321c";border.color:light?"#e3bd56":"#8b7434"
+                        Label {id:antivirusWarning;anchors.fill:parent;anchors.margins:12;wrapMode:Text.WordWrap;color:light?"#745200":"#ffe18b";text:tr("⚠ При обновлении или замене ядер антивирус может удалить их файлы. В этом случае VPN перестанет работать. Проверьте отчёт антивируса перед повторной установкой.","⚠ Antivirus software may remove engine files during updates or replacement. VPN will stop working if this happens. Check the antivirus report before reinstalling.")}
+                    }
                     RowLayout {
                         ActionButton { appWindow: win; text: "Xray · "+(win.modelData.xray_version||"—"); primary: engineView.engine==="xray"; onClicked: {engineView.engine="xray";engineView.releases=[]} }
                         ActionButton { appWindow: win; text: "sing-box · "+(win.modelData.engine_version||"—"); primary: engineView.engine==="sing-box"; onClicked: {engineView.engine="sing-box";engineView.releases=[]} }
@@ -1072,7 +1100,7 @@ ApplicationWindow {
                     Card { visible: !!engineView.release; Layout.fillWidth: true; implicitHeight: releaseDetails.implicitHeight+28
                         ColumnLayout { id: releaseDetails; anchors.fill: parent; anchors.margins: 14; spacing: 12
                             Label { textFormat: Text.PlainText; text: engineView.release?engineView.release.asset:""; color: textColor }
-                            HelpText { visible: engineView.engine==="sing-box"&&engineView.release&&engineView.release.tag==="v1.14.4"; text: tr("Официальный sing-box 1.14.4 не содержит дополнительных исправлений сборки NetPulse. Рекомендуется оставить встроенную 1.14.4-netpulse.1.","Official sing-box 1.14.4 does not contain the additional NetPulse fixes. Keeping the bundled 1.14.4-netpulse.1 is recommended.") }
+
                             Label { textFormat: Text.PlainText; text: "SHA-256: "+(engineView.release?engineView.release.archive_sha256:""); color: mutedColor; font.family: "Consolas"; font.pixelSize: 11; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
                             RowLayout {
                                 ActionButton { appWindow: win; text: tr("Страница выпуска ↗","Release page ↗"); onClicked: if(engineView.release)call("open_core_page",{url:engineView.release.page}) }

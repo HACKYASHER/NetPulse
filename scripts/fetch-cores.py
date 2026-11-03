@@ -7,8 +7,8 @@ COMPONENTS=[
     ('SagerNet/sing-box','v1.14.4','sing-box-1.14.4-windows-amd64.zip',{
         'sing-box.exe':'8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9',
         'libcronet.dll':'3217c6260fbca5f16072e0b79735742f40109a63bb0ff88fd6b96dd6b54a2928'}),
-    ('XTLS/Xray-core','v26.10.21','Xray-windows-64.zip',{
-        'xray.exe':'c77a00eb84fb93ae044c2d771a1cabcc033b81e487253fbc35b12df6879c1e15'})]
+    ('XTLS/Xray-core','v26.10.31','Xray-windows-64.zip',{
+        'xray.exe':'d5b558191cccb1e92a5772b68b8cab67717b26f634b0f15153215f65ae982a7e'})]
 for repo,tag,archive,files in COMPONENTS:
     if all((DEST/name).is_file() and hashlib.sha256((DEST/name).read_bytes()).hexdigest()==checksum for name,checksum in files.items()):continue
     request=urllib.request.Request(f'https://github.com/{repo}/releases/download/{tag}/{archive}',headers={'User-Agent':'NetPulse-source-build'})

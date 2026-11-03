@@ -5,6 +5,10 @@
 #include <QTimer>
 #include <QMap>
 #include <QCoreApplication>
+#include <QPointer>
+#include <QWindow>
+class QFileDialog;
+class QWidget;
 
 class Backend final : public QObject {
     Q_OBJECT
@@ -31,10 +35,12 @@ public:
     Q_INVOKABLE void copyText(const QString& text);
     Q_INVOKABLE QString clipboardText() const;
     Q_INVOKABLE void openDataDirectory();
+    Q_INVOKABLE void openLogDirectory();
     Q_INVOKABLE void openInstallationDirectory();
     Q_INVOKABLE void openProxySettings();
     Q_INVOKABLE void confirmDelete(const QString& method, const QVariantMap& params, const QString& label);
     void start();
+    void setMainWindow(QWindow* window);
 signals:
     void dataChanged();
     void readyChanged();
@@ -44,7 +50,16 @@ signals:
     void eventReceived(const QString& name, const QVariant& value);
     void quitReady();
 private:
+    friend class BackendProtocolTests;
     void readOutput();
+    void consumeOutput(const QByteArray& bytes);
+    void sendPendingRequest(quint64 id, const QString& method, const QVariantMap& params);
+    void finishPendingRequest(quint64 id, const QVariant& result, const QVariantMap& error = {});
+    QFileDialog* createFileDialog(const QString& method, const QVariantMap& params);
+    void beginFileDialog(quint64 id, const QString& method, const QVariantMap& params);
+    void parentDialog(QWidget* dialog);
+    bool confirmServerChange(const QString& method, const QVariantMap& params);
+    void openDirectory(const QString& directory);
     void setError(const QString& message);
     QProcess m_process;
     QTimer m_poll;
@@ -52,6 +67,8 @@ private:
     QVariantMap m_data;
     QMap<quint64, QString> m_pending;
     QString m_directory, m_error;
+    QPointer<QWindow> m_mainWindow;
+    QPointer<QFileDialog> m_fileDialog;
     quint64 m_nextId = 1;
     bool m_ready = false, m_isolated = false, m_quitting = false;
 };

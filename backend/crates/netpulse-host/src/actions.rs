@@ -2,13 +2,15 @@ use super::*;
 use netpulse_core::{diagnostics, selection};
 use std::sync::atomic::Ordering;
 
-pub fn subscription_monitor(app: host::AppHandle, core: Arc<Mutex<NetworkCore>>, preparing:Arc<std::sync::atomic::AtomicBool>) {
+pub fn subscription_monitor(app: host::AppHandle, core: Arc<Mutex<NetworkCore>>, preparing:Arc<std::sync::atomic::AtomicBool>, closing:Arc<std::sync::atomic::AtomicBool>) {
     std::thread::spawn(move || {
         let mut attempts = std::collections::HashMap::<String, std::time::Instant>::new();
         let mut first = true;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(if first { 100 } else { 60_000 }));
+            if closing.load(Ordering::Acquire){break;}
             let due = {
+                if closing.load(Ordering::Acquire){break;}
                 if preparing.load(Ordering::Acquire){continue;}
                 let Ok(c) = core.try_lock() else {
                     continue;
@@ -42,6 +44,7 @@ pub fn subscription_monitor(app: host::AppHandle, core: Arc<Mutex<NetworkCore>>,
                 let Ok(mut c) = core.lock() else {
                     break;
                 };
+                if closing.load(Ordering::Acquire){break;}
                 if preparing.load(Ordering::Acquire){continue;}
                 // Discard responses made obsolete by deletion, manual refresh
                 // or an interval change while the request was in flight.
@@ -155,6 +158,7 @@ fn open_path(path: &Path) -> Result<()> {
 
 type Session = Option<(u32, String)>;
 pub async fn start_mtu(state: host::State<'_, AppState>, target: String) -> Result<String> {
+    let generation=state.diagnostics.generation();
     let explicit_target=if target.trim().is_empty(){None}else{Some(target.trim().parse::<std::net::Ipv4Addr>().map_err(|_|Error::new("MtuTarget","mtu","Неверный IPv4 адрес"))?)};
     let (route, profile, prefs, path, tun, server) = with_core(&state, "mtu-start", |c| {
         let route = c.diagnostic_route();
@@ -178,7 +182,7 @@ pub async fn start_mtu(state: host::State<'_, AppState>, target: String) -> Resu
     .await?;
     let jobs = state.diagnostics.clone();
     let core = state.core.clone();
-    let (id, cancel) = jobs.begin("mtu", 1)?;
+    let (id, cancel) = jobs.begin_if_current("mtu", 1,generation)?;
     let returned = id.clone();
     std::thread::spawn(move || {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
@@ -209,11 +213,12 @@ pub async fn start_mtu(state: host::State<'_, AppState>, target: String) -> Resu
             value["target_source"]=serde_json::json!(target_source);
             value["max_icmp_payload"]=serde_json::json!(value["path"]["confirmed_mtu"].as_u64().map(|n|n.saturating_sub(28)));
             value["current_mtu"]=serde_json::json!(prefs.mtu);
-            jobs.append(&id, value.clone());
-            if let Ok(c) = core.lock() { let _ = c.store.add_measurement("mtu", &value); }
             if let Ok(c) = core.lock() {
+                if cancel.load(Ordering::SeqCst){return Err(Error::new("Cancelled","mtu","Проверка отменена"));}
+                let _=c.store.add_measurement("mtu",&value);
                 let _ = c.store.log("INFO", "Diagnostics", "mtu", "Completed", "Adapter, DF path and tunnel health analysis completed; recommendations are estimates");
             }
+            jobs.append(&id, value);
             Ok(())
         }));
         let error = match result {
@@ -233,14 +238,17 @@ fn begin_selection(
     core: Arc<Mutex<NetworkCore>>,
     jobs: Arc<diagnostics::Jobs>,
     preparing:Arc<std::sync::atomic::AtomicBool>,
+    closing:Arc<std::sync::atomic::AtomicBool>,
     samples: u8,
     force_reconnect: bool,
 ) -> Result<String> {
+    let generation=jobs.generation();
     let (profiles, prefs, path, expected) = {
         let mut c = core
             .lock()
             .map_err(|_| Error::new("CoreUnavailable", "selection", "Core unavailable"))?;
         let summaries = c.store.profiles()?;
+        ensure_open(&closing,"start_best_server")?;
         if preparing.load(Ordering::Acquire){return Err(Error::new("RuntimePreparing","selection","Дождитесь завершения операции с ядрами."));}
         if summaries.is_empty() || summaries.len() > 2000 {
             return Err(Error::new(
@@ -254,10 +262,13 @@ fn begin_selection(
             .map(|p| c.store.profile(&p.id))
             .collect::<Result<Vec<_>>>()?;
         let prefs = c.store.preferences()?;
+        if force_reconnect && !prefs.auto_failover {
+            return Err(Error::new("AutoFailoverDisabled","selection","Автоматическая смена сервера отключена"));
+        }
         let expected = c.guarded(|c| Ok(session(&c.snapshot())))?;
         (profiles, prefs, c.engine_path.clone(), expected)
     };
-    let (id, cancel) = jobs.begin("best_server", profiles.len())?;
+    let (id, cancel) = jobs.begin_if_current("best_server", profiles.len(),generation)?;
     let returned = id.clone();
     std::thread::spawn(move || {
         let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
@@ -297,6 +308,7 @@ fn begin_selection(
                             }
                             let value = serde_json::to_value(&result).unwrap_or_default();
                             if let Ok(c) = core.lock() {
+                                if cancel.load(Ordering::SeqCst){break;}
                                 let _ = c.store.add_measurement("latency", &value);
                                 let _ = c.store.log(
                                     "INFO",
@@ -335,7 +347,8 @@ fn begin_selection(
             let mut c = core
                 .lock()
                 .map_err(|_| Error::new("CoreUnavailable", "selection", "Core unavailable"))?;
-            if cancel.load(Ordering::SeqCst) || preparing.load(Ordering::Acquire)
+            if cancel.load(Ordering::SeqCst) || closing.load(Ordering::Acquire) || preparing.load(Ordering::Acquire)
+                || (force_reconnect && !c.store.preferences()?.auto_failover)
                 || c.guarded(|c| Ok(session(&c.snapshot())))? != expected
             {
                 return Ok(());
@@ -343,7 +356,7 @@ fn begin_selection(
             // Try the next tested candidate if the best fails during activation.
             let mut failure = None;
             for (_, id) in ranked {
-                if cancel.load(Ordering::SeqCst) {
+                if cancel.load(Ordering::SeqCst) || (force_reconnect && !c.store.preferences()?.auto_failover) {
                     return Ok(());
                 }
                 let result = if expected.is_some() {
@@ -412,7 +425,8 @@ pub async fn start_best_server(state: host::State<'_, AppState>, samples: u8) ->
     let core = state.core.clone();
     let jobs = state.diagnostics.clone();
     let preparing=state.runtime_preparing.clone();
-    selection_start_worker(move || begin_selection(core, jobs, preparing, samples, false)).await
+    let closing=state.closing.clone();
+    selection_start_worker(move || begin_selection(core, jobs, preparing, closing, samples, false)).await
 }
 async fn selection_start_worker(
     f: impl FnOnce() -> Result<String> + Send + 'static,
@@ -431,12 +445,14 @@ pub fn selection_monitor(
     core: Arc<Mutex<NetworkCore>>,
     jobs: Arc<diagnostics::Jobs>,
     preparing:Arc<std::sync::atomic::AtomicBool>,
+    closing:Arc<std::sync::atomic::AtomicBool>,
 ) {
     std::thread::spawn(move || {
         let mut failures = 0;
         let mut watched = None;
         loop {
             std::thread::sleep(std::time::Duration::from_secs(10));
+            if closing.load(Ordering::Acquire){break;}
             let request = core.try_lock().ok().and_then(|mut c| {
                 if preparing.load(Ordering::Acquire){return None;}
                 let prefs = c.store.preferences().ok()?;
@@ -470,7 +486,7 @@ pub fn selection_monitor(
             );
             // A manual switch/disconnect while the request was in flight cancels recovery.
             let still_current = core.lock().is_ok_and(|mut c| {
-                session(&c.snapshot()) == watched
+                !closing.load(Ordering::Acquire) && session(&c.snapshot()) == watched
                     && c.store.preferences().is_ok_and(|p| p.auto_failover)
             });
             if !still_current {
@@ -493,7 +509,7 @@ pub fn selection_monitor(
             }
             if failures >= 3 {
                 failures = 0;
-                if begin_selection(core.clone(), jobs.clone(), preparing.clone(), 5, true).is_ok() {
+                if begin_selection(core.clone(), jobs.clone(), preparing.clone(), closing.clone(), 5, true).is_ok() {
                     let _ = app.emit("automatic-selection", ());
                 }
             }
@@ -504,16 +520,21 @@ pub fn selection_monitor(
 
 
 pub async fn start_mtu_tuning(state:host::State<'_,AppState>,request:netpulse_core::mtu_tuning::Request)->Result<String> {
+    let generation=state.diagnostics.generation();
     use netpulse_core::mtu_tuning::{Trial, Probe, compare, confirm};
     request.validate()?;
-    let (original,mut expected_session)=with_core(&state,"mtu-tuning",|c|{
+    let maximum=request.maximum;
+    let (original,expected_session)=with_core(&state,"mtu-tuning",move |c|{
         let snapshot=c.snapshot();
         if !snapshot.tun_active||snapshot.engine_pid.is_none(){return Err(Error::new("TunRequired","mtu-tuning","Для сравнения MTU подключитесь в режиме TUN"))}
-        Ok((c.store.preferences()?,session(&snapshot)))
+        let preferences=c.store.preferences()?;
+        let applied=snapshot.applied_preferences.as_ref().map_or(preferences.mtu,|p|p.mtu);
+        if maximum>applied{return Err(Error::new("MtuSessionLimit","mtu-tuning",format!("Верхняя граница теста не должна превышать MTU текущего подключения ({applied})")));}
+        Ok((preferences,session(&snapshot)))
     }).await?;
     let values=request.candidates();
     let jobs=state.diagnostics.clone();let core=state.core.clone();
-    let (id,cancel)=jobs.begin("mtu_tuning",values.len()+4)?;let returned=id.clone();
+    let (id,cancel)=jobs.begin_if_current("mtu_tuning",values.len()+4,generation)?;let returned=id.clone();
     std::thread::spawn(move || {
         let mut runtime_mtu=original.mtu;
         let mut report=None;
@@ -531,12 +552,8 @@ pub async fn start_mtu_tuning(state:host::State<'_,AppState>,request:netpulse_co
                         return Err(Error::new("ConnectionChanged","mtu-tuning","Подключение или настройки изменились; тест остановлен"))
                     }
                     if runtime_mtu!=mtu {
-                        // connect_with can replace the process even when a later
-                        // preflight fails, so capture the resulting owned session.
-                        let changed=c.guarded(|c|c.set_session_mtu(mtu));
-                        let snapshot=c.snapshot();expected_session=session(&snapshot);
-                        runtime_mtu=snapshot.applied_preferences.as_ref().map_or(original.mtu,|p|p.mtu);
-                        changed?;
+                        c.guarded(|c|c.set_session_mtu(mtu))?;
+                        runtime_mtu=mtu;
                     }
                 }
                 let mut samples=Vec::new();let mut last_error=None;
@@ -582,7 +599,7 @@ pub async fn start_mtu_tuning(state:host::State<'_,AppState>,request:netpulse_co
                 // restore a runtime that still belongs to this diagnostic.
                 let owned=session(&snapshot)==expected_session;
                 if owned && snapshot.applied_preferences.as_ref().is_some_and(|p|p.mtu!=saved.mtu) {
-                    if let Err(e)=c.guarded(|c|c.apply_preferences(saved.clone())) {error=Some(e)} else {restored=true;}
+                    if let Err(e)=c.guarded(|c|c.set_session_mtu(saved.mtu)) {error=Some(e)} else {restored=true;}
                 } else {
                     restored=snapshot.engine_pid.is_none() || snapshot.applied_preferences.as_ref().is_some_and(|p|p.mtu==saved.mtu);
                 }
@@ -590,7 +607,7 @@ pub async fn start_mtu_tuning(state:host::State<'_,AppState>,request:netpulse_co
                     let _=std::fs::remove_file(c.store.data_directory().join("mtu-tuning-recovery.json"));
                 }
             }
-            if let Some(mut value)=report {
+            if !cancel.load(Ordering::SeqCst) && let Some(mut value)=report {
                 value["restored"]=serde_json::json!(restored);
                 // A failed restoration cannot expose an actionable suggestion.
                 if !restored {value["comparison"]["suggested_mtu"]=serde_json::Value::Null;}

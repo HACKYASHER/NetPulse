@@ -26,7 +26,7 @@ ApplicationWindow {
         Qt.callLater(function(){
             if(!done)return
             if(method==="log_days")done(["2026-10-25"])
-            else if(method==="log_read")done(JSON.stringify({id:params.category,level:"INFO",message:params.category+" entry"}))
+            else if(method==="log_page")done({text:JSON.stringify({id:params.category,level:"INFO",message:params.category+" entry"}),next:null})
             else if(method==="logs")done([{id:"events",level:"INFO",message:"events entry"}])
         })
         return id

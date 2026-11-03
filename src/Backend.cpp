@@ -8,6 +8,16 @@
 #include <QMessageBox>
 #include <QSet>
 #include <QUrl>
+#include <QFileDialog>
+#include <QStandardPaths>
+#include <QPushButton>
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 Backend::Backend(QString directory, bool isolated, QObject* parent)
     : QObject(parent), m_directory(std::move(directory)), m_isolated(isolated) {
@@ -23,6 +33,7 @@ Backend::Backend(QString directory, bool isolated, QObject* parent)
         m_poll.stop();
         const auto pendingRequests = m_pending;
         m_pending.clear(); emit pendingChanged();
+        if(m_fileDialog)m_fileDialog->reject();
         for (auto i = pendingRequests.cbegin(); i != pendingRequests.cend(); ++i)
             emit completed(QString::number(i.key()), i.value(), {},
                 {{QStringLiteral("code"), QStringLiteral("HostStopped")}, {QStringLiteral("message"), QStringLiteral("Сетевой контроллер остановлен")}});
@@ -37,6 +48,7 @@ Backend::Backend(QString directory, bool isolated, QObject* parent)
 }
 
 Backend::~Backend() {
+    if (m_fileDialog) { m_fileDialog->disconnect(this); delete m_fileDialog.data(); }
     if (m_process.state() != QProcess::NotRunning) {
         m_process.closeWriteChannel(); // EOF asks the controller to restore and disconnect.
         if (!m_process.waitForFinished(20000)) {
@@ -65,16 +77,103 @@ QString Backend::request(const QString& method, const QVariantMap& params) {
     if (m_pending.size() >= 24) {
         setError(QStringLiteral("Дождитесь завершения текущих операций")); return {};
     }
+    if (!confirmServerChange(method, params)) return {};
+    static const QSet<QString> fileMethods{QStringLiteral("import_file"), QStringLiteral("import_routing"), QStringLiteral("export_routing"), QStringLiteral("export_data"), QStringLiteral("restore_data"), QStringLiteral("choose_exe")};
+    const bool pickFile=fileMethods.contains(method)&&!params.contains(QStringLiteral("path"));
+    if (pickFile&&m_fileDialog) {setError(QStringLiteral("Завершите выбор файла в открытом окне"));return {};}
     const quint64 id = m_nextId++;
+    m_pending.insert(id, method); emit pendingChanged();
+    if (pickFile) beginFileDialog(id,method,params);
+    else sendPendingRequest(id,method,params);
+    return QString::number(id);
+}
+void Backend::sendPendingRequest(quint64 id,const QString& method,const QVariantMap& params) {
+    if (!m_pending.contains(id)) return;
+    if (m_process.state()!=QProcess::Running||(m_quitting&&method!=QStringLiteral("quit_application"))) {
+        const QVariantMap error{{QStringLiteral("code"),QStringLiteral("HostStopped")},{QStringLiteral("message"),QStringLiteral("Сетевой контроллер недоступен")}};
+        QTimer::singleShot(0,this,[this,id,error]{finishPendingRequest(id,{},error);});return;
+    }
     const QJsonObject request{{QStringLiteral("id"), qint64(id)}, {QStringLiteral("method"), method},
         {QStringLiteral("params"), QJsonObject::fromVariantMap(params)}};
     QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
-    if (bytes.size() > 12 * 1024 * 1024 - 1) { setError(QStringLiteral("Слишком большой запрос")); return {}; }
+    if (bytes.size() > 12 * 1024 * 1024 - 1) {
+        bytes.fill('\0');
+        QTimer::singleShot(0,this,[this,id]{finishPendingRequest(id,{},{{QStringLiteral("code"),QStringLiteral("FrameLimit")},{QStringLiteral("message"),QStringLiteral("Слишком большой запрос")}});});return;
+    }
     bytes.append('\n');
-    m_pending.insert(id, method); emit pendingChanged();
-    m_process.write(bytes);
+    const auto size=bytes.size();
+    const auto written=m_process.write(bytes);
     bytes.fill('\0');
-    return QString::number(id);
+    if(written!=size) {
+        m_process.closeWriteChannel();
+        QTimer::singleShot(0,this,[this,id]{finishPendingRequest(id,{},{{QStringLiteral("code"),QStringLiteral("HostWriteFailed")},{QStringLiteral("message"),QStringLiteral("Не удалось передать команду сетевому контроллеру")}});});
+    }
+}
+void Backend::finishPendingRequest(quint64 id,const QVariant& result,const QVariantMap& error) {
+    if(!m_pending.contains(id))return;
+    const auto method=m_pending.take(id);emit pendingChanged();
+    if(!error.isEmpty())setError(error.value(QStringLiteral("message")).toString());
+    if(method==QStringLiteral("quit_application")&&!error.isEmpty()){m_quitting=false;m_poll.start();}
+    emit completed(QString::number(id),method,result,error);
+}
+void Backend::setMainWindow(QWindow* window) {m_mainWindow=window;}
+void Backend::parentDialog(QWidget* dialog) {
+    dialog->setWindowModality(Qt::WindowModal);
+    if(m_mainWindow) {
+        if(m_mainWindow->visibility()==QWindow::Minimized)m_mainWindow->showNormal();
+        else m_mainWindow->show();
+        m_mainWindow->raise();m_mainWindow->requestActivate();
+        dialog->winId();
+        if(dialog->windowHandle())dialog->windowHandle()->setTransientParent(m_mainWindow);
+    }
+}
+QFileDialog* Backend::createFileDialog(const QString& method,const QVariantMap& params) {
+    auto* dialog=new QFileDialog;
+    dialog->setWindowTitle(QStringLiteral("NetPulse"));
+    dialog->setSupportedSchemes({QStringLiteral("file")});
+    dialog->setOption(QFileDialog::DontUseCustomDirectoryIcons);
+    dialog->setDirectory(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
+    const bool save=method==QStringLiteral("export_data")||method==QStringLiteral("export_routing");
+    dialog->setAcceptMode(save?QFileDialog::AcceptSave:QFileDialog::AcceptOpen);
+    dialog->setFileMode(save?QFileDialog::AnyFile:QFileDialog::ExistingFile);
+    if(method==QStringLiteral("choose_exe"))dialog->setNameFilter(QStringLiteral("Windows applications (*.exe)"));
+    else if(method==QStringLiteral("import_file")&&params.value(QStringLiteral("qr")).toBool())dialog->setNameFilter(QStringLiteral("QR images (*.png *.jpg *.jpeg *.webp)"));
+    else if(method==QStringLiteral("export_routing")||method==QStringLiteral("import_routing")) {
+        dialog->setNameFilter(QStringLiteral("NetPulse routing (*.json)"));dialog->setDefaultSuffix(QStringLiteral("json"));
+        if(save)dialog->selectFile(QStringLiteral("netpulse-routing.json"));
+    } else if(method==QStringLiteral("export_data")) {
+        const auto kind=params.value(QStringLiteral("kind")).toString();
+        const bool backup=kind==QStringLiteral("backup");
+        dialog->setDefaultSuffix(backup?QStringLiteral("npb"):QStringLiteral("json"));
+        dialog->selectFile(backup?QStringLiteral("netpulse-backup.npb"):kind==QStringLiteral("logs")?QStringLiteral("netpulse-logs.json"):QStringLiteral("netpulse-settings.json"));
+    } else dialog->setNameFilter(QStringLiteral("All files (*)"));
+    parentDialog(dialog);return dialog;
+}
+void Backend::beginFileDialog(quint64 id,const QString& method,const QVariantMap& params) {
+    auto* dialog=createFileDialog(method,params);m_fileDialog=dialog;
+    connect(dialog,&QDialog::finished,this,[this,dialog,id,method,params](int result) {
+        m_fileDialog=nullptr;
+        if(m_pending.contains(id)) {
+            if(result==QDialog::Accepted&&!dialog->selectedFiles().isEmpty()) {
+                auto selected=params;selected.insert(QStringLiteral("path"),dialog->selectedFiles().first());
+                sendPendingRequest(id,method,selected);
+            } else finishPendingRequest(id,{});
+        }
+        dialog->deleteLater();
+    });
+    dialog->QDialog::open();
+}
+bool Backend::confirmServerChange(const QString& method,const QVariantMap& params) {
+    if(method!=QStringLiteral("select_profile")&&method!=QStringLiteral("connect"))return true;
+    const auto snapshot=m_data.value(QStringLiteral("snapshot")).toMap();
+    const auto id=params.value(QStringLiteral("id")).toString();
+    if(snapshot.value(QStringLiteral("engine_pid")).isNull()||id.isEmpty()||snapshot.value(QStringLiteral("active")).toMap().value(QStringLiteral("id")).toString()==id)return true;
+    const bool en=m_data.value(QStringLiteral("preferences")).toMap().value(QStringLiteral("language")).toString()==QStringLiteral("en");
+    QMessageBox box;box.setIcon(QMessageBox::Question);box.setWindowTitle(QStringLiteral("NetPulse"));box.setTextFormat(Qt::PlainText);
+    box.setText(en?QStringLiteral("Switch server? Active application connections may be interrupted."):QStringLiteral("Переключить сервер? Активные соединения приложений могут быть прерваны."));
+    auto* accept=box.addButton(en?QStringLiteral("Switch"):QStringLiteral("Переключить"),QMessageBox::AcceptRole);
+    auto* cancel=box.addButton(en?QStringLiteral("Cancel"):QStringLiteral("Отмена"),QMessageBox::RejectRole);
+    box.setDefaultButton(cancel);box.setEscapeButton(cancel);parentDialog(&box);box.exec();return box.clickedButton()==accept;
 }
 void Backend::refresh() {
     if (!m_pending.values().contains(QStringLiteral("bootstrap"))) request(QStringLiteral("bootstrap"));
@@ -86,10 +185,20 @@ void Backend::quit() {
     if (request(QStringLiteral("quit_application")).isEmpty()) { m_quitting = false; m_poll.start(); }
 }
 void Backend::readOutput() {
-    m_buffer += m_process.readAllStandardOutput();
-    if (m_buffer.size() > 16 * 1024 * 1024) { setError(QStringLiteral("Ответ контроллера превышает лимит")); m_process.closeWriteChannel(); return; }
+    consumeOutput(m_process.readAllStandardOutput());
+}
+void Backend::consumeOutput(const QByteArray& bytes) {
+    m_buffer += bytes;
+    const auto rejectFrame = [this] {
+        m_buffer.fill('\0'); m_buffer.clear();
+        setError(QStringLiteral("Ответ контроллера превышает лимит"));
+        if (m_process.state() == QProcess::Running) m_process.closeWriteChannel();
+    };
+    constexpr qsizetype maxFrame = 16 * 1024 * 1024;
     while (true) {
-        const auto end = m_buffer.indexOf('\n'); if (end < 0) break;
+        const auto end = m_buffer.indexOf('\n');
+        if (end < 0) { if (m_buffer.size() > maxFrame) rejectFrame(); break; }
+        if (end > maxFrame) { rejectFrame(); return; }
         QByteArray line = m_buffer.left(end); m_buffer.remove(0, end + 1);
         QJsonParseError parseError;
         const QJsonObject response = QJsonDocument::fromJson(line, &parseError).object();
@@ -128,7 +237,7 @@ void Backend::readOutput() {
             QStringLiteral("delete_profile"), QStringLiteral("add_subscription"), QStringLiteral("save_subscription"), QStringLiteral("delete_subscription"),
             QStringLiteral("update_subscription"), QStringLiteral("save_preferences"), QStringLiteral("quick_network"), QStringLiteral("quick_ui"),
             QStringLiteral("select_profile"), QStringLiteral("save_profile_json"), QStringLiteral("save_profile_transport"), QStringLiteral("manage_service"),
-            QStringLiteral("restore_data"), QStringLiteral("activate_core_bundle"), QStringLiteral("update_core"), QStringLiteral("clear_logs"), QStringLiteral("clear_file_logs")};
+            QStringLiteral("restore_data"), QStringLiteral("delete_local_data"), QStringLiteral("activate_core_bundle"), QStringLiteral("update_core"), QStringLiteral("clear_logs"), QStringLiteral("clear_file_logs")};
         if (error.isEmpty() && changes.contains(method)) refresh();
     }
 }
@@ -136,13 +245,26 @@ void Backend::setError(const QString& message) { m_error = message; emit errorCh
 void Backend::clearError() { m_error.clear(); emit errorChanged(); }
 void Backend::copyText(const QString& text) { QApplication::clipboard()->setText(text); }
 QString Backend::clipboardText() const { return QApplication::clipboard()->text(); }
-void Backend::openDataDirectory() { QDesktopServices::openUrl(QUrl::fromLocalFile(m_directory)); }
-void Backend::openInstallationDirectory() { QDesktopServices::openUrl(QUrl::fromLocalFile(QCoreApplication::applicationDirPath())); }
+void Backend::openDirectory(const QString& directory) {
+#ifdef Q_OS_WIN
+    SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);info.fMask=SEE_MASK_NOASYNC|SEE_MASK_FLAG_NO_UI;
+    info.hwnd=m_mainWindow?reinterpret_cast<HWND>(m_mainWindow->winId()):nullptr;
+    info.lpVerb=L"open";info.lpFile=reinterpret_cast<const wchar_t*>(directory.utf16());info.nShow=SW_SHOWNORMAL;
+    if(!ShellExecuteExW(&info))setError(QStringLiteral("Не удалось открыть папку NetPulse. Проверьте доступ к папке."));
+#else
+    if(!QDesktopServices::openUrl(QUrl::fromLocalFile(directory)))setError(QStringLiteral("Не удалось открыть папку NetPulse"));
+#endif
+}
+void Backend::openDataDirectory() {openDirectory(m_directory);}
+void Backend::openLogDirectory() {const auto path=QDir(m_directory).filePath(QStringLiteral("logs"));if(QDir().mkpath(path))openDirectory(path);else setError(QStringLiteral("Не удалось открыть папку журналов"));}
+void Backend::openInstallationDirectory() {openDirectory(QCoreApplication::applicationDirPath());}
 void Backend::openProxySettings() { QDesktopServices::openUrl(QUrl(QStringLiteral("ms-settings:network-proxy"))); }
 void Backend::confirmDelete(const QString& method, const QVariantMap& params, const QString& label) {
     static const QSet<QString> allowed{QStringLiteral("delete_profile"), QStringLiteral("delete_subscription"), QStringLiteral("clear_logs"), QStringLiteral("clear_file_logs"), QStringLiteral("delete_local_data")};
     if (!allowed.contains(method)) return;
-    if (QMessageBox::question(nullptr, QStringLiteral("NetPulse"), label, QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes) request(method, params);
+    QMessageBox box(QMessageBox::Question,QStringLiteral("NetPulse"),label,QMessageBox::Yes|QMessageBox::No);
+    box.setTextFormat(Qt::PlainText);box.setDefaultButton(QMessageBox::No);parentDialog(&box);
+    if(box.exec()==QMessageBox::Yes)request(method,params);
 }
 
 QString Backend::readableText(const QString& value) const {

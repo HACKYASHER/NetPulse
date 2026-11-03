@@ -60,6 +60,7 @@ pub fn client_running() -> Result<bool> {
 /// own profile directory, but cannot write the parent or another user's profile.
 pub fn prepare_install_root(root: &Path) -> Result<()> {
     crate::install_paths::validate_root(root)?;
+    remove_obsolete_payload(root)?;
     // Removing an empty, pre-existing directory also revokes previously opened
     // handles. Recreate it atomically with the final protected descriptor.
     if root.exists() && std::fs::read_dir(root).map_err(|e|Error::io("install-directory",e))?.next().is_none(){std::fs::remove_dir(root).map_err(|e|Error::io("install-directory",e))?;}
@@ -72,6 +73,49 @@ pub fn prepare_install_root(root: &Path) -> Result<()> {
     // An interrupted first installation can resume only the machine-recorded,
     // already protected root; a file marker in an arbitrary folder is insufficient.
     crate::install_paths::record_pending_root(root)
+}
+/// Retire development material from previous managed manifests. Never recurse
+/// through unknown files, personal data or a reparse point during an update.
+fn remove_obsolete_payload(root:&Path)->Result<()> {
+    use std::os::windows::fs::MetadataExt;
+    normal_directory(root)?;let manifest=root.join("installation-files.txt");
+    let metadata=match manifest.symlink_metadata(){Ok(m)=>m,Err(e) if e.kind()==std::io::ErrorKind::NotFound=>return Ok(()),Err(e)=>return Err(Error::io("install-cleanup",e))};
+    if !metadata.is_file()||metadata.file_attributes()&0x400!=0{return Err(Error::new("InstallManifestInvalid","install-cleanup","Invalid previous installation manifest"));}
+    let bytes=crate::bounded_io::read(&manifest,1024*1024,Error::new("InstallManifestInvalid","install-cleanup","Previous installation manifest exceeds the limit"))?;
+    let text=std::str::from_utf8(&bytes).map_err(|_|Error::new("InstallManifestInvalid","install-cleanup","Invalid previous installation manifest"))?;
+    let mut files=Vec::new();let mut parents=Vec::new();
+    for name in text.lines() {
+        let relative=Path::new(name);
+        if name.is_empty()||name.contains([':', '\0'])||relative.is_absolute()||relative.components().any(|c|!matches!(c,std::path::Component::Normal(_))){return Err(Error::new("InstallManifestInvalid","install-cleanup","Invalid previous installation manifest"));}
+        let key=name.replace('\\',"/").to_ascii_lowercase();
+        let obsolete=key.starts_with("docs/")||key.starts_with("cores/netpulse-build/")||["readme.md","readme.ru.md","architecture.md","verification.md","verification.json"].contains(&key.as_str());
+        if !obsolete{continue;}
+        let path=root.join(relative);normal_directory(path.parent().unwrap())?;
+        match path.symlink_metadata(){
+            Ok(m) if m.is_file()&&m.file_attributes()&0x400==0=>{files.push(path);parents.extend(relative.parent().unwrap().ancestors().filter(|p|!p.as_os_str().is_empty()).map(|p|root.join(p)));},
+            Ok(_)=>return Err(Error::new("UnsafeInstallFile","install-cleanup","Obsolete installation entry must be a regular file")),
+            Err(e) if e.kind()==std::io::ErrorKind::NotFound=>(),
+            Err(e)=>return Err(Error::io("install-cleanup",e)),
+        }
+    }
+    for path in files{std::fs::remove_file(path).map_err(|e|Error::io("install-cleanup",e))?;}
+    parents.sort_by_key(|p|std::cmp::Reverse(p.components().count()));parents.dedup();for parent in parents{let _=std::fs::remove_dir(parent);}
+    Ok(())
+}
+#[cfg(test)]
+mod obsolete_payload_tests {
+ #[test]
+ fn removes_only_previous_managed_docs_and_preserves_notes_data_and_licenses() {
+  let dir=tempfile::tempdir().unwrap();let root=dir.path();std::fs::create_dir_all(root.join("docs/images")).unwrap();std::fs::create_dir(root.join("data")).unwrap();std::fs::create_dir(root.join("licenses")).unwrap();
+  for name in ["docs/fix.md","docs/images/old.png","docs/notes.txt","data/settings.json","licenses/license.txt"]{std::fs::write(root.join(name),"fixture").unwrap();}
+  std::fs::write(root.join("installation-files.txt"),"docs/fix.md\ndocs/images/old.png\nlicenses/license.txt\n").unwrap();
+  super::remove_obsolete_payload(root).unwrap();assert!(!root.join("docs/fix.md").exists());assert!(!root.join("docs/images").exists());assert!(root.join("docs/notes.txt").exists());assert!(root.join("data/settings.json").exists());assert!(root.join("licenses/license.txt").exists());
+ }
+ #[test]
+ fn rejects_traversal_before_removing_any_managed_file() {
+  let dir=tempfile::tempdir().unwrap();let root=dir.path();std::fs::create_dir(root.join("docs")).unwrap();std::fs::write(root.join("docs/keep.md"),"keep").unwrap();std::fs::write(root.join("installation-files.txt"),"docs/keep.md\n../outside\n").unwrap();
+  assert!(super::remove_obsolete_payload(root).is_err());assert!(root.join("docs/keep.md").exists());
+ }
 }
 
 /// Explicitly protect each installed file's owner as well as its inherited ACL.

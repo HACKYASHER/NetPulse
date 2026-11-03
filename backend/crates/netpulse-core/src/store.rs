@@ -298,6 +298,8 @@ impl Store {
     ) -> Result<ImportReport> {
         // Build and encrypt everything before beginning a mutation.
         let mut rows = vec![];
+        let mut fingerprints=std::collections::HashSet::new();
+        let complete_subscription=subscription.is_some() && parsed.report.issues.is_empty();
         for p in &mut parsed.profiles {
             p.subscription_id = subscription.map(str::to_string);
             p.validate()?;
@@ -305,7 +307,9 @@ impl Store {
                 .iter()
                 .map(|b| format!("{b:02x}"))
                 .collect::<String>();
+            if !fingerprints.insert(fingerprint.clone()) {continue;}
             let previous:Option<String>=self.db.query_row("SELECT id FROM profiles WHERE fingerprint=?1 AND COALESCE(subscription_id,'')=COALESCE(?2,'')",params![fingerprint,subscription],|r|r.get(0)).optional().map_err(db)?;
+            let counted=previous.is_none() || complete_subscription;
             if let Some(id) = previous {
                 let old = self.profile(&id)?;
                 p.transport_override = old.transport_override.clone();
@@ -315,19 +319,24 @@ impl Store {
             }
             let raw = Zeroizing::new(serde_json::to_vec(p).unwrap());
             let sealed = vault::seal(&raw)?;
-            rows.push((p.id.clone(), fingerprint, sealed));
+            rows.push((p.id.clone(), fingerprint, sealed, counted));
         }
         let tx = self.db.transaction().map_err(db)?;
-        // Preserve previous good nodes after a partial update. Complete updates replace.
-        if let Some(id) = subscription
-            && parsed.report.issues.is_empty()
-        {
-            tx.execute("DELETE FROM profiles WHERE subscription_id=?1", [id])
-                .map_err(db)?;
-        }
+        let retained=rows.iter().map(|(id,_,_,_)|id.clone()).collect::<std::collections::HashSet<_>>();
         let mut inserted = 0;
-        for (id, fp, sealed) in rows {
-            inserted+=tx.execute("INSERT OR IGNORE INTO profiles(id,fingerprint,subscription_id,sealed) VALUES(?1,?2,?3,?4)",params![id,fp,subscription,sealed]).map_err(db)?;
+        for (id, fp, sealed, counted) in rows {
+            let affected=tx.execute("INSERT INTO profiles(id,fingerprint,subscription_id,sealed) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET fingerprint=excluded.fingerprint,subscription_id=excluded.subscription_id,sealed=excluded.sealed",params![id,fp,subscription,sealed]).map_err(db)?;
+            if counted {inserted+=affected;}
+        }
+        // Retain unchanged rows and their ON DELETE CASCADE latency cache.
+        // Partial updates still preserve previous good nodes absent from this response.
+        if let Some(id)=subscription && parsed.report.issues.is_empty() {
+            let existing=tx.prepare("SELECT id FROM profiles WHERE subscription_id=?1").map_err(db)?
+                .query_map([id],|row|row.get::<_,String>(0)).map_err(db)?
+                .collect::<std::result::Result<Vec<_>,_>>().map_err(db)?;
+            for previous in existing.into_iter().filter(|id|!retained.contains(id)) {
+                tx.execute("DELETE FROM profiles WHERE id=?1",[previous]).map_err(db)?;
+            }
         }
         if let Some(id) = subscription {
             tx.execute(
@@ -640,6 +649,7 @@ impl Store {
         Ok(())
     }
     pub fn logs(&self) -> Result<Vec<LogEvent>> {
+        self.db.execute("DELETE FROM events WHERE timestamp < ?1",[now().saturating_sub(5*86400) as i64]).map_err(db)?;
         let mut s=self.db.prepare("SELECT id,timestamp,level,subsystem,stage,code,message FROM events WHERE NOT(level='DEBUG' AND subsystem IN ('Command','Interface')) ORDER BY rowid DESC LIMIT 1000").map_err(db)?;
         s.query_map([], |r| {
             Ok(LogEvent {
@@ -751,13 +761,8 @@ impl Store {
                 params![kind, now() as i64, vault::seal(&raw)?],
             )
             .map_err(db)?;
-        if kind=="latency" {
-            if let (Some(id),Some(method))=(value["profile_id"].as_str(),value["method"].as_str()) {
-                let verified_tcp=method!="tcp_connect_rtt" || value["note"].as_str().is_some_and(|s|s.contains("outside NetPulse TUN"));
-                if verified_tcp && ["tcp_connect_rtt","proxy_https_rtt","proxy_https_head_rtt","icmp_rtt"].contains(&method) {
-                    self.db.execute("INSERT INTO profile_latency(profile_id,method,sealed) SELECT ?1,?2,?3 WHERE EXISTS(SELECT 1 FROM profiles WHERE id=?1) ON CONFLICT(profile_id,method) DO UPDATE SET sealed=excluded.sealed",params![id,method,vault::seal(&raw)?]).map_err(db)?;
-                }
-            }
+        if kind=="latency" && let Some((id,method))=latency_key(value) {
+            self.db.execute("INSERT INTO profile_latency(profile_id,method,sealed) SELECT ?1,?2,?3 WHERE EXISTS(SELECT 1 FROM profiles WHERE id=?1) ON CONFLICT(profile_id,method) DO UPDATE SET sealed=excluded.sealed",params![id,method,vault::seal(&raw)?]).map_err(db)?;
         }
         self.db.execute("DELETE FROM measurements WHERE kind=?1 AND id NOT IN (SELECT id FROM measurements WHERE kind=?1 ORDER BY id DESC LIMIT 100)",[kind]).map_err(db)?;
         Ok(())
@@ -808,10 +813,21 @@ impl Store {
                 Ok(serde_json::json!({"summary":s,"url":url.as_str()}))
             })
             .collect::<Result<Vec<_>>>()?;
-        let bytes=Zeroizing::new(serde_json::to_vec(&serde_json::json!({"version":2,"latency":self.measurements("latency")?,"speed":self.measurements("speed")?,"preferences":self.preferences()?,"profiles":profiles,"subscriptions":subscriptions})).map_err(|_|Error::new("BackupError","backup","Could not encode backup"))?);
+        let mut latencies=Vec::<serde_json::Value>::new();
+        let mut query=self.db.prepare("SELECT sealed FROM profile_latency ORDER BY profile_id,method").map_err(db)?;
+        for row in query.query_map([],|row|row.get::<_,Vec<u8>>(0)).map_err(db)? {
+            let raw=vault::open(&row.map_err(db)?)?;
+            latencies.push(serde_json::from_slice(&raw).map_err(|_|Error::new("MeasurementInvalid","backup","Invalid saved latency"))?);
+        }
+        let bytes=Zeroizing::new(serde_json::to_vec(&serde_json::json!({"version":2,"profile_latency":latencies,"latency":self.measurements("latency")?,"speed":self.measurements("speed")?,"preferences":self.preferences()?,"profiles":profiles,"subscriptions":subscriptions})).map_err(|_|Error::new("BackupError","backup","Could not encode backup"))?);
         vault::seal(&bytes)
     }
     pub fn restore(&mut self, encrypted: &[u8]) -> Result<()> {
+        self.restore_with_preferences(encrypted,|_|Ok(()))
+    }
+    /// Apply external settings only after complete validation. A failed callback
+    /// rolls back the database transaction instead of partially restoring data.
+    pub fn restore_with_preferences(&mut self, encrypted: &[u8], before_commit:impl FnOnce(&Preferences)->Result<()>) -> Result<()> {
         if encrypted.len() > 64 * 1024 * 1024 {
             return Err(Error::new(
                 "BackupLimit",
@@ -887,6 +903,7 @@ impl Store {
             subs.push((summary, vault::seal(url.as_bytes())?));
         }
         let mut measurements = vec![];
+        let mut latencies=std::collections::BTreeMap::new();
         for kind in ["latency", "speed"] {
             if let Some(values) = value[kind].as_array() {
                 if values.len() > 100 {
@@ -906,6 +923,22 @@ impl Store {
                         ));
                     }
                     measurements.push((kind, vault::seal(&raw)?));
+                    if kind=="latency" && let Some((id,method))=latency_key(item) {
+                        latencies.insert((id.to_owned(),method.to_owned()),vault::seal(&raw)?);
+                    }
+                }
+            }
+        }
+        // Optional in version 2 so existing backups remain readable. The
+        // independent cache includes pings evicted from the 100-entry history.
+        if let Some(cache)=value.get("profile_latency") {
+            let cache=cache.as_array().filter(|v|v.len()<=80000)
+                .ok_or_else(||Error::new("BackupInvalid","restore","Invalid server latency cache"))?;
+            for item in cache {
+                let raw=Zeroizing::new(serde_json::to_vec(item).map_err(|_|Error::new("BackupInvalid","restore","Invalid server latency"))?);
+                if raw.len()>1024*1024 {return Err(Error::new("BackupLimit","restore","Oversized server latency"));}
+                if let Some((id,method))=latency_key(item) {
+                    latencies.insert((id.to_owned(),method.to_owned()),vault::seal(&raw)?);
                 }
             }
         }
@@ -945,20 +978,91 @@ impl Store {
             )
             .map_err(db)?;
         }
+        for ((id,method),sealed) in latencies {
+            tx.execute("INSERT INTO profile_latency(profile_id,method,sealed) SELECT ?1,?2,?3 WHERE EXISTS(SELECT 1 FROM profiles WHERE id=?1)",params![id,method,sealed]).map_err(db)?;
+        }
+        before_commit(&prefs)?;
         tx.commit().map_err(db)
     }
     pub fn clear_all(&mut self) -> Result<()> {
-        match std::fs::remove_file(self.directory.join("applications.json")) {
+        crate::audit::clear(&self.directory)?;
+        for name in ["applications.json","routing-apps.json","mtu-tuning-recovery.json","mtu-tuning-recovery.tmp"] {
+        match std::fs::remove_file(self.directory.join(name)) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(Error::io("applications-clear", e)),
+        }
         }
         self.db.execute_batch("BEGIN IMMEDIATE;DELETE FROM profiles;DELETE FROM subscriptions;DELETE FROM settings;DELETE FROM measurements;DELETE FROM events;COMMIT;PRAGMA wal_checkpoint(TRUNCATE);VACUUM;").map_err(db)
     }
 }
 
+fn latency_key(value:&serde_json::Value)->Option<(&str,&str)> {
+    let (id,method)=(value["profile_id"].as_str()?,value["method"].as_str()?);
+    if !["tcp_connect_rtt","proxy_https_rtt","proxy_https_head_rtt","icmp_rtt"].contains(&method)
+        || (method=="tcp_connect_rtt" && !value["note"].as_str().is_some_and(|s|s.contains("outside NetPulse TUN"))) {return None;}
+    Some((id,method))
+}
+
 #[cfg(all(test, windows))]
 mod tests {
+    #[test]
+    fn restore_rejected_by_external_settings_preserves_the_previous_database() {
+        let dir=tempfile::tempdir().unwrap();let mut store=Store::open(&dir.path().join("state.db")).unwrap();
+        store.import(crate::imports::parse("socks5://127.0.0.1:1080#Original").unwrap(),None).unwrap();
+        let original=store.backup().unwrap();
+        store.clear_all().unwrap();store.import(crate::imports::parse("socks5://127.0.0.1:1081#Current").unwrap(),None).unwrap();
+        assert_eq!(store.restore_with_preferences(&original,|_|Err(Error::new("FixtureDenied","autostart","denied"))).unwrap_err().code,"FixtureDenied");
+        assert_eq!(store.profiles().unwrap()[0].name,"Current");
+        store.restore(&original).unwrap();assert_eq!(store.profiles().unwrap()[0].name,"Original");
+    }
+    #[test]
+    fn subscription_refresh_keeps_latency_for_retained_servers_and_updates_names() {
+        let dir=tempfile::tempdir().unwrap();let mut store=Store::open(&dir.path().join("state.db")).unwrap();
+        let sub=store.add_subscription("Fixture","https://example.org/fixture").unwrap();
+        store.import(crate::imports::parse("socks5://127.0.0.1:1080#First\nsocks5://127.0.0.1:1081#Removed").unwrap(),Some(&sub)).unwrap();
+        let first=store.profiles().unwrap()[0].id.clone();
+        store.add_measurement("latency",&serde_json::json!({"profile_id":first,"method":"tcp_connect_rtt","avg_ms":15.,"note":"measured outside NetPulse TUN"})).unwrap();
+        store.import(crate::imports::parse("socks5://127.0.0.1:1080#Renamed\nsocks5://127.0.0.1:1080#Duplicate").unwrap(),Some(&sub)).unwrap();
+        let profiles=store.profiles().unwrap();assert_eq!(profiles.len(),1);assert_eq!(profiles[0].id,first);
+        assert_eq!(profiles[0].name,"Renamed");assert_eq!(profiles[0].latency_ms,Some(15));
+        // The cache must survive even when the shared history no longer has a fallback.
+        store.db.execute("DELETE FROM measurements",[]).unwrap();
+        assert_eq!(store.profiles().unwrap()[0].latency_ms,Some(15));
+    }
+    #[test]
+    fn restore_replaces_latency_cache_and_backup_preserves_evicted_server_pings() {
+        let dir=tempfile::tempdir().unwrap();
+        let mut store=Store::open(&dir.path().join("state.db")).unwrap();
+        store.import(crate::imports::parse("socks5://127.0.0.1:1080#First\nsocks5://127.0.0.1:1081#Other").unwrap(),None).unwrap();
+        let profiles=store.profiles().unwrap();let first=profiles[0].id.clone();let other=profiles[1].id.clone();
+        let sample=|id:&str,ms:f64,timestamp:u64|serde_json::json!({"profile_id":id,"method":"tcp_connect_rtt","avg_ms":ms,"timestamp":timestamp,"note":"measured outside NetPulse TUN"});
+        store.add_measurement("latency",&sample(&first,15.,1)).unwrap();
+        for i in 0..110 {store.add_measurement("latency",&sample(&other,20.,i+2)).unwrap();}
+        let backup=store.backup().unwrap();
+        store.add_measurement("latency",&sample(&first,900.,999)).unwrap();
+        store.restore(&backup).unwrap();
+        assert_eq!(store.profiles().unwrap()[0].latency_ms,Some(15));
+        let mut restored=Store::open(&dir.path().join("restored.db")).unwrap();
+        restored.restore(&backup).unwrap();
+        assert_eq!(restored.profiles().unwrap()[0].latency_ms,Some(15));
+        assert_eq!(restored.profiles().unwrap()[1].latency_ms,Some(20));
+    }
+    #[test]
+    fn clear_all_removes_latency_cache_and_managed_settings_files() {
+        let dir=tempfile::tempdir().unwrap();
+        let mut store=Store::open(&dir.path().join("state.db")).unwrap();
+        store.import(crate::imports::parse("socks5://127.0.0.1:1080#Fixture").unwrap(),None).unwrap();
+        let id=store.profiles().unwrap()[0].id.clone();
+        store.add_measurement("latency",&serde_json::json!({"profile_id":id,"method":"proxy_https_rtt","avg_ms":12.})).unwrap();
+        store.save_preferences(&Preferences::default()).unwrap();
+        std::fs::write(dir.path().join("notes.txt"),b"keep").unwrap();
+        store.clear_all().unwrap();
+        assert_eq!(store.db.query_row("SELECT COUNT(*) FROM profile_latency",[],|r|r.get::<_,i64>(0)).unwrap(),0);
+        assert!(!dir.path().join("routing-apps.json").exists());
+        assert_eq!(std::fs::read(dir.path().join("notes.txt")).unwrap(),b"keep");
+        assert!(crate::audit::read(dir.path(),&crate::audit::date(now()),"main").unwrap().is_empty());
+    }
     #[test]
     fn provider_usage_parses_spacing_and_rejects_untrusted_numbers() {
         let a =

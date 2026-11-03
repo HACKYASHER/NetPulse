@@ -25,6 +25,7 @@ struct AppState {
     diagnostics: Arc<netpulse_core::diagnostics::Jobs>,
     runtime_preparing: Arc<std::sync::atomic::AtomicBool>,
     startup_smoke: bool,
+    closing: Arc<std::sync::atomic::AtomicBool>,
 }
 fn blocked_during_runtime_change(operation:&str)->bool {
     if matches!(operation,"install_client_update"|"start_best_server"|"start_mtu_tuning"|"start_mtu"|"mtu-tuning"){return true;}
@@ -58,6 +59,7 @@ async fn with_core<T: Send + 'static>(
     operation: &'static str,
     f: impl FnOnce(&mut NetworkCore) -> Result<T> + Send + 'static,
 ) -> Result<T> {
+    ensure_open(&s.closing,operation)?;
     if s.runtime_preparing
         .load(std::sync::atomic::Ordering::Acquire)
         && blocked_during_runtime_change(operation)
@@ -69,6 +71,8 @@ async fn with_core<T: Send + 'static>(
         ));
     }
     let preparing=s.runtime_preparing.clone();
+    let closing=s.closing.clone();
+    let diagnostics=s.diagnostics.clone();
     let core = s.core.clone();
     host::async_runtime::spawn_blocking(move || {
         let mut core = core.lock().map_err(|_| {
@@ -78,7 +82,11 @@ async fn with_core<T: Send + 'static>(
                 "Native application core is unavailable",
             )
         })?;
+        ensure_open(&closing,operation)?;
         if preparing.load(std::sync::atomic::Ordering::Acquire) && blocked_during_runtime_change(operation) {return Err(Error::new("RuntimePreparing","startup","Дождитесь завершения операции с ядрами."));}
+        if matches!(operation,"connect"|"disconnect"|"select_profile"|"save_preferences"|"quick_network"|"save_profile_transport"|"save_profile_json"|"restore_data"|"delete_local_data"|"quit_application") {
+            diagnostics.cancel_all();
+        }
         let result = core.guarded(f);
         if let Err(e) = &result {
             let _ = core
@@ -95,6 +103,43 @@ async fn with_core<T: Send + 'static>(
             "Native command task could not finish",
         )
     })?
+}
+fn ensure_open(closing:&std::sync::atomic::AtomicBool,operation:&str)->Result<()> {
+    if closing.load(std::sync::atomic::Ordering::Acquire) && !matches!(operation,"disconnect"|"quit_application") {
+        return Err(Error::new("HostClosing","command","Клиент завершает работу; новые операции отменены"));
+    }
+    Ok(())
+}
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+    #[tokio::test]
+    async fn an_open_file_dialog_keeps_snapshot_and_quit_responsive_and_cannot_import_after_quit() {
+        let directory=std::env::temp_dir().join(format!("netpulse-host-dialog-{}",uuid::Uuid::new_v4()));
+        std::fs::create_dir(&directory).unwrap();
+        let store=Store::open(&directory.join("state.db")).unwrap();
+        let state=Arc::new(AppState{core:Arc::new(Mutex::new(NetworkCore::new(store,directory.join("engine/sing-box.exe")).unwrap())),data_dir:directory.clone(),diagnostics:Arc::new(Default::default()),runtime_preparing:Arc::new(false.into()),startup_smoke:true,closing:Arc::new(false.into())});
+        let (opened_tx,opened_rx)=tokio::sync::oneshot::channel();
+        let (release_tx,release_rx)=std::sync::mpsc::channel();
+        let importing=state.clone();
+        let task=tokio::spawn(async move {import_file_with(host::State(&importing),move||{
+            let _=opened_tx.send(());release_rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+            Ok(Some(Zeroizing::new("socks5://127.0.0.1:1080#LateImport".into())))
+        }).await});
+        tokio::time::timeout(std::time::Duration::from_secs(2),opened_rx).await.unwrap().unwrap();
+        let snapshot=tokio::time::timeout(std::time::Duration::from_secs(2),snapshot(host::State(&state))).await;
+        // Release a failed fixture too, so a regression never hangs test shutdown.
+        if snapshot.is_err(){let _=release_tx.send(());let _=task.await;panic!("file dialog held the network core lock");}
+        assert!(snapshot.unwrap().unwrap().engine_pid.is_none());
+        quit_application(host::AppHandle,host::State(&state)).await.unwrap();
+        release_tx.send(()).unwrap();
+        assert_eq!(task.await.unwrap().unwrap_err().code,"HostClosing");
+        assert!(state.core.lock().unwrap().store.profiles().unwrap().is_empty());
+        drop(state);
+        // This is the exact directory created above, with no production data.
+        assert_eq!(directory.parent(),Some(std::env::temp_dir().as_path()));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 }
 #[derive(Serialize)]
 struct Bootstrap {
@@ -228,6 +273,9 @@ async fn log_read(
     })
     .await
     .map_err(|_| Error::new("LogReadFailed", "audit-read", "Не удалось прочитать журнал"))?
+}
+async fn log_page(state:host::State<'_,AppState>,day:String,category:String,cursor:Option<String>,level:String)->Result<netpulse_core::audit::Page>{
+ let directory=state.data_dir.clone();host::async_runtime::spawn_blocking(move||netpulse_core::audit::page(&directory,&day,&category,cursor.as_deref(),&level)).await.map_err(|_|Error::new("LogReadFailed","audit-read","Не удалось прочитать журнал"))?
 }
 async fn profile_transport(
     state: host::State<'_, AppState>,
@@ -558,21 +606,16 @@ fn copy_ip(ip: String) -> Result<bool> {
     copy_clipboard(&ip.to_string())?;
     Ok(true)
 }
-async fn import_file(state: host::State<'_, AppState>, qr: bool) -> Result<Option<ImportReport>> {
-    with_core(&state, "import_file", move |c| {
-        let dialog = rfd::FileDialog::new().set_title(if qr {
-            "Import QR image"
-        } else {
-            "Import profiles"
-        });
-        let dialog = if qr {
-            dialog.add_filter("QR photographs", &["png", "jpg", "jpeg", "webp"])
-        } else {
-            dialog
-        };
-        let Some(path) = dialog.pick_file() else {
-            return Ok(None);
-        };
+fn selected_path(path:String)->Result<PathBuf> {
+    let path=PathBuf::from(path);
+    if !path.is_absolute() || path.as_os_str().is_empty() || path.as_os_str().to_string_lossy().contains('\0') || path.as_os_str().len()>32767 {
+        return Err(Error::new("InvalidSelectedPath","file-selection","Выберите абсолютный путь к файлу в окне NetPulse"));
+    }
+    Ok(path)
+}
+async fn import_file(state: host::State<'_, AppState>, qr: bool, path:String) -> Result<Option<ImportReport>> {
+    let path=selected_path(path)?;
+    import_file_with(state,move || {
         let bytes = read_limited(
             &path,
             if qr {
@@ -588,9 +631,16 @@ async fn import_file(state: host::State<'_, AppState>, qr: bool) -> Result<Optio
                 Error::new("ImportError", "file-read", "Profile file must be UTF-8")
             })?)
         };
-        Ok(Some(import_payload(c, &text)?))
-    })
-    .await
+        Ok(Some(text))
+    }).await
+}
+async fn file_task<T:Send+'static>(stage:&'static str,task:impl FnOnce()->Result<T>+Send+'static)->Result<T> {
+    host::async_runtime::spawn_blocking(task).await
+        .map_err(|_|Error::new("FileTaskFailed",stage,"Не удалось завершить операцию с файлом"))?
+}
+async fn import_file_with(state:host::State<'_,AppState>,read:impl FnOnce()->Result<Option<Zeroizing<String>>>+Send+'static)->Result<Option<ImportReport>> {
+    let Some(text)=file_task("file-import",read).await? else{return Ok(None)};
+    with_core(&state,"import_file",move|c|Ok(Some(import_payload(c,&text)?))).await
 }
 async fn delete_profile(state: host::State<'_, AppState>, id: String) -> Result<()> {
     with_core(&state, "delete_profile", move |c| {
@@ -646,14 +696,9 @@ async fn save_subscription(
     })
     .await
 }
-async fn import_routing() -> Result<Option<netpulse_core::routing::RoutingSettings>> {
-    host::async_runtime::spawn_blocking(|| {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("NetPulse routing", &["json"])
-            .pick_file()
-        else {
-            return Ok(None);
-        };
+async fn import_routing(path:String) -> Result<Option<netpulse_core::routing::RoutingSettings>> {
+    let path=selected_path(path)?;
+    host::async_runtime::spawn_blocking(move || {
         let bytes = read_limited(&path, 2 * 1024 * 1024)?;
         Ok(Some(netpulse_core::routing::RoutingSettings::parse(
             &bytes,
@@ -668,16 +713,10 @@ async fn import_routing() -> Result<Option<netpulse_core::routing::RoutingSettin
         )
     })?
 }
-async fn export_routing(routing: netpulse_core::routing::RoutingSettings) -> Result<bool> {
+async fn export_routing(routing: netpulse_core::routing::RoutingSettings,path:String) -> Result<bool> {
+    let path=selected_path(path)?;
     host::async_runtime::spawn_blocking(move || {
         let checked = routing.apply(&Preferences::default())?;
-        let Some(path) = rfd::FileDialog::new()
-            .set_file_name("netpulse-routing.json")
-            .add_filter("NetPulse routing", &["json"])
-            .save_file()
-        else {
-            return Ok(false);
-        };
         let bytes = serde_json::to_vec_pretty(
             &netpulse_core::routing::RoutingSettings::from_preferences(&checked),
         )
@@ -731,7 +770,9 @@ async fn save_preferences(
 ) -> Result<bool> {
     state.diagnostics.cancel_all();
     let isolated = state.startup_smoke;
-    with_core(&state, "save_preferences", move |c| {
+    with_core(&state, "save_preferences", move |c| apply_saved_preferences(c,preferences,isolated)).await
+}
+fn apply_saved_preferences(c:&mut NetworkCore,preferences:Preferences,isolated:bool)->Result<bool> {
         preferences.clone().normalized().validate()?;
         let old = c.store.preferences()?;
         if !isolated && old.autostart != preferences.autostart {
@@ -745,8 +786,6 @@ async fn save_preferences(
             return Err(e);
         }
         Ok(true)
-    })
-    .await
 }
 async fn quick_network(
     state: host::State<'_, AppState>,
@@ -888,18 +927,20 @@ async fn update_core(
 ) -> Result<serde_json::Value> {
     let guard=RuntimeOperation::acquire(&state.runtime_preparing)?;
     state.diagnostics.cancel_all();
-    let data=state.data_dir.clone();let core=state.core.clone();
+    let data=state.data_dir.clone();let core=state.core.clone();let isolated=state.startup_smoke;let closing=state.closing.clone();
     host::async_runtime::spawn_blocking(move || {
         let _guard=guard;
         let result=(|| {
             let (profiles,prefs)={
                 let mut c=core.lock().map_err(|_|Error::new("CoreUnavailable","core-update","Network core unavailable"))?;
+                ensure_open(&closing,"update_core")?;
                 if c.snapshot().engine_pid.is_some(){return Err(Error::new("ConnectionInUse","core-update","Отключите VPN перед обновлением ядра"));}
                 (c.store.profiles()?.iter().map(|p|c.store.profile(&p.id)).collect::<Result<Vec<_>>>()?,c.store.preferences()?)
             };
             let engine=release.engine.clone();let previous=netpulse_core::core_releases::version(&data.join("engine"),&engine);
             let exe=std::env::current_exe().map_err(|e|Error::io("core-bundle",e))?;
             netpulse_core::core_releases::install_with_bundle(release,&data,&profiles,&prefs,Some(&exe.parent().unwrap().join("cores")))?;
+            synchronize_service_bundle(&data,isolated,&closing)?;
             let installed=netpulse_core::core_releases::executable_version(&data.join("engine").join(if engine=="xray" {"xray.exe"}else{"sing-box.exe"}),&engine)?;
             if let Ok(c)=core.lock(){c.store.log("INFO","Update","core-installed","Verified",&format!("{engine}: {previous} -> {installed}; executable version and SHA-256 verified"))?;}
             Ok(serde_json::json!({"engine":engine,"previous":previous,"installed":installed,"cache_clean":!std::fs::read_dir(data.join("core-downloads")).is_ok_and(|mut i|i.next().is_some())}))
@@ -949,32 +990,37 @@ fn open_core_page(url: String) -> Result<()> {
     }
     Ok(())
 }
-async fn activate_core_bundle(
-    app: host::AppHandle,
-    state: host::State<'_, AppState>,
-    rollback: bool,
-) -> Result<bool> {
-    let resources = app
-        .path()
-        .resource_dir()
-        .map_err(|_| Error::new("ResourceMissing", "core-update", "Bundled runtimes missing"))?;
-    let data = state.data_dir.clone();
-    with_core(&state, "activate_core_bundle", move |c| {
-        if c.snapshot().engine_pid.is_some() {
-            return Err(Error::new(
-                "ConnectionInUse",
-                "core-update",
-                "Disconnect before updating or rolling back runtimes",
-            ));
-        }
-        if rollback {
-            netpulse_core::core_updates::rollback(&data)?;
-        } else {
-            netpulse_core::core_updates::activate_bundled(&resources, &data)?;
-        }
+fn synchronize_service_bundle(data:&Path,isolated:bool,closing:&std::sync::atomic::AtomicBool)->Result<()> {
+    ensure_open(closing,"core-update")?;
+    if isolated{return Ok(());}
+    let status=netpulse_core::service::installation_status()?;
+    if status.installed {
+        let installer=netpulse_core::service::installer_executable()?;
+        netpulse_core::service::elevated_install(&installer,&data.join("engine"),true,true).map_err(|e|Error::new("ServiceCoreSyncPending","core-update",format!("Локальный комплект ядер изменён, но обновление службы TUN не завершено: {}. Откройте «Настройки → Служба TUN». Повторное восстановление файлов автоматически не выполняется.",e.message)))?;
+    }Ok(())
+}
+#[cfg(test)]
+mod core_sync_lifecycle_tests {
+ #[test]
+ fn closing_prevents_a_delayed_service_elevation() {
+    let closing=std::sync::atomic::AtomicBool::new(true);
+    assert_eq!(super::synchronize_service_bundle(std::path::Path::new("unused-owned-fixture"),true,&closing).unwrap_err().code,"HostClosing");
+    closing.store(false,std::sync::atomic::Ordering::Release);
+    assert!(super::synchronize_service_bundle(std::path::Path::new("unused-owned-fixture"),true,&closing).is_ok());
+ }
+}
+async fn activate_core_bundle(app:host::AppHandle,state:host::State<'_,AppState>,rollback:bool)->Result<bool> {
+    let guard=RuntimeOperation::acquire(&state.runtime_preparing)?;state.diagnostics.cancel_all();
+    let resources=app.path().resource_dir().map_err(|_|Error::new("ResourceMissing","core-update","Bundled runtimes missing"))?;
+    let data=state.data_dir.clone();let core=state.core.clone();let isolated=state.startup_smoke;let closing=state.closing.clone();
+    host::async_runtime::spawn_blocking(move||{
+        let _guard=guard;
+        {let mut c=core.lock().map_err(|_|Error::new("CoreUnavailable","core-update","Network core unavailable"))?;ensure_open(&closing,"activate_core_bundle")?;
+            if c.snapshot().engine_pid.is_some(){return Err(Error::new("ConnectionInUse","core-update","Отключите VPN перед изменением ядер"));}}
+        if rollback{netpulse_core::core_updates::rollback(&data)?;}else{netpulse_core::core_updates::activate_bundled(&resources,&data)?;}
+        synchronize_service_bundle(&data,isolated,&closing)?;
         Ok(true)
-    })
-    .await
+    }).await.map_err(|_|Error::new("CoreTaskFailed","core-update","Core activation task failed"))?
 }
 
 async fn quit_application(
@@ -982,8 +1028,10 @@ async fn quit_application(
     state: host::State<'_, AppState>,
 ) -> Result<bool> {
     state.diagnostics.cancel_all();
-    with_core(&state, "quit_application", |c| {
+    let closing=state.closing.clone();
+    with_core(&state, "quit_application", move |c| {
         c.disconnect()?;
+        closing.store(true,std::sync::atomic::Ordering::Release);
         Ok(())
     })
     .await?;
@@ -995,6 +1043,7 @@ async fn start_latency(
     ids: Vec<String>,
     method: String,
 ) -> Result<String> {
+    let generation=state.diagnostics.generation();
     if ids.is_empty()
         || ids.len() > 2000
         || ![
@@ -1027,7 +1076,7 @@ async fn start_latency(
     .await?;
     let jobs = state.diagnostics.clone();
     let core = state.core.clone();
-    let (id, cancel) = jobs.begin("latency", profiles.len())?;
+    let (id, cancel) = jobs.begin_if_current("latency", profiles.len(),generation)?;
     let result_id = id.clone();
     host::async_runtime::spawn_blocking(move || {
         let queue = Mutex::new(profiles.into_iter());
@@ -1060,6 +1109,7 @@ async fn start_latency(
                             );
                             let value = serde_json::to_value(result).unwrap_or_default();
                             if let Ok(c) = core.lock() {
+                                if cancel.load(std::sync::atomic::Ordering::SeqCst) {break;}
                                 let _ = c.store.add_measurement("latency", &value);
                             }
                             jobs.append(id, value);
@@ -1076,6 +1126,7 @@ async fn start_speed(
     state: host::State<'_, AppState>,
     request: netpulse_core::diagnostics::SpeedRequest,
 ) -> Result<String> {
+    let generation=state.diagnostics.generation();
     request.validate()?;
     let route = with_core(&state, "start_speed", |c| Ok(c.diagnostic_route())).await?;
     if request.mode != "direct" && route.vpn_port.is_none() {
@@ -1094,7 +1145,7 @@ async fn start_speed(
     } else {
         vec!["direct"]
     };
-    let (id, cancel) = jobs.begin("speed", modes.len())?;
+    let (id, cancel) = jobs.begin_if_current("speed", modes.len(),generation)?;
     let result_id = id.clone();
     host::async_runtime::spawn_blocking(move || {
         let budget = request.max_payload_mib * 1024 * 1024 / modes.len() as u64;
@@ -1112,6 +1163,7 @@ async fn start_speed(
             );
             let value = serde_json::to_value(result).unwrap_or_default();
             if let Ok(c) = core.lock() {
+                if cancel.load(std::sync::atomic::Ordering::SeqCst) {break;}
                 let _ = c.store.add_measurement("speed", &value);
             }
             jobs.append(&id, value);
@@ -1151,19 +1203,8 @@ async fn select_profile(state: host::State<'_, AppState>, id: String) -> Result<
     })
     .await
 }
-async fn install_compatibility_runtime(state: host::State<'_, AppState>) -> Result<()> {
-    let dir = state.data_dir.clone();
-    with_core(&state, "install_compatibility_runtime", move |c| {
-        if c.snapshot().engine_pid.is_some() {
-            return Err(Error::new(
-                "EngineInUse",
-                "xray-install",
-                "Disconnect before changing runtimes",
-            ));
-        }
-        netpulse_core::runtime::install_xray(&dir)
-    })
-    .await
+async fn install_compatibility_runtime(state:host::State<'_,AppState>)->Result<()> {
+    activate_core_bundle(host::AppHandle,state,false).await.map(|_|())
 }
 async fn manage_service(
     _app: host::AppHandle,
@@ -1263,14 +1304,9 @@ async fn application_icon(path: String) -> Result<Option<String>> {
         .await
         .map_err(|_| Error::new("IconReadFailed", "applications-icon", "Icon lookup failed"))?
 }
-async fn choose_exe() -> Result<Option<inventory::Application>> {
-    host::async_runtime::spawn_blocking(|| {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("Windows application", &["exe"])
-            .pick_file()
-        else {
-            return Ok(None);
-        };
+async fn choose_exe(path:String) -> Result<Option<inventory::Application>> {
+    let path=selected_path(path)?;
+    host::async_runtime::spawn_blocking(move || {
         if path
             .extension()
             .is_none_or(|e| !e.eq_ignore_ascii_case("exe"))
@@ -1317,19 +1353,8 @@ async fn public_ips(
             )
         })
 }
-async fn install_engine(state: host::State<'_, AppState>) -> Result<()> {
-    let dir = state.data_dir.clone();
-    with_core(&state, "install_engine", move |c| {
-        if c.snapshot().engine_pid.is_some() {
-            return Err(Error::new(
-                "EngineInUse",
-                "engine-install",
-                "Disconnect before installing the engine",
-            ));
-        }
-        engine::install(&dir)
-    })
-    .await
+async fn install_engine(state:host::State<'_,AppState>)->Result<()> {
+    activate_core_bundle(host::AppHandle,state,false).await.map(|_|())
 }
 async fn clear_logs(state: host::State<'_, AppState>) -> Result<()> {
     with_core(&state, "clear_logs", |c| c.store.clear_logs()).await
@@ -1340,29 +1365,33 @@ async fn clear_file_logs(state: host::State<'_, AppState>) -> Result<()> {
 async fn logs(state: host::State<'_, AppState>) -> Result<Vec<LogEvent>> {
     with_core(&state, "logs", |c| c.store.logs()).await
 }
-async fn export_data(state: host::State<'_, AppState>, kind: String) -> Result<bool> {
-    with_core(&state, "export_data", move |c| {
-        let (name, bytes) = match kind.as_str() {
-            "settings" => (
-                "netpulse-settings.json",
-                c.store.export_settings()?.into_bytes(),
-            ),
-            "logs" => (
-                "netpulse-logs.json",
-                serde_json::to_vec_pretty(&c.store.logs()?).unwrap(),
-            ),
-            "backup" => ("netpulse-backup.npb", c.store.backup()?),
+async fn export_data(state: host::State<'_, AppState>, kind: String, path:String) -> Result<bool> {
+    let path=selected_path(path)?;
+    let bytes=with_core(&state, "export_data", move |c| {
+        let bytes = match kind.as_str() {
+            "settings" => c.store.export_settings()?.into_bytes(),
+            "logs" => serde_json::to_vec_pretty(&c.store.logs()?).unwrap(),
+            "backup" => c.store.backup()?,
             _ => return Err(Error::new("ExportKind", "export", "Unknown export type")),
         };
-        let Some(path) = rfd::FileDialog::new().set_file_name(name).save_file() else {
-            return Ok(false);
-        };
-        std::fs::write(path, bytes).map_err(|e| Error::io("export-write", e))?;
+        Ok(Zeroizing::new(bytes))
+    }).await?;
+    let closing=state.closing.clone();
+    file_task("export",move||{
+        ensure_open(&closing,"export_data")?;
+        std::fs::write(path, &*bytes).map_err(|e| Error::io("export-write", e))?;
         Ok(true)
     })
     .await
 }
-async fn restore_data(state: host::State<'_, AppState>, backup: bool) -> Result<bool> {
+async fn restore_data(state: host::State<'_, AppState>, backup: bool, path:String) -> Result<bool> {
+    let path=selected_path(path)?;
+    with_core(&state,"restore-check",|c|{
+        if c.snapshot().engine_pid.is_some(){return Err(Error::new("ConnectionInUse","restore","Disconnect before restoring data"));}
+        Ok(())
+    }).await?;
+    let bytes=file_task("restore-read",move||read_limited(&path,64*1024*1024)).await?;
+    let isolated=state.startup_smoke;
     with_core(&state, "restore_data", move |c| {
         if c.snapshot().engine_pid.is_some() {
             return Err(Error::new(
@@ -1371,26 +1400,39 @@ async fn restore_data(state: host::State<'_, AppState>, backup: bool) -> Result<
                 "Disconnect before restoring data",
             ));
         }
-        let Some(path) = rfd::FileDialog::new().pick_file() else {
-            return Ok(false);
-        };
-        let bytes = read_limited(&path, 64 * 1024 * 1024)?;
         if backup {
-            c.store.restore(&bytes)?;
+            let old=c.store.preferences()?;
+            let mut autostart_changed=false;
+            let result=c.store.restore_with_preferences(&bytes,|prefs|{
+                if !isolated && old.autostart!=prefs.autostart {
+                    desktop::autostart(prefs.autostart)?;autostart_changed=true;
+                }
+                Ok(())
+            });
+            if result.is_err() && autostart_changed {let _=desktop::autostart(old.autostart);}
+            result?;
+            c.apply_preferences(c.store.preferences()?)?;
         } else {
             let prefs: Preferences = serde_json::from_slice(&bytes).map_err(|_| {
                 Error::new("ImportError", "settings-import", "Invalid settings JSON")
             })?;
-            c.store.save_preferences(&prefs)?;
+            apply_saved_preferences(c,prefs,isolated)?;
         }
         Ok(true)
     })
     .await
 }
 async fn delete_local_data(state: host::State<'_, AppState>) -> Result<()> {
-    with_core(&state, "delete_local_data", |c| {
+    let isolated=state.startup_smoke;
+    let jobs=state.diagnostics.clone();
+    with_core(&state, "delete_local_data", move |c| {
         c.disconnect()?;
-        c.store.clear_all()
+        let old=c.store.preferences()?;
+        if !isolated && old.autostart {desktop::autostart(false)?;}
+        let result=c.store.clear_all();
+        if result.is_err() && !isolated && old.autostart {let _=desktop::autostart(true);}
+        if result.is_ok(){jobs.reset();}
+        result
     })
     .await
 }
