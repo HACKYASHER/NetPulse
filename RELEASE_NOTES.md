@@ -1,9 +1,11 @@
 # NetPulse 1.0.8
 
-- Импорт VLESS сохраняет параметры REALITY, gRPC и XHTTP. XHTTP `packet-up` принимает настройки GET, заголовков, padding, старые имена полей сессии и целые числа в формате `1000.0`.
-- Ссылки Hysteria2 с `insecure=0` импортируются с включённой проверкой сертификата.
-- Ссылку на подписку можно навсегда закрыть для копирования отдельно от конфигураций серверов. Блокировка переживает восстановление старой резервной копии, а обновления подписки продолжают работать.
-- Удаление сразу обновляет список. Запоздавший ответ провайдера не восстанавливает удалённую подписку. Если активен её сервер, клиент отключает его после подтверждения.
-- Флаги определяются по английским и русским названиям, кодам стран и эмодзи. Исправлено отображение Литвы, Румынии и США.
+[<kbd>Русский</kbd>](docs/ru/releases/v1.0.8.md)
 
-[Проверки выпуска](https://github.com/HACKYASHER/NetPulse/blob/v1.0.8/VERIFICATION.md) · [Сравнение с 1.0.7](https://github.com/HACKYASHER/NetPulse/compare/v1.0.7...v1.0.8)
+- VLESS imports retain REALITY, gRPC, and XHTTP settings. XHTTP `packet-up` accepts GET, header and padding options, legacy session field names, and whole numbers written as decimals such as `1000.0`.
+- Hysteria2 links with `insecure=0` import with certificate verification enabled.
+- Subscription URL copying can be locked permanently, independently of server configuration. The lock survives restoring an older backup, and subscriptions can still refresh.
+- The list refreshes immediately after deletion. A late provider response can no longer restore a deleted subscription. If a server from that subscription is active, the client disconnects it after confirmation.
+- Country flags are matched by English and Russian names, country codes, and emoji. Lithuania, Romania, and the United States now display their flags.
+
+[Release verification](VERIFICATION.md) · [Compare with 1.0.7](https://github.com/HACKYASHER/NetPulse/compare/v1.0.7...v1.0.8)

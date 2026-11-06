@@ -1,5 +1,7 @@
 # NetPulse installation layout
 
+[<kbd>Русский</kbd>](ru/INSTALLATION.md)
+
 Choose the installation folder on the Windows installer's directory page.
 `C:\Program Files\NetPulse` is the default, and another local folder such as
 `D:\NetPulse` can be selected. The client, engines, service and personal data
@@ -15,7 +17,7 @@ New parent directories created by the installer are protected as well.
 | cores | Official Xray 26.10.31 and unchanged official sing-box 1.14.4 bundle |
 | service | Protected service and engine copies |
 | data\<Windows SID> | Private settings, encrypted profiles, active engines, logs and backups |
-| docs, licenses | Documentation and original redistribution notices |
+| licenses | Original redistribution notices |
 | NetPulse-Maintenance.exe, Uninstall.exe | Repair/update and uninstall |
 
 The machine-wide registration records the selected root and former installation

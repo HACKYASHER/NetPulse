@@ -1,5 +1,7 @@
 # Architecture
 
+[<kbd>Русский</kbd>](docs/ru/ARCHITECTURE.md)
+
 ```text
 NetPulse.exe — C++20 / Qt Quick / QML, normal user privileges
     │
@@ -17,8 +19,8 @@ netpulsed.exe — Rust NetworkCore, SQLite and DPAPI
 
 The C++ client starts only the bundled controller using an absolute path. It
 does not start a shell or local HTTP server. Inherited stdin/stdout belong to
-the parent QProcess. `backend/commands.json` lists 68 typed commands adapted
-from NetPulse 3.0.4. Frames are limited to 12 MiB and concurrent execution to
+the parent QProcess. `backend/commands.json` lists the typed commands.
+Frames are limited to 12 MiB and concurrent execution to
 eight requests. Method names use an explicit allowlist, not shell interpretation.
 
 The regular UI receives profile summaries without credentials. The explicit
@@ -37,7 +39,7 @@ Full physical adapter recovery still needs elevated Windows validation.
 
 The installer offers update, repair and uninstall, preserving user data. It
 attempts TUN service installation by default through standard UAC; portable
-users can install or repair the service from Network. Service management uses
+users can install or repair the service from Settings. Service management uses
 the same verified helper. The service retains
 typed requests, SID/PID checks, pipe ACLs, a protected directory and independent
 engine hash validation. Separate identities prevent replacing the old service:
@@ -52,9 +54,8 @@ engine hash validation. Separate identities prevent replacing the old service:
 ## Engines and data
 
 Qt DLLs are deployed next to the client. `cores/` supplies the verified engines;
-the controller prepares the user runtime separately. The original sing-box/Xray
-division, including authenticated local transport bridges, is retained.
-No Happ binaries, source code or proprietary assets are included.
+the controller prepares the user runtime separately. The sing-box/Xray
+division includes authenticated local transport bridges.
 
 SQLite and DPAPI protect stored profile data. DPAPI entropy is preserved for
 explicit import of a 3.0.4 backup under the same Windows account. The old
@@ -75,7 +76,7 @@ interrupted downloads and obsolete client installers are cleaned up; the previou
 engine bundle remains available for rollback.
 
 MTU comparison is user initiated and restricted to the active owned TUN session.
-It benchmarks bounded HTTPS payloads, repeats the leading candidate, checks the
-original baseline again, then restores MTU. A recovery journal handles interrupted
-tests without replacing unrelated preferences. Applying a recommendation is
-explicit; the measurements do not establish a universal or game-UDP optimum.
+It measures latency and loss with small probes, repeats the leading candidate,
+checks the original baseline again, and restores MTU. A recovery journal handles
+interrupted tests while preserving unrelated preferences. Applying a
+recommendation requires a separate action.

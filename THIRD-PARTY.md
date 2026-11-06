@@ -1,5 +1,7 @@
 # Third-party components
 
+[<kbd>Русский</kbd>](docs/ru/THIRD-PARTY.md)
+
 | Component | Version | Purpose | Source |
 |---|---|---|---|
 | Qt / Qt Quick | 6.8.3 | Dynamically linked desktop UI | https://code.qt.io/cgit/qt/qtbase.git/ and https://code.qt.io/cgit/qt/qtdeclarative.git/, tag `v6.8.3` |
@@ -13,9 +15,9 @@ Compatible Qt DLLs can be replaced, and the application can be rebuilt from the
 supplied sources. License texts and source links are in `licenses/qt/`; SPDX
 manifests from the SDK are in `licenses/qt/sbom/`.
 
-The retained complete engine source bundle is supplied as
-`NetPulse-Engine-Sources.zip`. Provenance and component licenses also appear
-in `cores/source-manifest.json` and `cores/licenses/`.
+The matching engine and dependency sources ship as `NetPulse-Engine-Sources.zip`.
+The repository includes the [engine source manifest](resources/cores/source-manifest.json)
+and [component licenses](resources/cores/licenses).
 
 `licenses/NETPULSE-V2-NOTICE.md` documents the source release. Some former
 Tauri/React/WebView2 notices are preserved in the license archive for provenance;

@@ -1,17 +1,25 @@
-# Проверка NetPulse 1.0.8
+# NetPulse 1.0.8 verification
 
-6 ноября 2026 года. [Машинный отчёт](VERIFICATION.json) · [Изменения](RELEASE_NOTES.md)
+[<kbd>Русский</kbd>](docs/ru/VERIFICATION.md)
 
-| Область | Результат |
+November 6, 2026. [Machine-readable report](VERIFICATION.json) · [Release notes](RELEASE_NOTES.md)
+
+| Area | Result |
 |---|---|
-| Транспорт | Через локальные тестовые серверы передано по 2 МиБ HTTPS для XHTTP REALITY, XHTTP TLS packet-up, gRPC REALITY и Hysteria2 с Salamander. gRPC с TLS отдельно прошёл загрузку и отправку по 8 МиБ. |
-| Импорт и подписки | Проверены параметры REALITY, gRPC, XHTTP и безопасный флаг TLS Hysteria2. Тесты покрывают сохранение блокировки ссылки после восстановления старой копии и удаление подписки во время обновления. |
-| Интерфейс | Прошли 9 результатов нативных тестов и 46 результатов QML. Все восемь разделов открылись в четырёх сочетаниях языка и темы без ошибок QML. |
-| Контроллер и данные | Прошли 7 тестов контроллера, 16 групп проверок IPC, перенос профиля, восстановление ядра и 9 сценариев запуска. |
-| Установщик и служба | Изолированная проверка прошла установку, восстановление, удаление и повторную установку с сохранением данных. Прошли 10 тестов обслуживания и самопроверка службы. |
+| Transport | XHTTP REALITY, XHTTP TLS packet-up, gRPC REALITY, and Hysteria2 with Salamander each transferred 2 MiB over HTTPS through local test servers. The separate gRPC TLS test uploaded and downloaded 8 MiB in each direction. |
+| Imports and subscriptions | Tests cover REALITY, gRPC, and XHTTP options, the secure Hysteria2 TLS flag, persistence of a URL lock after restoring an older backup, and deletion during a subscription refresh. |
+| Interface | Nine native test results and 46 QML test results passed. All eight sections opened without QML errors in four combinations of language and theme. |
+| Controller and data | Seven controller tests, 16 groups of IPC checks, profile migration, engine repair, and nine startup scenarios passed. |
+| Installer and service | An isolated installer test covered installation, repair, removal, and reinstallation with data retention. Ten maintenance tests and the service self-test passed. |
 
-В основном прогоне прошли 167 тестов ядра Rust и оба интеграционных теста gRPC/TLS. В Playground проверка TCP-слушателя на локальном стенде завершилась ошибкой. Это поведение воспроизводилось и в версии 1.0.7. Проверка установленных TCP-соединений через IPC прошла. Две отдельные проверки IPv6 на локальном стенде также завершились ошибкой.
+The main run passed 167 Rust core tests and both gRPC/TLS integration tests.
+The Playground test for a TCP listener failed on the local Windows test machine,
+as it did with 1.0.7. The IPC check for established TCP connections passed.
+Two separate IPv6 checks also failed on the local test machine.
 
-Для проверок использовались локальные тестовые серверы и ключи. Сценарии установки и восстановления службы проверялись в изолированном контуре с имитацией кодов возврата. Действующий TUN, системный прокси и профиль пользователя в проверках не задействованы.
+Tests used local servers and fixture keys. Installer and service-repair
+scenarios ran in an isolated environment with simulated service exit codes.
+The checks left the active TUN, system proxy, and user profile untouched.
 
-В комплект входят официальные sing-box 1.14.4 и Xray 26.10.31. Контрольные суммы ядер сверены. [Сведения об исходниках ядер](resources/cores/source-manifest.json)
+The bundled sing-box 1.14.4 and Xray 26.10.31 binaries match the verified
+official Windows releases. [Engine source manifest](resources/cores/source-manifest.json)

@@ -2,6 +2,8 @@
 
 # NetPulse
 
+[<kbd>Русский</kbd>](README.ru.md)
+
 **A native VPN client for Windows.**
 
 NetPulse connects to your own servers and subscriptions. It combines a
@@ -14,7 +16,7 @@ traffic capture through a virtual network adapter.
 [Download the installer](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.8/NetPulse-Setup.exe)
 · [Download the portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.8/NetPulse-Portable.zip)
 · [Release notes](https://github.com/HACKYASHER/NetPulse/releases/tag/v1.0.8)
-· [Русская инструкция](README.ru.md)
+· [Documentation](docs/README.md)
 
 ![NetPulse desktop interface](docs/images/overview.png)
 
@@ -64,12 +66,11 @@ The tray supports connect, disconnect, reconnect, connection modes, servers,
 IP checks and navigation. The installer supports update, repair and uninstall.
 Settings and subscriptions are preserved by repair and uninstall.
 
-MTU comparison is an explicit, disruptive test: it reconnects the current TUN
-session multiple times, checks each MTU with up to five HTTPS or ICMP probes,
-then restores the original MTU. It recommends a change only after repeatable
-improvement and stable baseline controls. It compares latency, loss and jitter,
-not download throughput or game UDP performance. Apply the candidate manually
-and compare throughput separately with Speed Test.
+MTU comparison runs on the active TUN adapter without restarting the engine.
+It checks each candidate with repeated latency and loss probes and restores the
+original value. A recommendation requires repeatable improvement and a stable
+baseline. Apply the recommendation manually. Speed Test measures throughput
+separately.
 
 Executables are unsigned. Tests use controlled network fixtures; elevated TUN
 and the MTU benchmark on a physical remote VPN have not been verified here.
@@ -127,14 +128,14 @@ Run from a **Developer PowerShell for Visual Studio**:
 python -m pip install cmake ninja py7zr
 python scripts/fetch-qt.py
 python scripts/fetch-cores.py
+python scripts/fetch-engine-sources.py
 python scripts/build.py --qt .tools/Qt
 python scripts/package.py
 ```
 
 Alternatively, set `QTDIR` to an existing Qt SDK and `NSIS_EXE` to `makensis.exe`.
 `NETPULSE_TOOLCHAIN` accepts a portable Rust/MSVC SDK; `--cargo-target` reuses a
-Cargo build cache. This workspace can also reuse the neighboring project's
-prepared toolchain; the application source is independent.
+Cargo build cache.
 
 Outputs: `release/NetPulse/NetPulse.exe`, `release/NetPulse-Setup.exe`,
 `release/NetPulse-Portable.zip` and `release/NetPulse-Source.zip`.
@@ -148,8 +149,9 @@ cd backend
 cargo test -p netpulse-core --lib
 ```
 
-The smoke run uses isolated data, renders ten pages and does not connect or
-change the system proxy/TUN state. See `VERIFICATION.md` for executed checks.
+The smoke run renders eight sections with an isolated profile. The release
+report records which checks passed and where the test environment had limits.
+[Release verification](VERIFICATION.md)
 
 ## License and credits
 
@@ -162,4 +164,4 @@ Developed by **HACKYASHER**, with assistance from OpenAI Codex.
 
 Bundled engines: official Xray **26.10.31**, official sing-box **1.14.4**, unchanged from the upstream Windows release. For source builds, run `scripts/fetch-cores.py` and `scripts/fetch-engine-sources.py` before building and packaging.
 
-[NetPulse 1.0.7 audit and limits](docs/SECURITY-AUDIT-1.0.7.ru.md) · [Patched engine provenance](docs/SING-BOX-NETPULSE-BUILD.md).
+[Historical engineering records](docs/README.md#historical-records)
