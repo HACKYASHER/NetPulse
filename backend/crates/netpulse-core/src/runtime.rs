@@ -330,11 +330,24 @@ pub fn xray_config(profile: &Profile, port: u16, password: &str) -> Result<Value
     let mut stream = json!({"network":network,"security":security});
     match network {
         "xhttp" => {
-            stream["xhttpSettings"] =
-                json!({"path":t["path"],"mode":t["mode"],"host":t["host"].as_str().unwrap_or("")})
+            let mode = t["mode"].as_str().unwrap_or("auto");
+            let mut extra = t.get("extra")
+                .map(|value| crate::imports::normalize_xhttp_extra(value, mode))
+                .transpose()?.unwrap_or_default();
+            let extra_path = extra.remove("path");
+            let path = t["path"].as_str().filter(|s| !s.is_empty())
+                .or_else(|| extra_path.as_ref().and_then(Value::as_str)).unwrap_or("/");
+            let mut settings = json!({"path":path,"mode":mode,"host":t["host"].as_str().unwrap_or("")});
+            if !extra.is_empty() {
+                settings["extra"] = Value::Object(extra);
+            }
+            stream["xhttpSettings"] = settings;
         }
         "grpc" => {
-            stream["grpcSettings"] = json!({"serviceName":t["service_name"].as_str().unwrap_or(""),"multiMode":t["mode"]=="multi"})
+            stream["grpcSettings"] = json!({"serviceName":t["service_name"].as_str().unwrap_or(""),"multiMode":t["mode"]=="multi"});
+            if let Some(authority) = t.get("authority") {
+                stream["grpcSettings"]["authority"] = authority.clone();
+            }
         }
         "ws" => {
             stream["wsSettings"] = json!({"path":t["path"].as_str().unwrap_or("/"),"headers":t["headers"].as_object().cloned().unwrap_or_default()})
@@ -352,6 +365,9 @@ pub fn xray_config(profile: &Profile, port: u16, password: &str) -> Result<Value
     };
     if stream["security"] == "reality" {
         stream["realitySettings"] = json!({"serverName":sni,"fingerprint":fp,"publicKey":tls["reality"]["public_key"],"shortId":tls["reality"]["short_id"]});
+        if let Some(path) = tls["reality"].get("spider_x") {
+            stream["realitySettings"]["spiderX"] = path.clone();
+        }
     } else if security == "tls" {
         let mut settings = json!({"serverName":sni,"allowInsecure":false,"fingerprint":fp});
         if let Some(alpn) = tls.get("alpn") {
@@ -571,8 +587,8 @@ mod tests {
         );
         verify_xray(&path).unwrap();
         for transport in [
-            "type=xhttp&path=%2F&mode=auto",
-            "type=grpc&serviceName=fixture&mode=multi",
+            "type=xhttp&path=%2F&mode=auto&spx=%2Fdocs&extra=%7B%22xPaddingBytes%22%3A%22100-200%22%7D",
+            "type=grpc&serviceName=fixture&mode=multi&spx=%2Fdocs&authority=edge.example.org%3A443",
         ] {
             let p=crate::imports::parse_uri(&format!("vless://15bc786a-b01b-4a8a-962e-cb52e089e500@example.org:443?encryption=none&security=reality&sni=example.org&fp=firefox&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=0123456789abcdef&{transport}")).unwrap();
             let c = xray_config(&p, free_port().unwrap(), "synthetic-fixture").unwrap();

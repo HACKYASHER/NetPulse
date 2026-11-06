@@ -37,7 +37,7 @@ async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> 
         "delete_profile" => encode(delete_profile(host::State(state), argument::<String>(&params, "id")?).await?),
         "add_subscription" => encode(add_subscription(host::State(state), argument::<String>(&params, "name")?, argument::<String>(&params, "url")?, argument::<Option<bool>>(&params, "protected")?).await?),
         "copy_subscription_url" => encode(copy_subscription_url(host::State(state), argument::<String>(&params, "id")?).await?),
-        "save_subscription" => encode(save_subscription(host::State(state), argument::<String>(&params, "id")?, argument::<String>(&params, "name")?, argument::<u32>(&params, "interval_hours")?, argument::<bool>(&params, "protected")?, argument::<Option<bool>>(&params, "lock_configuration")?).await?),
+        "save_subscription" => encode(save_subscription(host::State(state), argument::<String>(&params, "id")?, argument::<String>(&params, "name")?, argument::<u32>(&params, "interval_hours")?, argument::<bool>(&params, "protected")?, argument::<Option<bool>>(&params, "lock_configuration")?, argument::<Option<bool>>(&params, "lock_url")?).await?),
         "import_routing" => encode(import_routing(argument(&params,"path")?).await?),
         "export_routing" => encode(export_routing(argument::<netpulse_core::routing::RoutingSettings>(&params, "routing")?,argument(&params,"path")?).await?),
         "update_subscription" => encode(update_subscription(host::State(state), argument::<String>(&params, "id")?).await?),

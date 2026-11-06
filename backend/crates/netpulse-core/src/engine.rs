@@ -45,6 +45,9 @@ fn sensitive(v: &Value, key: &str, out: &mut Vec<String>) {
                 "server_name",
                 "path",
                 "service_name",
+                "spiderx",
+                "spider_x",
+                "authority",
             ]
             .contains(&key.to_ascii_lowercase().as_str())
                 && !s.is_empty() =>

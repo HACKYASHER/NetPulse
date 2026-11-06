@@ -353,8 +353,8 @@ fn import_payload(c: &mut NetworkCore, text: &str) -> Result<ImportReport> {
     if !trimmed.contains(['\r', '\n'])
         && let Ok(u) = url_parse_subscription(trimmed)
     {
-        let id = c.store.add_subscription("Imported subscription", &u)?;
-        return c.update_subscription(&id);
+        let parsed = netpulse_core::network::fetch_subscription(&u)?;
+        return c.add_subscription("Imported subscription", &u, true, parsed);
     }
     c.store.import(imports::parse(text)?, None)
 }
@@ -661,12 +661,9 @@ async fn add_subscription(
     url: String,
     protected: Option<bool>,
 ) -> Result<ImportReport> {
-    let url = Zeroizing::new(url);
+    let (url, parsed) = download_subscription(Zeroizing::new(url)).await?;
     with_core(&state, "add_subscription", move |c| {
-        let id =
-            c.store
-                .add_subscription_with_protection(&name, &url, protected.unwrap_or(true))?;
-        c.update_subscription(&id)
+        c.add_subscription(&name, &url, protected.unwrap_or(true), parsed?)
     })
     .await
 }
@@ -685,14 +682,13 @@ async fn save_subscription(
     interval_hours: u32,
     protected: bool,
     lock_configuration: Option<bool>,
+    lock_url: Option<bool>,
 ) -> Result<()> {
     with_core(&state, "save_subscription", move |c| {
-        c.store
-            .edit_subscription(&id, &name, interval_hours, protected)?;
-        if lock_configuration == Some(true) {
-            c.store.lock_subscription(&id)?;
-        }
-        Ok(())
+        c.store.edit_subscription(
+            &id, &name, interval_hours, protected,
+            lock_configuration.unwrap_or(false), lock_url.unwrap_or(false),
+        )
     })
     .await
 }
@@ -739,26 +735,48 @@ async fn export_routing(routing: netpulse_core::routing::RoutingSettings,path:St
         )
     })?
 }
+async fn download_subscription(
+    url: Zeroizing<String>,
+) -> Result<(Zeroizing<String>, Result<imports::Parsed>)> {
+    host::async_runtime::spawn_blocking(move || {
+        let parsed = netpulse_core::network::fetch_subscription(&url);
+        (url, parsed)
+    })
+    .await
+    .map_err(|_| Error::new(
+        "SubscriptionDownloadFailed",
+        "subscription-download",
+        "Не удалось загрузить подписку",
+    ))
+}
 async fn update_subscription(
     state: host::State<'_, AppState>,
     id: String,
-) -> Result<ImportReport> {
+) -> Result<Option<ImportReport>> {
+    let lookup_id = id.clone();
+    let url = with_core(&state, "update_subscription", move |c| {
+        c.store.subscription_url(&lookup_id)
+    }).await?;
+    let (url, parsed) = download_subscription(url).await?;
     with_core(&state, "update_subscription", move |c| {
-        c.update_subscription(&id)
+        match c.store.subscription_url(&id) {
+            Ok(current) if current.as_str() == url.as_str() => c.apply_subscription(&id, parsed?).map(Some),
+            Ok(_) => Ok(None),
+            Err(e) if e.code == "SubscriptionMissing" => Ok(None),
+            Err(e) => Err(e),
+        }
     })
     .await
 }
 async fn delete_subscription(state: host::State<'_, AppState>, id: String) -> Result<()> {
+    let diagnostics = state.diagnostics.clone();
     with_core(&state, "delete_subscription", move |c| {
         if c.snapshot()
             .active
             .is_some_and(|p| p.subscription_id.as_deref() == Some(&id))
         {
-            return Err(Error::new(
-                "ProfileInUse",
-                "subscription-delete",
-                "Disconnect before deleting the active subscription",
-            ));
+            diagnostics.cancel_all();
+            c.disconnect()?;
         }
         c.store.delete_subscription(&id)
     })

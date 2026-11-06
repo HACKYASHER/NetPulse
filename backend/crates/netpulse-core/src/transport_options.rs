@@ -118,13 +118,16 @@ pub fn use_xray(profile: &Profile, prefs: &Preferences) -> Result<bool> {
     if prefs.transport_engine == "xray" && !supported {
         return Err(invalid("Xray не поддерживает этот протокол. Для Hysteria2 выберите sing-box или Автоматически."));
     }
-    let required = profile.requires_xray() || advanced;
-    if (required && prefs.transport_engine == "sing-box") || (advanced && !supported) {
+    let required = profile.requires_xray();
+    if required && prefs.transport_engine == "sing-box" {
+        return Err(invalid("Транспорт этого профиля требует Xray. Выберите Xray или Автоматически."));
+    }
+    if advanced && (!supported || prefs.transport_engine == "sing-box") {
         return Err(invalid(
             "Фрагментация и Mux требуют совместимый профиль Xray. Для Hysteria2 выключите эти функции; для остальных выберите Xray или Автоматически.",
         ));
     }
-    let use_xray = required
+    let use_xray = required || advanced
         || (prefs.transport_engine == "auto" && (profile.outbound["transport"]["type"] == "grpc"
             || (profile.outbound["type"]=="vless" && profile.outbound["tls"]["reality"]["enabled"]==true)))
         || (prefs.transport_engine == "xray" && supported);

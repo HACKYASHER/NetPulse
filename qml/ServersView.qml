@@ -280,10 +280,18 @@ ColumnLayout {
         ThemedMenuItem { appWindow: view.appWindow;
             objectName: "subscriptionCopyUrl"
             text: view.tr("Копировать ссылку", "Copy URL")
-            visible: !view.subscriptionContext.url_protected
+            visible: !view.subscriptionContext.url_protected && !view.subscriptionContext.url_locked
             onTriggered: view.appWindow.call("copy_subscription_url", {id: view.subscriptionContext.id})
         }
         MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: view.appWindow.borderColor } }
-        ThemedMenuItem { appWindow: view.appWindow; text: view.tr("Удалить подписку", "Delete subscription"); danger: true; onTriggered: view.bridge.confirmDelete("delete_subscription", {id: view.subscriptionContext.id}, view.tr("Удалить подписку и её серверы?", "Delete this subscription and its servers?")) }
+        ThemedMenuItem {
+            appWindow: view.appWindow
+            text: view.tr("Удалить подписку", "Delete subscription")
+            danger: true
+            enabled: !view.appWindow.busy("delete_subscription")
+            onTriggered: view.bridge.confirmDelete("delete_subscription", {id: view.subscriptionContext.id},
+                view.tr("Удалить подписку и её серверы? Если подключён сервер этой подписки, VPN отключится.",
+                        "Delete this subscription and its servers? If one of its servers is active, the VPN will disconnect."))
+        }
     }
 }

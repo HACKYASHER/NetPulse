@@ -25,4 +25,6 @@ NetPulse source is GPL-3.0-or-later. See `LICENSE.txt`.
 
 Country flags: [flag-icons 7.5.0](https://github.com/lipis/flag-icons/tree/v7.5.0), MIT license. Full license: `licenses/flag-icons.txt`.
 
+English and Russian territory names come from [Unicode CLDR 48.0.0](https://github.com/unicode-org/cldr-json/tree/48.0.0). The Unicode License v3 is in `licenses/unicode-cldr.txt`.
+
 The bundled sing-box executable is the unchanged official v1.14.4 Windows release. Xray is the unchanged official v26.10.31 Windows release.

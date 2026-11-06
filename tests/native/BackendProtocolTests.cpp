@@ -73,6 +73,20 @@ private slots:
         QCOMPARE(events.first().at(1).toInt(), 7);
         QVERIFY(!backend.errorMessage().isEmpty());
     }
+    void deletionQueuesRefreshBehindAnOlderBootstrap() {
+        Backend backend(QStringLiteral("unused-test-profile"), true);
+        QSignalSpy errors(&backend, &Backend::errorChanged);
+        backend.m_pending.insert(1, QStringLiteral("bootstrap"));
+        backend.m_pending.insert(2, QStringLiteral("delete_subscription"));
+
+        backend.consumeOutput("{\"id\":2,\"result\":null}\n");
+        QVERIFY(backend.m_refreshQueued);
+        QCOMPARE(errors.count(), 0);
+
+        backend.consumeOutput("{\"id\":1,\"result\":{}}\n");
+        QVERIFY(!backend.m_refreshQueued);
+        QCOMPARE(errors.count(), 1); // The replacement request reached the stopped test controller.
+    }
 };
 QTEST_MAIN(BackendProtocolTests)
 #include "BackendProtocolTests.moc"

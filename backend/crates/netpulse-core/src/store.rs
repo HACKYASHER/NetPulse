@@ -91,6 +91,8 @@ pub struct SubscriptionSummary {
     #[serde(default = "protected_by_default")]
     pub url_protected: bool,
     #[serde(default)]
+    pub url_locked: bool,
+    #[serde(default)]
     pub config_locked: bool,
     #[serde(default)]
     pub usage: Option<SubscriptionUsage>,
@@ -103,6 +105,21 @@ impl SubscriptionSummary {
 }
 fn protected_by_default() -> bool {
     true
+}
+struct NewSubscription<'a> {
+    id: String,
+    name: &'a str,
+    sealed_url: Vec<u8>,
+    protected: bool,
+}
+impl NewSubscription<'_> {
+    fn insert(&self, db_conn: &Connection) -> Result<()> {
+        db_conn.execute(
+            "INSERT INTO subscriptions(id,name,sealed_url,url_protected) VALUES(?1,?2,?3,?4)",
+            params![self.id, self.name, self.sealed_url, self.protected],
+        ).map_err(db)?;
+        Ok(())
+    }
 }
 pub struct Store {
     db: Connection,
@@ -166,7 +183,10 @@ impl Store {
                 .map_err(db)?;
         }
         // Tombstones survive deletion and restoring an older backup.
-        tx.execute_batch("CREATE TABLE IF NOT EXISTS subscription_locks(id TEXT PRIMARY KEY);")
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS subscription_locks(id TEXT PRIMARY KEY);
+             CREATE TABLE IF NOT EXISTS subscription_url_locks(id TEXT PRIMARY KEY);",
+        )
             .map_err(db)?;
         tx.commit().map_err(db)?;
         Ok(Self {
@@ -293,8 +313,26 @@ impl Store {
     }
     pub fn import(
         &mut self,
+        parsed: Parsed,
+        subscription: Option<&str>,
+    ) -> Result<ImportReport> {
+        self.import_profiles(parsed, subscription, None)
+    }
+    pub fn import_new_subscription(
+        &mut self,
+        name: &str,
+        url: &str,
+        protected: bool,
+        parsed: Parsed,
+    ) -> Result<ImportReport> {
+        let subscription = Self::prepare_subscription(name, url, protected)?;
+        self.import_profiles(parsed, Some(&subscription.id), Some(&subscription))
+    }
+    fn import_profiles(
+        &mut self,
         mut parsed: Parsed,
         subscription: Option<&str>,
+        new_subscription: Option<&NewSubscription<'_>>,
     ) -> Result<ImportReport> {
         // Build and encrypt everything before beginning a mutation.
         let mut rows = vec![];
@@ -322,6 +360,17 @@ impl Store {
             rows.push((p.id.clone(), fingerprint, sealed, counted));
         }
         let tx = self.db.transaction().map_err(db)?;
+        if let Some(new) = new_subscription {
+            new.insert(&tx)?;
+        } else if let Some(id) = subscription
+            && !tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM subscriptions WHERE id=?1)",
+                [id],
+                |r| r.get::<_, bool>(0),
+            ).map_err(db)?
+        {
+            return Err(Error::new("SubscriptionMissing", "subscription-update", "Подписка не найдена"));
+        }
         let retained=rows.iter().map(|(id,_,_,_)|id.clone()).collect::<std::collections::HashSet<_>>();
         let mut inserted = 0;
         for (id, fp, sealed, counted) in rows {
@@ -396,25 +445,6 @@ impl Store {
         }
         Ok(())
     }
-    pub fn lock_subscription(&self, id: &str) -> Result<()> {
-        let n = self
-            .db
-            .execute(
-                "INSERT OR IGNORE INTO subscription_locks SELECT id FROM subscriptions WHERE id=?1",
-                [id],
-            )
-            .map_err(db)?;
-        if n > 0 {
-            self.log(
-                "INFO",
-                "Subscriptions",
-                "subscription-lock",
-                "Locked",
-                "Subscription configuration editing permanently disabled",
-            )?;
-        }
-        Ok(())
-    }
     pub fn save_profile_transport(&self, p: &Profile) -> Result<()> {
         self.ensure_profile_editable(&p.id)?;
         p.validate()?;
@@ -457,6 +487,15 @@ impl Store {
         url: &str,
         protected: bool,
     ) -> Result<String> {
+        let subscription = Self::prepare_subscription(name, url, protected)?;
+        subscription.insert(&self.db)?;
+        Ok(subscription.id)
+    }
+    fn prepare_subscription<'a>(
+        name: &'a str,
+        url: &str,
+        protected: bool,
+    ) -> Result<NewSubscription<'a>> {
         if name.trim().is_empty() || name.len() > 256 || name.chars().any(char::is_control) {
             return Err(Error::new(
                 "InvalidSubscription",
@@ -482,22 +521,21 @@ impl Store {
                 "Subscription must use HTTPS without URL userinfo",
             ));
         }
-        let id = uuid::Uuid::new_v4().to_string();
-        let sealed = vault::seal(url.as_bytes())?;
-        self.db
-            .execute(
-                "INSERT INTO subscriptions(id,name,sealed_url,url_protected) VALUES(?1,?2,?3,?4)",
-                params![id, name, sealed, protected],
-            )
-            .map_err(db)?;
-        Ok(id)
+        Ok(NewSubscription {
+            id: uuid::Uuid::new_v4().to_string(),
+            name,
+            sealed_url: vault::seal(url.as_bytes())?,
+            protected,
+        })
     }
     pub fn edit_subscription(
-        &self,
+        &mut self,
         id: &str,
         name: &str,
         interval_hours: u32,
         protected: bool,
+        lock_configuration: bool,
+        lock_url: bool,
     ) -> Result<()> {
         let name = name.trim();
         if name.is_empty()
@@ -511,11 +549,13 @@ impl Store {
                 "Укажите название и интервал обновления от 1 до 168 часов",
             ));
         }
-        let changed = self
-            .db
+        let tx = self.db.transaction().map_err(db)?;
+        let changed = tx
             .execute(
-                "UPDATE subscriptions SET name=?2,interval_hours=?3,url_protected=?4 WHERE id=?1",
-                params![id, name, interval_hours, protected],
+                "UPDATE subscriptions SET name=?2,interval_hours=?3,
+                 url_protected=?4 OR EXISTS(SELECT 1 FROM subscription_url_locks WHERE id=?1)
+                 WHERE id=?1",
+                params![id, name, interval_hours, protected || lock_url],
             )
             .map_err(db)?;
         if changed == 0 {
@@ -525,13 +565,21 @@ impl Store {
                 "Подписка не найдена",
             ));
         }
-        self.log(
+        if lock_configuration {
+            tx.execute("INSERT OR IGNORE INTO subscription_locks VALUES(?1)", [id]).map_err(db)?;
+        }
+        if lock_url {
+            tx.execute("INSERT OR IGNORE INTO subscription_url_locks VALUES(?1)", [id]).map_err(db)?;
+        }
+        tx.commit().map_err(db)?;
+        let _ = self.log(
             "INFO",
             "Subscriptions",
             "subscription-edit",
             "Saved",
             "Subscription settings saved",
-        )
+        );
+        Ok(())
     }
     pub fn subscription_url(&self, id: &str) -> Result<Zeroizing<String>> {
         let raw: Vec<u8> = self
@@ -541,7 +589,9 @@ impl Store {
                 [id],
                 |r| r.get(0),
             )
-            .map_err(db)?;
+            .optional()
+            .map_err(db)?
+            .ok_or_else(|| Error::new("SubscriptionMissing", "subscription-load", "Подписка не найдена"))?;
         String::from_utf8(vault::open(&raw)?.to_vec())
             .map(Zeroizing::new)
             .map_err(|_| {
@@ -553,15 +603,23 @@ impl Store {
             })
     }
     pub fn subscriptions(&self) -> Result<Vec<SubscriptionSummary>> {
-        let mut s=self.db.prepare("SELECT s.id,s.name,s.updated_at,(SELECT COUNT(*) FROM profiles p WHERE p.subscription_id=s.id),s.interval_hours,s.url_protected,EXISTS(SELECT 1 FROM subscription_locks l WHERE l.id=s.id),s.usage FROM subscriptions s ORDER BY s.rowid").map_err(db)?;
+        let mut s = self.db.prepare(
+            "SELECT s.id,s.name,s.updated_at,(SELECT COUNT(*) FROM profiles p WHERE p.subscription_id=s.id),
+                    s.interval_hours,s.url_protected,
+                    EXISTS(SELECT 1 FROM subscription_locks l WHERE l.id=s.id),s.usage,
+                    EXISTS(SELECT 1 FROM subscription_url_locks l WHERE l.id=s.id)
+             FROM subscriptions s ORDER BY s.rowid",
+        ).map_err(db)?;
         s.query_map([], |r| {
+            let url_locked = r.get(8)?;
             Ok(SubscriptionSummary {
                 id: r.get(0)?,
                 name: r.get(1)?,
                 updated_at: r.get::<_, i64>(2)? as u64,
                 count: r.get::<_, i64>(3)? as usize,
                 interval_hours: r.get(4)?,
-                url_protected: r.get(5)?,
+                url_protected: url_locked || r.get::<_, bool>(5)?,
+                url_locked,
                 config_locked: r.get(6)?,
                 usage: r
                     .get::<_, Option<String>>(7)?
@@ -573,7 +631,19 @@ impl Store {
         .map_err(db)
     }
     pub fn delete_subscription(&mut self, id: &str) -> Result<()> {
+        let mut prefs = self.preferences()?;
         let tx = self.db.transaction().map_err(db)?;
+        if let Some(profile) = &prefs.selected_profile
+            && tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM profiles WHERE id=?1 AND subscription_id=?2)",
+                params![profile, id],
+                |r| r.get::<_, bool>(0),
+            ).map_err(db)?
+        {
+            prefs.selected_profile = None;
+            tx.execute("UPDATE settings SET value=?1 WHERE id=1", [serde_json::to_string(&prefs).unwrap()])
+                .map_err(db)?;
+        }
         tx.execute("DELETE FROM profiles WHERE subscription_id=?1", [id])
             .map_err(db)?;
         tx.execute("DELETE FROM subscriptions WHERE id=?1", [id])
@@ -584,7 +654,8 @@ impl Store {
         let protected: bool = self
             .db
             .query_row(
-                "SELECT url_protected FROM subscriptions WHERE id=?1",
+                "SELECT url_protected OR EXISTS(SELECT 1 FROM subscription_url_locks WHERE id=?1)
+                 FROM subscriptions WHERE id=?1",
                 [id],
                 |r| r.get(0),
             )
@@ -965,8 +1036,13 @@ impl Store {
                 )
                 .map_err(db)?;
             }
+            if s.url_locked {
+                tx.execute("INSERT OR IGNORE INTO subscription_url_locks VALUES(?1)", [&s.id])
+                    .map_err(db)?;
+            }
             tx.execute(
-                "INSERT INTO subscriptions(id,name,sealed_url,updated_at,interval_hours,url_protected,usage) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+                "INSERT INTO subscriptions(id,name,sealed_url,updated_at,interval_hours,url_protected,usage)
+                 VALUES(?1,?2,?3,?4,?5,?6 OR EXISTS(SELECT 1 FROM subscription_url_locks WHERE id=?1),?7)",
                 params![s.id, s.name, url, s.updated_at as i64, s.interval_hours, s.url_protected, s.usage.as_ref().map(|v| serde_json::to_string(v).unwrap())],
             )
             .map_err(db)?;
@@ -1114,7 +1190,8 @@ mod tests {
                 .download,
             Some(20)
         );
-        s.lock_subscription(&sub).unwrap();
+        let summary = &s.subscriptions().unwrap()[0];
+        s.edit_subscription(&sub, &summary.name, summary.interval_hours, summary.url_protected, true, false).unwrap();
         assert_eq!(
             s.save_profile_transport(&p).unwrap_err().code,
             "ConfigurationLocked"
@@ -1147,7 +1224,7 @@ mod tests {
         assert!(!summary.due(999));
         assert!(!summary.due(4599));
         assert!(summary.due(4600));
-        s.edit_subscription(&id, "  New name  ", 24, false).unwrap();
+        s.edit_subscription(&id, "  New name  ", 24, false, false, false).unwrap();
         assert_eq!(s.subscriptions().unwrap()[0].name, "New name");
         assert_eq!(s.subscriptions().unwrap()[0].interval_hours, 24);
         assert_eq!(s.subscriptions().unwrap()[0].updated_at, before);
@@ -1157,10 +1234,10 @@ mod tests {
             "https://example.org/EDIT-FIXTURE"
         );
         for (name, hours) in [("", 12), ("bad\nname", 12), ("Name", 0), ("Name", 169)] {
-            assert!(s.edit_subscription(&id, name, hours, true).is_err());
+            assert!(s.edit_subscription(&id, name, hours, true, false, false).is_err());
         }
         assert_eq!(s.subscriptions().unwrap()[0].name, "New name");
-        s.edit_subscription(&id, "New name", 24, true).unwrap();
+        s.edit_subscription(&id, "New name", 24, true, false, false).unwrap();
         assert!(s.copyable_subscription_url(&id).is_err());
         let backup = s.backup().unwrap();
         s.clear_all().unwrap();
@@ -1169,6 +1246,63 @@ mod tests {
         assert_eq!(s.subscriptions().unwrap()[0].interval_hours, 24);
         assert!(s.copyable_subscription_url(&id).is_err());
         assert_eq!(s.profiles().unwrap()[0].id, profile_id);
+    }
+    #[test]
+    fn permanent_url_lock_survives_edits_and_old_backups() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = super::Store::open(&dir.path().join("state.db")).unwrap();
+        let url = "https://example.org/LOCK-FIXTURE";
+        let id = store.add_subscription_with_protection("Fixture", url, false).unwrap();
+        let before = store.backup().unwrap();
+        assert_eq!(store.copyable_subscription_url(&id).unwrap().as_str(), url);
+        store.edit_subscription(&id, "Fixture", 24, false, false, true).unwrap();
+        store.edit_subscription(&id, "Renamed", 24, false, false, false).unwrap();
+        let locked_backup = store.backup().unwrap();
+        store.delete_subscription(&id).unwrap();
+        store.restore(&before).unwrap();
+
+        let mut restored = super::Store::open(&dir.path().join("restored.db")).unwrap();
+        restored.restore(&locked_backup).unwrap();
+        for locked_store in [&store, &restored] {
+            let summary = &locked_store.subscriptions().unwrap()[0];
+            assert!(summary.url_locked && summary.url_protected);
+            assert!(!summary.config_locked);
+            assert_eq!(locked_store.copyable_subscription_url(&id).unwrap_err().code, "SubscriptionProtected");
+            assert_eq!(locked_store.subscription_url(&id).unwrap().as_str(), url);
+        }
+    }
+    #[test]
+    fn new_subscription_and_profiles_commit_together() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = super::Store::open(&dir.path().join("state.db")).unwrap();
+        let parsed = || crate::imports::parse("socks5://127.0.0.1:1080#Fixture").unwrap();
+        let url = "https://example.org/fixture";
+        store.db.execute_batch(
+            "CREATE TRIGGER reject_fixture BEFORE INSERT ON profiles BEGIN SELECT RAISE(ABORT, 'fixture'); END;",
+        ).unwrap();
+        assert!(store.import_new_subscription("Fixture", url, true, parsed()).is_err());
+        assert!(store.subscriptions().unwrap().is_empty());
+        store.db.execute_batch("DROP TRIGGER reject_fixture").unwrap();
+        assert_eq!(store.import_new_subscription("Fixture", url, true, parsed()).unwrap().imported, 1);
+        assert_eq!(store.subscriptions().unwrap()[0].count, 1);
+    }
+    #[test]
+    fn deleted_subscription_discards_in_flight_refresh_and_selection() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = super::Store::open(&dir.path().join("state.db")).unwrap();
+        let id = store.add_subscription("Fixture", "https://example.org/fixture").unwrap();
+        let parse = || crate::imports::parse("socks5://127.0.0.1:1080#Fixture").unwrap();
+        store.import(parse(), Some(&id)).unwrap();
+        let mut prefs = store.preferences().unwrap();
+        prefs.selected_profile = Some(store.profiles().unwrap()[0].id.clone());
+        store.save_preferences(&prefs).unwrap();
+
+        store.delete_subscription(&id).unwrap();
+        assert_eq!(store.import(parse(), Some(&id)).unwrap_err().code, "SubscriptionMissing");
+        store.delete_subscription(&id).unwrap();
+        assert!(store.profiles().unwrap().is_empty());
+        assert!(store.subscriptions().unwrap().is_empty());
+        assert!(store.preferences().unwrap().selected_profile.is_none());
     }
     #[test]
     fn profile_transport_override_survives_subscription_refresh_and_backup() {

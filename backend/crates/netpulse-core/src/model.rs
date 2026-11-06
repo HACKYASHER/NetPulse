@@ -49,6 +49,8 @@ impl Profile {
     pub fn requires_xray(&self) -> bool {
         self.outbound["transport"]["type"] == "xhttp"
             || self.outbound["transport"]["mode"] == "multi"
+            || self.outbound["transport"].get("authority").is_some()
+            || self.outbound["tls"]["reality"].get("spider_x").is_some()
     }
     pub fn summary(&self) -> ProfileSummary {
         let o = self.outbound_override.as_ref().unwrap_or(&self.outbound);

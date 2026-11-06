@@ -52,6 +52,7 @@ signals:
 private:
     friend class BackendProtocolTests;
     void readOutput();
+    void refreshAfterChange();
     void consumeOutput(const QByteArray& bytes);
     void sendPendingRequest(quint64 id, const QString& method, const QVariantMap& params);
     void finishPendingRequest(quint64 id, const QVariant& result, const QVariantMap& error = {});
@@ -71,4 +72,5 @@ private:
     QPointer<QFileDialog> m_fileDialog;
     quint64 m_nextId = 1;
     bool m_ready = false, m_isolated = false, m_quitting = false;
+    bool m_refreshQueued = false;
 };

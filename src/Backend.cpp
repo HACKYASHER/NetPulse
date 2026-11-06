@@ -178,6 +178,10 @@ bool Backend::confirmServerChange(const QString& method,const QVariantMap& param
 void Backend::refresh() {
     if (!m_pending.values().contains(QStringLiteral("bootstrap"))) request(QStringLiteral("bootstrap"));
 }
+void Backend::refreshAfterChange() {
+    if (m_pending.values().contains(QStringLiteral("bootstrap"))) m_refreshQueued = true;
+    else refresh();
+}
 void Backend::quit() {
     if (m_quitting) return;
     if (m_process.state() == QProcess::NotRunning) { emit quitReady(); return; }
@@ -213,7 +217,7 @@ void Backend::consumeOutput(const QByteArray& bytes) {
                 state.insert(QStringLiteral("state"), payload);
                 m_data.insert(QStringLiteral("snapshot"), state); emit dataChanged();
             }
-            if (name == QStringLiteral("runtime-prepared") || name == QStringLiteral("subscriptions-updated") || name == QStringLiteral("automatic-selection") || name == QStringLiteral("mtu-tuning-finished")) refresh();
+            if (name == QStringLiteral("runtime-prepared") || name == QStringLiteral("subscriptions-updated") || name == QStringLiteral("automatic-selection") || name == QStringLiteral("mtu-tuning-finished")) refreshAfterChange();
             if (name == QStringLiteral("host-error")) setError(payload.toMap().value(QStringLiteral("message")).toString());
             continue;
         }
@@ -238,7 +242,11 @@ void Backend::consumeOutput(const QByteArray& bytes) {
             QStringLiteral("update_subscription"), QStringLiteral("save_preferences"), QStringLiteral("quick_network"), QStringLiteral("quick_ui"),
             QStringLiteral("select_profile"), QStringLiteral("save_profile_json"), QStringLiteral("save_profile_transport"), QStringLiteral("manage_service"),
             QStringLiteral("restore_data"), QStringLiteral("delete_local_data"), QStringLiteral("activate_core_bundle"), QStringLiteral("update_core"), QStringLiteral("clear_logs"), QStringLiteral("clear_file_logs")};
-        if (error.isEmpty() && changes.contains(method)) refresh();
+        if (error.isEmpty() && changes.contains(method)) refreshAfterChange();
+        if (method == QStringLiteral("bootstrap") && m_refreshQueued) {
+            m_refreshQueued = false;
+            refresh();
+        }
     }
 }
 void Backend::setError(const QString& message) { m_error = message; emit errorChanged(); }

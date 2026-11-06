@@ -4,7 +4,7 @@ use base64::{
     engine::general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 
 pub const MAX_IMPORT: usize = 8 * 1024 * 1024;
@@ -162,12 +162,14 @@ pub fn parse_uri(raw: &str) -> Result<Profile> {
         "host",
         "security",
         "mode",
+        "authority",
+        "extra",
     ];
     for key in q.keys() {
         let allowed = match scheme {
             "vless" => {
                 common.contains(&key.as_str())
-                    || ["pbk", "sid", "flow", "encryption"].contains(&key.as_str())
+                    || ["pbk", "sid", "spx", "flow", "encryption"].contains(&key.as_str())
             }
             "trojan" => common.contains(&key.as_str()),
             "hy2" | "hysteria2" => [
@@ -175,6 +177,7 @@ pub fn parse_uri(raw: &str) -> Result<Profile> {
                 "alpn",
                 "obfs",
                 "obfs-password",
+                "insecure",
                 "security",
                 "netpulse-bbr",
             ]
@@ -236,6 +239,9 @@ pub fn parse_uri(raw: &str) -> Result<Profile> {
             o["password"] = json!(pass);
         }
         "hysteria2" => {
+            if get("insecure", "0") != "0" {
+                return Err(error("Hysteria2 requires TLS certificate verification (insecure=0)"));
+            }
             if q.contains_key("netpulse-bbr") {
                 o["bbr_profile"] = json!("standard");
                 o["brutal_debug"] = json!(false);
@@ -295,15 +301,25 @@ pub fn parse_uri(raw: &str) -> Result<Profile> {
             tls["utls"] = json!({"enabled":true,"fingerprint":if fingerprint.is_empty(){"chrome"}else{&fingerprint}});
         }
         let pbk = get("pbk", "");
+        let spider_x = get("spx", "/");
         if security == "reality" {
             tls["reality"] = json!({"enabled":true,"public_key":pbk,"short_id":get("sid","")});
-        } else if !pbk.is_empty() || !get("sid", "").is_empty() {
-            return Err(error("Reality keys require security=reality"));
+            if spider_x != "/" {
+                tls["reality"]["spider_x"] = json!(spider_x);
+            }
+        } else if !pbk.is_empty() || !get("sid", "").is_empty() || !get("spx", "").is_empty() {
+            return Err(error("Reality parameters require security=reality"));
         }
         o["tls"] = tls;
     }
     let transport = get("type", "tcp");
-    match transport.as_str() {
+    let transport = if transport == "splithttp" { "xhttp" } else { transport.as_str() };
+    let authority = get("authority", "");
+    let extra = get("extra", "");
+    if (!authority.is_empty() && transport != "grpc") || (!extra.is_empty() && transport != "xhttp") {
+        return Err(error("authority requires gRPC and extra requires XHTTP"));
+    }
+    match transport {
         "tcp" => {
             if q.contains_key("path") || q.contains_key("serviceName") || q.contains_key("host") {
                 return Err(error("TCP does not use transport path/host/serviceName"));
@@ -321,7 +337,7 @@ pub fn parse_uri(raw: &str) -> Result<Profile> {
             o["transport"] = t;
         }
         "grpc" => {
-            if q.contains_key("path") || q.contains_key("host") {
+            if !get("path", "").is_empty() || !get("host", "").is_empty() {
                 return Err(error("gRPC requires serviceName, not path/host"));
             }
             let mode = get("mode", "gun");
@@ -329,6 +345,9 @@ pub fn parse_uri(raw: &str) -> Result<Profile> {
                 return Err(error("gRPC mode must be gun or multi"));
             }
             o["transport"] = json!({"type":"grpc","service_name":get("serviceName","")});
+            if !authority.is_empty() {
+                o["transport"]["authority"] = json!(authority);
+            }
             if mode == "multi" {
                 o["transport"]["mode"] = json!(mode);
             }
@@ -341,8 +360,22 @@ pub fn parse_uri(raw: &str) -> Result<Profile> {
             if !["auto", "packet-up", "stream-up", "stream-one"].contains(&mode.as_str()) {
                 return Err(error("Unsupported XHTTP mode"));
             }
-            o["transport"] =
-                json!({"type":"xhttp","path":get("path","/"),"host":get("host",""),"mode":mode});
+            let mut extra = if extra.is_empty() {
+                Map::new()
+            } else {
+                if extra.len() > 16 * 1024 {
+                    return Err(error("XHTTP extra exceeds 16 KiB"));
+                }
+                let extra = crate::strict_json::parse(&extra)
+                    .map_err(|_| error("XHTTP extra must be JSON without duplicate fields"))?;
+                normalize_xhttp_extra(&extra, &mode)?
+            };
+            let extra_path = extra.remove("path");
+            let path = get("path", extra_path.as_ref().and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or("/"));
+            o["transport"] = json!({"type":"xhttp","path":path,"host":get("host",""),"mode":mode});
+            if !extra.is_empty() {
+                o["transport"]["extra"] = Value::Object(extra);
+            }
         }
         _ => {
             return Err(error(
@@ -351,7 +384,7 @@ pub fn parse_uri(raw: &str) -> Result<Profile> {
         }
     }
     let name = unescape(u.fragment().filter(|v| !v.is_empty()).unwrap_or(kind))?;
-    if q.contains_key("mode") && !["grpc", "xhttp"].contains(&transport.as_str()) {
+    if q.contains_key("mode") && !["grpc", "xhttp"].contains(&transport) {
         return Err(error("mode is supported only for gRPC/XHTTP"));
     }
     let profile = Profile {
@@ -364,6 +397,162 @@ pub fn parse_uri(raw: &str) -> Result<Profile> {
     };
     profile.validate()?;
     Ok(profile)
+}
+
+fn validate_spider_path(value: &Value) -> Result<()> {
+    let path = value.as_str().unwrap_or_default();
+    let valid = path.len() <= 2048
+        && path.starts_with('/')
+        && !path.starts_with("//")
+        && !path.contains(['\\', '#'])
+        && !path.chars().any(|c| c.is_control() || c.is_whitespace())
+        && path.match_indices('%').all(|(i, _)| {
+            path.as_bytes().get(i + 1..i + 3)
+                .is_some_and(|hex| hex.iter().all(u8::is_ascii_hexdigit))
+        })
+        && url::Url::parse(&format!("https://example.invalid{path}"))
+            .is_ok_and(|u| !u.query_pairs().any(|(key, _)| ["p", "c", "t", "i", "r"].contains(&key.as_ref())));
+    if !valid {
+        return Err(error("Invalid REALITY spiderX path or unsupported crawler options"));
+    }
+    Ok(())
+}
+
+fn validate_grpc_authority(value: &Value) -> Result<()> {
+    let authority = value.as_str().unwrap_or_default();
+    if authority.is_empty()
+        || authority.len() > 260
+        || authority.contains(['/', '\\', '@', '?', '#', '%'])
+        || authority.chars().any(|c| c.is_control() || c.is_whitespace())
+        || !url::Url::parse(&format!("https://{authority}")).is_ok_and(|u| u.host().is_some())
+    {
+        return Err(error("gRPC authority must be a host with an optional port"));
+    }
+    Ok(())
+}
+
+fn normalize_xhttp_integer(value: &mut Value, min: i64, max: i64) -> Option<i64> {
+    let n = value.as_f64().filter(|n| n.fract() == 0.0 && *n >= min as f64 && *n <= max as f64)? as i64;
+    *value = json!(n);
+    Some(n)
+}
+
+fn normalize_xhttp_ranges(
+    object: &mut Map<String, Value>,
+    ranges: &[(&str, i64)],
+) -> Result<()> {
+    for &(key, max) in ranges {
+        let Some(value) = object.get_mut(key) else { continue };
+        let valid = if let Some(range) = value.as_str() {
+            range.split_once('-').is_some_and(|(first, last)| {
+                first.parse::<i64>().ok().zip(last.parse::<i64>().ok())
+                    .is_some_and(|(first, last)| {
+                        first >= 0 && first <= last && last <= max
+                            && (first > 0 || last == 0 || !["xPaddingBytes", "scMaxEachPostBytes"].contains(&key))
+                    })
+            })
+        } else {
+            normalize_xhttp_integer(value, 0, max).is_some()
+        };
+        if !valid {
+            return Err(error(format!("Invalid XHTTP range: {key}")));
+        }
+    }
+    Ok(())
+}
+
+fn valid_xhttp_metadata_key(value: &Value) -> bool {
+    value.as_str().is_some_and(|key| {
+        key.is_empty() || (key.len() <= 128 && reqwest::header::HeaderName::from_bytes(key.as_bytes())
+            .is_ok_and(|name| ![
+                "host", "content-length", "transfer-encoding", "connection",
+                "upgrade", "authorization", "proxy-authorization", "cookie", "set-cookie",
+            ].contains(&name.as_str())))
+    })
+}
+
+pub(crate) fn normalize_xhttp_extra(extra: &Value, mode: &str) -> Result<Map<String, Value>> {
+    // Only transport options. Nested stream configurations can change the destination or TLS policy.
+    let ranges = [
+        ("xPaddingBytes", 8192),
+        ("scMaxEachPostBytes", 16 * 1024 * 1024),
+        ("scMinPostsIntervalMs", 60_000),
+        ("scStreamUpServerSecs", 3600),
+        ("uplinkChunkSize", 65_536),
+    ];
+    let flags = ["noGRPCHeader", "noSSEHeader", "xPaddingObfsMode"];
+    let metadata_keys = ["xPaddingKey", "xPaddingHeader", "sessionIDKey", "seqKey", "uplinkDataKey"];
+    let aliases = [("sessionPlacement", "sessionIDPlacement"), ("sessionKey", "sessionIDKey")];
+    let placements = ["path", "cookie", "header", "query"];
+    let choices: &[(&str, &[&str])] = &[
+        ("xPaddingPlacement", &["cookie", "header", "query", "queryInHeader"]),
+        ("xPaddingMethod", &["repeat-x", "tokenish"]),
+        ("sessionIDPlacement", &placements),
+        ("seqPlacement", &placements),
+        ("uplinkDataPlacement", &["auto", "body", "cookie", "header"]),
+        ("uplinkHTTPMethod", &["POST", "GET", "PUT", "PATCH"]),
+    ];
+    let fields = ranges.map(|(key, _)| key).into_iter()
+        .chain(flags).chain(metadata_keys).chain(aliases.map(|(key, _)| key))
+        .chain(choices.iter().map(|(key, _)| *key))
+        .chain(["path", "xmux", "serverMaxHeaderBytes"]).collect::<Vec<_>>();
+    ensure_keys(extra, &fields, "XHTTP extra")?;
+    let mut extra = extra.as_object().cloned().unwrap();
+    for (alias, key) in aliases {
+        if let Some(value) = extra.remove(alias) {
+            if extra.get(key).is_some_and(|canonical| *canonical != value) {
+                return Err(error(format!("Conflicting XHTTP fields: {alias} and {key}")));
+            }
+            extra.entry(key).or_insert(value);
+        }
+    }
+    normalize_xhttp_ranges(&mut extra, &ranges)?;
+    if flags.iter().any(|key| extra.get(*key).is_some_and(|v| !v.is_boolean()))
+        || metadata_keys.iter().any(|key| extra.get(*key).is_some_and(|v| !valid_xhttp_metadata_key(v)))
+        || choices.iter().any(|(key, values)| {
+            extra.get(*key).is_some_and(|v| !v.as_str().is_some_and(|s| s.is_empty() || values.contains(&s)))
+        })
+    {
+        return Err(error("Invalid XHTTP extra value"));
+    }
+    if extra.get("path").is_some_and(|v| {
+        !v.as_str().is_some_and(|s| s.len() <= 2048 && (s.is_empty() || s.starts_with('/'))
+            && !s.starts_with("//") && !s.contains(['\\', '#']) && !s.chars().any(char::is_control))
+    }) {
+        return Err(error("Invalid XHTTP extra path"));
+    }
+    if mode != "packet-up"
+        && (extra.get("uplinkHTTPMethod").is_some_and(|v| v == "GET")
+            || extra.get("uplinkDataPlacement").and_then(Value::as_str)
+                .is_some_and(|s| ["header", "cookie"].contains(&s)))
+    {
+        return Err(error("XHTTP GET or header/cookie uplink requires packet-up mode"));
+    }
+    if let Some(value) = extra.get_mut("serverMaxHeaderBytes")
+        && normalize_xhttp_integer(value, 0, 1024 * 1024).is_none()
+    {
+        return Err(error("Invalid XHTTP serverMaxHeaderBytes"));
+    }
+    if let Some(xmux) = extra.get_mut("xmux") {
+        let ranges = [
+            ("maxConcurrency", 1024),
+            ("maxConnections", 1024),
+            ("cMaxReuseTimes", 100_000),
+            ("hMaxRequestTimes", 100_000),
+            ("hMaxReusableSecs", 86_400),
+        ];
+        let mut fields = ranges.map(|(key, _)| key).to_vec();
+        fields.push("hKeepAlivePeriod");
+        ensure_keys(xmux, &fields, "XHTTP xmux")?;
+        let xmux = xmux.as_object_mut().unwrap();
+        normalize_xhttp_ranges(xmux, &ranges)?;
+        if let Some(value) = xmux.get_mut("hKeepAlivePeriod")
+            && normalize_xhttp_integer(value, -1, 86_400).is_none()
+        {
+            return Err(error("Invalid XHTTP hKeepAlivePeriod"));
+        }
+    }
+    Ok(extra)
 }
 
 pub(crate) fn validate_outbound_schema(v: &Value) -> Result<()> {
@@ -406,13 +595,19 @@ pub(crate) fn validate_outbound_schema(v: &Value) -> Result<()> {
             ensure_keys(utls, &["enabled", "fingerprint"], "uTLS")?;
         }
         if let Some(r) = tls.get("reality") {
-            ensure_keys(r, &["enabled", "public_key", "short_id"], "Reality")?;
+            ensure_keys(r, &["enabled", "public_key", "short_id", "spider_x"], "Reality")?;
+            if let Some(path) = r.get("spider_x") {
+                if r["enabled"] != true {
+                    return Err(error("spiderX requires REALITY"));
+                }
+                validate_spider_path(path)?;
+            }
         }
     }
     if let Some(t) = v.get("transport") {
         ensure_keys(
             t,
-            &["type", "path", "headers", "service_name", "mode", "host"],
+            &["type", "path", "headers", "service_name", "mode", "host", "authority", "extra"],
             "Transport",
         )?;
         if !["ws", "grpc", "xhttp"].contains(&t["type"].as_str().unwrap_or("")) {
@@ -420,6 +615,18 @@ pub(crate) fn validate_outbound_schema(v: &Value) -> Result<()> {
         }
         if let Some(h) = t.get("headers") {
             ensure_keys(h, &["Host"], "WebSocket headers")?;
+        }
+        if let Some(authority) = t.get("authority") {
+            if t["type"] != "grpc" {
+                return Err(error("authority requires gRPC"));
+            }
+            validate_grpc_authority(authority)?;
+        }
+        if let Some(extra) = t.get("extra") {
+            if t["type"] != "xhttp" {
+                return Err(error("extra requires XHTTP"));
+            }
+            normalize_xhttp_extra(extra, t["mode"].as_str().unwrap_or("auto"))?;
         }
     }
     if let Some(o) = v.get("obfs") {
@@ -701,6 +908,17 @@ mod tests {
         }
     }
     #[test]
+    fn hysteria2_accepts_an_explicit_secure_tls_flag() {
+        for scheme in ["hy2", "hysteria2"] {
+            let uri = format!("{scheme}://fixture@example.org:443?sni=example.org");
+            let implicit = parse_uri(&uri).unwrap();
+            let explicit = parse_uri(&format!("{uri}&insecure=0")).unwrap();
+            assert_eq!(explicit.outbound, implicit.outbound);
+            assert_eq!(explicit.outbound["tls"]["enabled"], true);
+            assert!(parse_uri(&format!("{uri}&insecure=1")).is_err());
+        }
+    }
+    #[test]
     fn provider_quic_bbr_and_reality_transports() {
         let fm = percent_encoding::utf8_percent_encode(
             r#"{"quicParams":{"debug":false,"congestion":"bbr"}}"#,
@@ -729,6 +947,77 @@ mod tests {
         assert!(parse_uri(&format!("{base}?{reality}&type=xhttp&mode=unknown")).is_err());
         let bad_fm = fm.replace("bbr", "unknown");
         assert!(parse_uri(&format!("hy2://fixture@example.org:443?fm={bad_fm}")).is_err());
+    }
+    #[test]
+    fn encoded_subscription_preserves_reality_grpc_and_xhttp_options() {
+        let reality = "vless://15bc786a-b01b-4a8a-962e-cb52e089e500@example.org:443?security=reality&sni=example.org&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let tcp = format!("{reality}&type=tcp&flow=xtls-rprx-vision");
+        let grpc = format!("{reality}&type=grpc&spx=%2Fdocs&serviceName=fixture&authority=edge.example.org%3A443&host=&path=");
+        let extra = r#"{"xPaddingBytes":"100-200","noGRPCHeader":true,"xmux":{"maxConcurrency":"8-16"}}"#;
+        let encoded = percent_encoding::utf8_percent_encode(extra, percent_encoding::NON_ALPHANUMERIC);
+        let xhttp = format!("{reality}&type=xhttp&spx=%2F&path=%2Fstream&extra={encoded}");
+        let parsed = parse(&STANDARD.encode(format!("{tcp}&spx=%2F\n{grpc}\n{xhttp}"))).unwrap();
+        assert_eq!(parsed.report.imported, 3);
+        assert!(parsed.report.issues.is_empty());
+        assert_eq!(parsed.profiles[0].outbound, parse_uri(&tcp).unwrap().outbound);
+        assert!(parsed.profiles[1].requires_xray());
+        let grpc_config = crate::runtime::xray_config(&parsed.profiles[1], 1080, "fixture").unwrap();
+        let stream = &grpc_config["outbounds"][0]["streamSettings"];
+        assert_eq!(stream["grpcSettings"]["authority"], "edge.example.org:443");
+        assert_eq!(stream["realitySettings"]["spiderX"], "/docs");
+        let xhttp_config = crate::runtime::xray_config(&parsed.profiles[2], 1080, "fixture").unwrap();
+        assert_eq!(xhttp_config["outbounds"][0]["streamSettings"]["xhttpSettings"]["extra"], serde_json::from_str::<Value>(extra).unwrap());
+
+        for parameters in [
+            "type=grpc&authority=example.org%2Fpath",
+            "type=xhttp&extra=%7B%22downloadSettings%22%3A%7B%7D%7D",
+            "type=xhttp&extra=%7B%22xPaddingBytes%22%3A999999%7D",
+            "spx=%2F%3Fc%3D999999",
+            "spx=%2F%25ZZ",
+        ] {
+            assert!(parse_uri(&format!("{reality}&{parameters}")).is_err(), "{parameters}");
+        }
+    }
+    #[test]
+    fn provider_packet_up_options_reach_xray_without_changing_wire_parameters() {
+        let raw = include_str!("../tests/fixtures/xhttp-packet-up-extra.json");
+        let encoded = percent_encoding::utf8_percent_encode(raw, percent_encoding::NON_ALPHANUMERIC);
+        let base = "vless://15bc786a-b01b-4a8a-962e-cb52e089e500@example.org:443?security=tls&type=xhttp&mode=packet-up";
+        let profile = parse_uri(&format!("{base}&extra={encoded}")).unwrap();
+        let config = crate::runtime::xray_config(&profile, 1080, "fixture").unwrap();
+        let settings = &config["outbounds"][0]["streamSettings"]["xhttpSettings"];
+        assert_eq!(settings["path"], "/fixture/upload/");
+        let extra = &settings["extra"];
+        assert_eq!(extra["sessionIDPlacement"], "header");
+        assert_eq!(extra["sessionIDKey"], "X-Upload-Token");
+        assert_eq!(extra["seqKey"], "chunk_id");
+        assert_eq!(extra["uplinkHTTPMethod"], "GET");
+        assert_eq!(extra["uplinkDataPlacement"], "header");
+        assert_eq!(extra["xPaddingMethod"], "tokenish");
+        assert_eq!(extra["scMaxEachPostBytes"].as_u64(), Some(1_000_000));
+        assert_eq!(extra["serverMaxHeaderBytes"].as_u64(), Some(262_144));
+        assert_eq!(extra["xmux"]["hKeepAlivePeriod"].as_u64(), Some(20_000));
+        assert_eq!(extra["xmux"]["cMaxReuseTimes"].as_u64(), Some(1_000));
+        assert_eq!(extra["xmux"]["maxConnections"].as_u64(), Some(0));
+        assert!(extra.get("sessionPlacement").is_none() && extra.get("sessionKey").is_none());
+        assert!(extra.get("path").is_none());
+        let explicit = parse_uri(&format!("{base}&path=%2Fexplicit%2F&extra={encoded}")).unwrap();
+        assert_eq!(explicit.outbound["transport"]["path"], "/explicit/");
+        let legacy = json!({"sessionPlacement":"header","sessionKey":"X-Upload-Token"});
+        let extra = normalize_xhttp_extra(&legacy, "packet-up").unwrap();
+        assert_eq!(extra["sessionIDPlacement"], "header");
+        assert_eq!(extra["sessionIDKey"], "X-Upload-Token");
+        for invalid in [
+            json!({"sessionIDPlacement":"header","sessionPlacement":"query"}),
+            json!({"uplinkDataKey":"X-Fixture\r\nInjected"}),
+            json!({"xPaddingHeader":"Content-Length"}),
+            json!({"scMaxEachPostBytes":"0-1000"}),
+            json!({"xmux":{"cMaxReuseTimes":1000.5}}),
+            json!({"downloadSettings":{"address":"example.org"}}),
+        ] {
+            assert!(normalize_xhttp_extra(&invalid, "packet-up").is_err());
+        }
+        assert!(normalize_xhttp_extra(&json!({"uplinkHTTPMethod":"GET"}), "stream-up").is_err());
     }
     #[test]
     fn partial_and_no_secret_errors() {

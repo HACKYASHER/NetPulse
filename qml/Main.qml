@@ -216,7 +216,15 @@ ApplicationWindow {
         ;(prefs.applications||[]).forEach(function(name){if(!seen[name])result.push({name:name,path:name,source:"saved"})})
         return result.filter(function(a){return (a.name+" "+exe(a.path)).toLowerCase().indexOf(appSearch.toLowerCase())>=0})
     }
-    function editSubscription(sub) { subEdit.sub=sub;subEditName.text=sub.name;subEditHours.value=sub.interval_hours;subEditProtect.checked=sub.url_protected;subEditLock.checked=sub.config_locked;subEdit.open() }
+    function editSubscription(sub) {
+        subEdit.sub = sub
+        subEditName.text = sub.name
+        subEditHours.value = sub.interval_hours
+        subEdit.protectUrl = !!sub.url_protected
+        subEditUrlLock.checked = !!sub.url_locked
+        subEditLock.checked = !!sub.config_locked
+        subEdit.open()
+    }
     function logMessage(event) {
         var message=backend.readableText(event.message)
         var hint=(event.level==="ERROR"||event.level==="WARNING"||event.level==="WARN")?LogText.hint(message,prefs.language!=="en"):""
@@ -251,6 +259,7 @@ ApplicationWindow {
             if(method==="delete_local_data"&&!error.code){jobTimer.stop();diagnosticId="";job=null;activeProbe={id:"",ms:null};applications=[];backend.refresh()}
             if(method==="bootstrap"&&!error.code&&result) {
                 modelData=result
+                if (sourceFilter !== "all" && !subscriptions.some(function(sub) { return sub.id === sourceFilter })) sourceFilter = "all"
                 if(JSON.stringify(persistedPreferences)!==JSON.stringify(result.preferences))persistedPreferences=result.preferences
             }
             var done = callbacks[id]
@@ -351,7 +360,7 @@ ApplicationWindow {
                     Layout.fillWidth: true; implicitHeight: 64
                     RowLayout { anchors.fill: parent; anchors.margins: 12; spacing: 9
                         Rectangle { width: 7; height: 7; radius: 4; color: modelData.engine_ready ? "#6bd9b0" : "#e0b86d" }
-                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.7"; font.pixelSize: 10; color: mutedColor } }
+                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.8"; font.pixelSize: 10; color: mutedColor } }
                     }
                 }
             }
@@ -995,7 +1004,7 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: aboutColumn.implicitHeight+40
                 ColumnLayout { id: aboutColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
                     Label { textFormat: Text.PlainText; text: tr("О клиенте","About NetPulse"); color: textColor; font.pixelSize: 17; font.bold: true }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.7 · Windows x64"; color: textColor }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.8 · Windows x64"; color: textColor }
                     Label { textFormat: Text.PlainText; text: "Qt Quick · Rust · sing-box "+(modelData.engine_version||"—")+" · Xray "+(modelData.xray_version||"—"); color: mutedColor; font.pixelSize: 12 }
                     ActionButton { appWindow: win; text: "GitHub · NetPulse ↗"; onClicked: Qt.openUrlExternally("https://github.com/HACKYASHER/NetPulse") }
                 }
@@ -1039,7 +1048,7 @@ ApplicationWindow {
                     }
                     HelpText { text: tr("Временные архивы ядер очищаются после установки и при следующем запуске. Незавершённые загрузки и установщики уже установленной версии тоже удаляются; предыдущий комплект ядер остаётся для отката.","Temporary engine archives are cleared after installation and on startup. Interrupted downloads and installers for the installed version are also removed; the previous engine bundle remains for rollback.") }
                     ActionButton { appWindow: win; text: tr("Редактор всех параметров…", "Edit all preferences…"); onClicked: editJson(tr("Параметры NetPulse", "NetPulse preferences"), JSON.stringify(prefs, null, 2), "save_preferences") }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.7  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.8  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
                 }
             }
 
@@ -1250,16 +1259,23 @@ ApplicationWindow {
     Dialog {
         id: subEdit; anchors.centerIn: parent; width: 480; modal: true
         title: tr("Параметры подписки", "Subscription settings"); property var sub: ({})
+        property bool protectUrl: false
         ColumnLayout { anchors.fill: parent; spacing: 14
             Input { id: subEditName; Layout.fillWidth: true }
-            RowLayout { Label { textFormat: Text.PlainText; text: tr("Интервал, часов", "Interval, hours"); color: mutedColor } SpinBox { id: subEditHours; from: 1; to: 720; editable: true } }
-            CheckBox { id: subEditProtect; text: tr("Запретить копирование ссылки","Protect subscription URL") }
+            RowLayout { Label { textFormat: Text.PlainText; text: tr("Интервал, часов", "Interval, hours"); color: mutedColor } SpinBox { id: subEditHours; from: 1; to: 168; editable: true } }
+            CheckBox {
+                text: tr("Запретить копирование ссылки", "Prevent copying the subscription URL")
+                enabled: !subEditUrlLock.checked
+                checked: subEdit.protectUrl || subEditUrlLock.checked
+                onToggled: subEdit.protectUrl = checked
+            }
+            CheckBox { id: subEditUrlLock; enabled: !subEdit.sub.url_locked; text: tr("Заблокировать ссылку навсегда", "Permanently lock the subscription URL") }
             CheckBox { id: subEditLock; enabled: !subEdit.sub.config_locked; text: tr("Запретить редактирование профилей", "Lock profile configuration") }
-            Label { textFormat: Text.PlainText; text: tr("Блокировку конфигурации после сохранения снять нельзя. Обновления от провайдера продолжат работать.","Configuration locking is permanent. Provider updates will continue to work."); color: mutedColor; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            Label { textFormat: Text.PlainText; text: tr("Блокировки ссылки и конфигурации вступают в силу при сохранении. Снять их нельзя. Обновления от провайдера продолжат работать.", "URL and configuration locks take effect when saved and are permanent. Provider updates will continue to work."); color: mutedColor; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             RowLayout { Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
                 ActionButton { appWindow: win; text: tr("Отмена", "Cancel"); onClicked: subEdit.close() }
-                ActionButton { appWindow: win; text: tr("Сохранить", "Save"); primary: true; onClicked: call("save_subscription", {id: subEdit.sub.id, name: subEditName.text, interval_hours: subEditHours.value, protected: subEditProtect.checked, lock_configuration: subEditLock.checked}, function() { subEdit.close() }) }
+                ActionButton { appWindow: win; text: tr("Сохранить", "Save"); primary: true; enabled: !busy("save_subscription"); onClicked: call("save_subscription", {id: subEdit.sub.id, name: subEditName.text, interval_hours: subEditHours.value, protected: subEdit.protectUrl, lock_configuration: subEditLock.checked, lock_url: subEditUrlLock.checked}, function() { subEdit.close() }) }
             }
         }
     }

@@ -848,29 +848,34 @@ impl NetworkCore {
         }
         Ok(self.snapshot())
     }
-    pub fn update_subscription(&mut self, id: &str) -> Result<ImportReport> {
-        let result = (|| {
-            let url = self.store.subscription_url(id)?;
-            self.store
-                .import(fetch_subscription(url.as_str())?, Some(id))
-        })();
-        match &result {
-            Ok(r) => {
-                let _ = self.store.log(
-                    "INFO",
-                    "Subscriptions",
-                    "subscription-update",
-                    "Imported",
-                    &format!(
-                        "Imported {} profiles; {} incompatible entries",
-                        r.imported,
-                        r.issues.len()
-                    ),
-                );
-            }
-            Err(e) => self.log_error(e),
-        };
-        result
+    pub fn add_subscription(
+        &mut self,
+        name: &str,
+        url: &str,
+        protected: bool,
+        parsed: crate::imports::Parsed,
+    ) -> Result<ImportReport> {
+        let report = self.store.import_new_subscription(name, url, protected, parsed)?;
+        self.log_subscription_import(&report);
+        Ok(report)
+    }
+    pub fn apply_subscription(&mut self, id: &str, parsed: crate::imports::Parsed) -> Result<ImportReport> {
+        let report = self.store.import(parsed, Some(id))?;
+        self.log_subscription_import(&report);
+        Ok(report)
+    }
+    fn log_subscription_import(&self, report: &ImportReport) {
+        let _ = self.store.log(
+            "INFO",
+            "Subscriptions",
+            "subscription-update",
+            "Imported",
+            &format!(
+                "Imported {} profiles; {} incompatible entries",
+                report.imported,
+                report.issues.len()
+            ),
+        );
     }
     pub fn public_ip(&self) -> Result<String> {
         if self.engine.is_none() {
@@ -1315,6 +1320,113 @@ mod tests {
                 let _ = t.join();
             }
         }
+    }
+    #[test]
+    #[ignore = "Requires bundled Windows cores; uses owned loopback endpoints"]
+    fn real_xhttp_grpc_and_hysteria2_carry_https() {
+        let origin = Origin::new();
+        let engine_path = path();
+        let xray_path = engine_path.with_file_name("xray.exe");
+        let ca = include_str!("../tests/fixtures/owned-ca.pem");
+        let certificate: Vec<_> = include_str!("../tests/fixtures/owned-localhost-cert.pem").lines().collect();
+        let key: Vec<_> = include_str!("../tests/fixtures/owned-localhost-key.pem").lines().collect();
+        let uuid = "15bc786a-b01b-4a8a-962e-cb52e089e500";
+        let private_key = "AAIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eH2A";
+        let public_key = "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw";
+        let cover = free_port().unwrap();
+        let xhttp = free_port().unwrap();
+        let xhttp_packet_up = free_port().unwrap();
+        let grpc = free_port().unwrap();
+        let vless_inbound = |port, stream| {
+            json!({"listen":"127.0.0.1","port":port,"protocol":"vless",
+                "settings":{"clients":[{"id":uuid}],"decryption":"none"},"streamSettings":stream})
+        };
+        let reality = json!({"target":format!("127.0.0.1:{cover}"),"serverNames":["localhost"],
+            "privateKey":private_key,"shortIds":["0123456789abcdef"]});
+        let server_config = json!({"log":{"loglevel":"info"},"inbounds":[
+            vless_inbound(cover,json!({"network":"tcp","security":"tls","tlsSettings":{
+                "minVersion":"1.3","alpn":["h2"],"certificates":[{"certificate":certificate,"key":key}]}})),
+            vless_inbound(xhttp,json!({"network":"xhttp","security":"reality","realitySettings":reality,
+                "xhttpSettings":{"path":"/fixture","mode":"stream-up"}})),
+            vless_inbound(xhttp_packet_up,json!({"network":"xhttp","security":"tls",
+                "tlsSettings":{"alpn":["h2","http/1.1"],"certificates":[{"certificate":certificate,"key":key}]},
+                "xhttpSettings":{"host":"localhost","path":"/fixture/upload/","mode":"packet-up",
+                    "sessionIDPlacement":"header","sessionIDKey":"X-Upload-Token",
+                    "seqPlacement":"query","seqKey":"chunk_id","uplinkHTTPMethod":"GET",
+                    "uplinkDataPlacement":"header","uplinkDataKey":"X-Data","uplinkChunkSize":"1024-2048",
+                    "xPaddingObfsMode":true,"xPaddingPlacement":"queryInHeader",
+                    "xPaddingKey":"hash","xPaddingHeader":"X-Client-Version","xPaddingMethod":"tokenish",
+                    "serverMaxHeaderBytes":262144}})),
+            vless_inbound(grpc,json!({"network":"grpc","security":"reality","realitySettings":reality,
+                "grpcSettings":{"serviceName":"fixture"}}))
+        ],"outbounds":[{"protocol":"freedom","settings":{"finalRules":[
+            {"ip":["127.0.0.1/32"],"port":origin.port.to_string(),"action":"allow"}
+        ]}}]});
+        let args = ["run", "-format", "json", "-c", "stdin:"];
+        let mut server = Engine::spawn_arguments(&xray_path, &server_config, &args).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(8);
+        for port in [cover, xhttp, xhttp_packet_up, grpc] {
+            while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
+                assert!(server.alive().unwrap() && Instant::now() < deadline, "{}", server.diagnostic(&server_config));
+                std::thread::sleep(Duration::from_millis(25));
+            }
+        }
+
+        let hy2_port = std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let hy2_config = json!({"log":{"level":"info"},"inbounds":[{"type":"hysteria2",
+            "listen":"127.0.0.1","listen_port":hy2_port,"users":[{"password":"fixture-pass"}],
+            "obfs":{"type":"salamander","password":"fixture-mask"},
+            "tls":{"enabled":true,"alpn":["h3"],"certificate":certificate,"key":key}
+        }],"outbounds":[{"type":"direct","tag":"direct"}],"route":{"rules":[
+            {"ip_cidr":["127.0.0.1/32"],"port":origin.port,"action":"route","outbound":"direct"},
+            {"action":"reject"}
+        ]}});
+        let mut hy2 = Engine::spawn(&engine_path, &hy2_config, false).unwrap();
+        let reality = format!("security=reality&sni=localhost&fp=chrome&pbk={public_key}&sid=0123456789abcdef&spx=%2F");
+        let xhttp_extra = "%7B%22xPaddingBytes%22%3A%22100-200%22%7D";
+        let packet_up_extra = percent_encoding::utf8_percent_encode(
+            include_str!("../tests/fixtures/xhttp-packet-up-extra.json"),
+            percent_encoding::NON_ALPHANUMERIC,
+        );
+        let profiles = [
+            ("XHTTP REALITY", format!("vless://{uuid}@127.0.0.1:{xhttp}?{reality}&type=xhttp&mode=stream-up&path=%2Ffixture&extra={xhttp_extra}"), true),
+            ("XHTTP TLS packet-up", format!("vless://{uuid}@127.0.0.1:{xhttp_packet_up}?security=tls&sni=localhost&fp=chrome&type=xhttp&mode=packet-up&path=%2Ffixture%2Fupload%2F&host=localhost&alpn=h2%2Chttp%2F1.1&encryption=none&extra={packet_up_extra}"), true),
+            ("gRPC REALITY", format!("vless://{uuid}@127.0.0.1:{grpc}?{reality}&type=grpc&mode=multi&serviceName=fixture&authority=localhost"), true),
+            ("Hysteria2", format!("hy2://fixture-pass@127.0.0.1:{hy2_port}?sni=localhost&alpn=h3&obfs=salamander&obfs-password=fixture-mask&insecure=0"), false),
+        ];
+        let url = format!("https://127.0.0.1:{}/download", origin.port);
+        let root = reqwest::Certificate::from_pem(ca.as_bytes()).unwrap();
+        for (name, uri, requires_bridge) in profiles {
+            let profile = crate::imports::parse_uri(&uri).unwrap_or_else(|e| panic!("{name}: {e}"));
+            let prefs = Preferences { proxy_port: free_port().unwrap(), ..Preferences::default() };
+            let secret = "owned-proxy-password";
+            let mut plan = RuntimePlan::new(
+                &engine_path, &profile, &prefs, free_port().unwrap(), "owned-api-password", secret,
+                [free_port().unwrap(), free_port().unwrap()],
+            ).unwrap();
+            assert_eq!(plan.bridge.is_some(), requires_bridge, "{name}");
+            if !requires_bridge {
+                plan.config["outbounds"][0]["tls"]["certificate"] = json!(ca.lines().collect::<Vec<_>>());
+            } else if profile.outbound["tls"]["reality"].is_null() {
+                plan.bridge.as_mut().unwrap()["outbounds"][0]["streamSettings"]["tlsSettings"]["certificates"] =
+                    json!([{"certificate":ca.lines().collect::<Vec<_>>(),"usage":"verify"}]);
+            }
+            plan.validate(&engine_path).unwrap();
+            let mut runtime = plan.start(&engine_path).unwrap();
+            let proxy = reqwest::Proxy::all(format!("http://127.0.0.1:{}", plan.probe_port))
+                .unwrap().basic_auth("netpulse", secret);
+            let client = reqwest::blocking::Client::builder().no_proxy().proxy(proxy)
+                .timeout(Duration::from_secs(12)).add_root_certificate(root.clone()).build().unwrap();
+            let body = client.get(&url).send().and_then(|r| r.error_for_status()).and_then(|r| r.bytes())
+                .unwrap_or_else(|e| panic!("{name}: {e}\nclient: {}\nserver: {}", runtime.diagnostic(&plan),
+                    if requires_bridge { server.diagnostic(&server_config) } else { hy2.diagnostic(&hy2_config) }));
+            assert_eq!(body.len(), 2 * 1024 * 1024, "{name}");
+            assert!(body.iter().all(|&byte| byte == 7), "{name}");
+            println!("{name}: 2 MiB through an authenticated NetPulse proxy");
+            runtime.stop().unwrap();
+        }
+        hy2.stop().unwrap();
+        server.stop().unwrap();
     }
     #[test]
     fn owned_https_speed_caps_upload_and_cancel() {
