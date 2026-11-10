@@ -1,7 +1,8 @@
 {
-  "version": "1.0.8",
-  "date": "2026-11-06",
-  "github_prerelease": false,
+  "version": "1.0.9",
+  "date": "2026-11-10",
+  "distribution": "GitHub stable release",
+  "result": "passed",
   "bundled_engines": {
     "sing-box": {
       "version": "1.14.4",
@@ -15,89 +16,194 @@
       "sha256": "3217c6260fbca5f16072e0b79735742f40109a63bb0ff88fd6b96dd6b54a2928"
     }
   },
-  "rust": {
-    "core_passed": 167,
-    "controller_passed": 7,
-    "service_passed": 10,
-    "integration_passed": 2,
-    "known_local_failures": [
-      {
-        "test": "playground::tests::observes_owned_tcp_udp_ipv6_and_rejects_a_different_executable",
-        "detail": "The Windows socket table did not expose the test's TCP listener. The symptom was also observed in the previous release."
-      },
-      {
-        "test": "icmp::tests::owned_ipv4_and_ipv6_echo",
-        "detail": "ICMP echo failed (11050) in a separate IPv6 check."
-      },
-      {
-        "test": "runtime::tests::prefer_ipv4_preserves_ipv6_only_names_without_using_external_dns",
-        "detail": "The local IPv6-only transfer failed in a separate check."
-      }
-    ]
+  "unit_tests": {
+    "native_protocol": 11,
+    "qml": 50,
+    "audit_storage": 8,
+    "controller": 7,
+    "service_maintenance": 10
   },
-  "transports": {
-    "https_download_bytes_each": 2097152,
-    "profiles": [
-      "XHTTP REALITY",
-      "XHTTP TLS packet-up",
-      "gRPC REALITY",
-      "Hysteria2"
+  "scope": "Continuous Activity journal, controller recovery, settings retry and shutdown fixes. No live TUN, system proxy or external provider connectivity test.",
+  "changes": [
+    "Continuous Activity journal with automatic older-history loading, dates and level filters retained",
+    "No size-based audit rotation; daily files continue past 8 MiB and are retained for five days",
+    "Latest-entry highlighting, return-to-latest button, and preserved selection/scroll when older entries are loaded",
+    "Responsive Activity controls at narrow widths",
+    "Supplied background-error, settings-retry, panic-reply and shutdown fixes built and validated",
+    "Corrected bounded controller retry budget and validated recovery after an owned controller crash",
+    "Safe local icon fallback for missing or unsupported temporary process paths"
+  ],
+  "ipc": {
+    "result": "passed",
+    "checks": [
+      "offline engines verified; no connection on startup",
+      "unknown and malformed requests rejected; channel remains usable",
+      "isolated sessions reject service maintenance and client installation before argument handling",
+      "profile import, selection, encrypted persistence, settings validation",
+      "DNS persists, EXE rules migrate and deduplicate, routing has its own JSON file",
+      "62 settings form variants persist; invalid saves are atomic; isolated tests preserve Windows autorun",
+      "pin and unpin actions persist",
+      "Playground exposes owned TCP connections by PID and EXE group, with network-focused process data",
+      "engine choices persist; invalid choice rolls back; independent modes and Sniffing validate without starting VPN",
+      "connection cannot start with both modes disabled",
+      "10 concurrent responses correctly correlated",
+      "real diagnostic job completes over owned loopback target",
+      "audit reads work and path traversal is rejected",
+      "Qt-selected absolute paths round-trip settings and routing; log paging rejects invalid filters",
+      "last per-server ping survives controller restart",
+      "settings and profile persist after controller restart"
     ],
-    "grpc_tls_upload_bytes": 8388608,
-    "grpc_tls_download_bytes": 8388608,
-    "owned_loopback": true
-  },
-  "native_ui": {
-    "native_test_results_passed": 9,
-    "qml_test_results_passed": 46,
-    "configurations": [
-      {
-        "language": "ru",
-        "theme": "dark",
-        "pages": 8,
-        "frames": 22,
-        "qml_issues": 0
-      },
-      {
-        "language": "ru",
-        "theme": "light",
-        "pages": 8,
-        "frames": 22,
-        "qml_issues": 0
-      },
-      {
-        "language": "en",
-        "theme": "light",
-        "pages": 8,
-        "frames": 22,
-        "qml_issues": 0
-      },
-      {
-        "language": "en",
-        "theme": "dark",
-        "pages": 8,
-        "frames": 22,
-        "qml_issues": 0
-      }
-    ]
+    "system_network_changed": false
   },
   "startup": {
-    "scenarios_passed": 9
+    "result": "passed",
+    "version": "1.0.9",
+    "checks": [
+      "default profile with existing database starts from multiple working directories",
+      "migration list contains only absolute noncurrent profiles",
+      "stale lock from a missing process is recovered",
+      "directory creation error is not reported as another instance",
+      "lock file access error is not reported as another instance",
+      "real GUI reaches its isolated controller using default profile resolution",
+      "second instance preserves the active primary lock",
+      "restart after abrupt isolated client exit recovers its lock",
+      "existing profile is preserved"
+    ],
+    "production_profile_changed": false,
+    "system_network_changed": false,
+    "registry_modified": false
   },
-  "controller_ipc": {
-    "scenarios_passed": 16,
-    "profile_migration_passed": true
+  "layout": {
+    "result": "passed",
+    "packaged_profile_migration": true,
+    "encrypted_profile_preserved": true,
+    "preferences_preserved": true,
+    "legacy_known_files_cleaned": true,
+    "unknown_files_preserved": true,
+    "missing_engine_not_silently_recreated": true,
+    "explicit_offline_repair": true,
+    "all_data_under_application": true,
+    "system_network_changed": false
+  },
+  "controller_recovery": {
+    "result": "passed",
+    "gui_survived_controller_crash": true,
+    "controller_restarted_automatically": true,
+    "isolated_session": true,
+    "system_network_changed": false,
+    "production_profile_changed": false
+  },
+  "packaged_ui": {
+    "result": "passed",
+    "version": "1.0.9",
+    "ui": [
+      {
+        "language": "ru",
+        "theme": "dark",
+        "activity_viewports_fit": true,
+        "core_log_rows": 2,
+        "frames": 22,
+        "network_changed": false,
+        "pages": 8,
+        "qml_issues": 0,
+        "qml_messages": [],
+        "qt": "6.8.3",
+        "result": "passed",
+        "version": "1.0.9",
+        "webview_used": false
+      },
+      {
+        "language": "ru",
+        "theme": "light",
+        "activity_viewports_fit": true,
+        "core_log_rows": 2,
+        "frames": 22,
+        "network_changed": false,
+        "pages": 8,
+        "qml_issues": 0,
+        "qml_messages": [],
+        "qt": "6.8.3",
+        "result": "passed",
+        "version": "1.0.9",
+        "webview_used": false
+      },
+      {
+        "language": "en",
+        "theme": "light",
+        "activity_viewports_fit": true,
+        "core_log_rows": 2,
+        "frames": 22,
+        "network_changed": false,
+        "pages": 8,
+        "qml_issues": 0,
+        "qml_messages": [],
+        "qt": "6.8.3",
+        "result": "passed",
+        "version": "1.0.9",
+        "webview_used": false
+      },
+      {
+        "language": "en",
+        "theme": "dark",
+        "activity_viewports_fit": true,
+        "core_log_rows": 2,
+        "frames": 22,
+        "network_changed": false,
+        "pages": 8,
+        "qml_issues": 0,
+        "qml_messages": [],
+        "qt": "6.8.3",
+        "result": "passed",
+        "version": "1.0.9",
+        "webview_used": false
+      }
+    ],
+    "system_network_changed": false
   },
   "installer": {
+    "result": "passed",
     "install": true,
-    "repair": true,
+    "update_repair": true,
     "uninstall": true,
-    "reinstall": true,
-    "profiles_preserved": true,
-    "service_hooks_simulated": true,
-    "sha256": "f19517ed92a6aeb40d415ba9ab27081b1936b3ff2be917ec3a343053d9ce6cae"
+    "reinstall_with_retained_data": true,
+    "data_preserved": true,
+    "in_root_data_preserved": true,
+    "layout_helper_stubbed": true,
+    "uninstall_entry_removed": true,
+    "profile_identity_retained": true,
+    "test_registry_cleaned": true,
+    "installed_ui": {
+      "activity_viewports_fit": true,
+      "core_log_rows": 1,
+      "frames": 22,
+      "network_changed": false,
+      "pages": 8,
+      "qml_issues": 0,
+      "qml_messages": [],
+      "qt": "6.8.3",
+      "result": "passed",
+      "version": "1.0.9",
+      "webview_used": false
+    },
+    "simulated_service_failure_codes": [
+      20,
+      21,
+      22,
+      23,
+      24,
+      1,
+      "error",
+      "timeout"
+    ],
+    "simulated_success_clears_error": true,
+    "tun_service_installed": false,
+    "global_network_changed": false
   },
-  "service_self_test_passed": true,
-  "production_profile_changed": false,
-  "system_network_changed": false
+  "files": {
+    "NetPulse-Setup.exe": "aade6361103d25915c2dcdb1754b0cadf328877504d41ccca275971c87a14478",
+    "NetPulse/NetPulse.exe": "56100789134be7a00f9b36249aba3c0fafc36706359d07f76676a46e7dd1d374",
+    "NetPulse/netpulsed.exe": "2f0a77baa0761a9f6ae4e3f6d13b2ca701bd533ff19020e7ea75fe5a62b30c8d",
+    "NetPulse/NetPulseService.exe": "1c0f4b0c2b860bef35bbaca08a895be00a4695d50d707fde98682a5f99ddd014"
+  },
+  "installation_tests_note": "Installer lifecycle tested in a separate namespace with elevation, TUN service and layout helper hooks stubbed. File migration also tested separately; no production network or profile changes."
 }

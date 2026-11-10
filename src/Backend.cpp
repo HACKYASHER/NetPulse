@@ -1,6 +1,7 @@
 #include "Backend.h"
 #include <QApplication>
 #include <QClipboard>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
 #include <QJsonDocument>
@@ -24,21 +25,24 @@ Backend::Backend(QString directory, bool isolated, QObject* parent)
     connect(&m_process, &QProcess::readyReadStandardOutput, this, &Backend::readOutput);
     // Private controller stderr is deliberately not written into the UI log.
     connect(&m_process, &QProcess::readyReadStandardError, this, [this] { m_process.readAllStandardError(); });
-    connect(&m_process, &QProcess::started, this, [this] { refresh(); m_poll.start(); });
-    connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
-        if (error == QProcess::FailedToStart)
-            setError(QStringLiteral("Не удалось запустить netpulsed.exe. Проверьте комплектность приложения."));
+    connect(&m_process, &QProcess::started, this, [this] {
+        m_lastStartMs = QDateTime::currentMSecsSinceEpoch();
+        refresh(); m_poll.start();
     });
-    connect(&m_process, &QProcess::finished, this, [this](int, QProcess::ExitStatus) {
-        m_poll.stop();
-        const auto pendingRequests = m_pending;
-        m_pending.clear(); emit pendingChanged();
-        if(m_fileDialog)m_fileDialog->reject();
-        for (auto i = pendingRequests.cbegin(); i != pendingRequests.cend(); ++i)
-            emit completed(QString::number(i.key()), i.value(), {},
-                {{QStringLiteral("code"), QStringLiteral("HostStopped")}, {QStringLiteral("message"), QStringLiteral("Сетевой контроллер остановлен")}});
-        if (m_quitting) emit quitReady();
-        else { m_ready = false; emit readyChanged(); setError(QStringLiteral("Сетевой контроллер завершился. Перезапустите NetPulse; журнал восстановления сохранён.")); }
+    connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart) {
+            // FailedToStart does not emit finished(); treat it as an exit so restart logic runs.
+            handleProcessFinished();
+            if (!m_quitting) setError(QStringLiteral("Не удалось запустить netpulsed.exe. Проверьте комплектность приложения."));
+        }
+    });
+    connect(&m_process, &QProcess::finished, this, [this](int, QProcess::ExitStatus) { handleProcessFinished(); });
+    // A crashed controller is restarted automatically (bounded), instead of leaving
+    // the UI permanently disconnected. The controller restores the System Proxy from
+    // its recovery journal on startup.
+    m_restart.setSingleShot(true);
+    connect(&m_restart, &QTimer::timeout, this, [this] {
+        if (!m_quitting && m_process.state() == QProcess::NotRunning) start();
     });
     m_poll.setInterval(2000);
     connect(&m_poll, &QTimer::timeout, this, [this] {
@@ -47,7 +51,50 @@ Backend::Backend(QString directory, bool isolated, QObject* parent)
     });
 }
 
+void Backend::handleProcessFinished() {
+    m_poll.stop();
+    // Drop any partial frame from the dead process so it cannot corrupt the next one.
+    m_buffer.fill('\0'); m_buffer.clear();
+    m_refreshQueued = false;
+    const auto pendingRequests = m_pending;
+    m_pending.clear(); emit pendingChanged();
+    if (m_fileDialog) m_fileDialog->reject();
+    for (auto i = pendingRequests.cbegin(); i != pendingRequests.cend(); ++i)
+        emit completed(QString::number(i.key()), i.value(), {},
+            {{QStringLiteral("code"), QStringLiteral("HostStopped")}, {QStringLiteral("message"), QStringLiteral("Сетевой контроллер остановлен")}});
+    if (m_quitting) { emit quitReady(); return; }
+    if (m_ready) { m_ready = false; emit readyChanged(); }
+    // A controller that ran for a while before exiting earns a fresh retry budget.
+    const auto startedAt = m_lastStartMs;
+    m_lastStartMs = 0; // Failed starts must not reuse a previous healthy run's budget.
+    if (startedAt && QDateTime::currentMSecsSinceEpoch() - startedAt > 120000) m_restartAttempts = 0;
+    if (m_restartAttempts < 3) {
+        ++m_restartAttempts; m_restarting = true;
+        setError(QStringLiteral("Сетевой контроллер завершился; выполняется перезапуск (попытка %1 из 3).").arg(m_restartAttempts));
+        m_restart.start(1000 * m_restartAttempts);
+    } else {
+        setError(QStringLiteral("Сетевой контроллер завершился. Перезапустите NetPulse; журнал восстановления сохранён."));
+    }
+}
+
+void Backend::reportError(const QString& method, const QVariantMap& error) {
+    // Background polling must not raise the global error banner: those requests are
+    // retried automatically and their failures are already written to the log.
+    static const QSet<QString> quiet{QStringLiteral("snapshot"), QStringLiteral("diagnostic_status"), QStringLiteral("current_diagnostic"),
+        QStringLiteral("connection_analysis"), QStringLiteral("playground_processes"), QStringLiteral("application_icon"),
+        QStringLiteral("check_client_update"), QStringLiteral("log_days"), QStringLiteral("log_page")};
+    const auto code = error.value(QStringLiteral("code")).toString();
+    if (quiet.contains(method)) return;
+    // Preference saves blocked by a transient runtime operation are retried by the UI.
+    if (method == QStringLiteral("save_preferences") && code == QStringLiteral("RuntimePreparing")) return;
+    // A request cancelled because the controller stopped is reported once by handleProcessFinished().
+    if (code == QStringLiteral("HostStopped")) return;
+    setError(error.value(QStringLiteral("message")).toString());
+}
+
 Backend::~Backend() {
+    m_quitting = true; // Destruction must never schedule a controller restart.
+    m_restart.stop();
     if (m_fileDialog) { m_fileDialog->disconnect(this); delete m_fileDialog.data(); }
     if (m_process.state() != QProcess::NotRunning) {
         m_process.closeWriteChannel(); // EOF asks the controller to restore and disconnect.
@@ -112,7 +159,7 @@ void Backend::sendPendingRequest(quint64 id,const QString& method,const QVariant
 void Backend::finishPendingRequest(quint64 id,const QVariant& result,const QVariantMap& error) {
     if(!m_pending.contains(id))return;
     const auto method=m_pending.take(id);emit pendingChanged();
-    if(!error.isEmpty())setError(error.value(QStringLiteral("message")).toString());
+    if(!error.isEmpty())reportError(method,error);
     if(method==QStringLiteral("quit_application")&&!error.isEmpty()){m_quitting=false;m_poll.start();}
     emit completed(QString::number(id),method,result,error);
 }
@@ -184,7 +231,7 @@ void Backend::refreshAfterChange() {
 }
 void Backend::quit() {
     if (m_quitting) return;
-    if (m_process.state() == QProcess::NotRunning) { emit quitReady(); return; }
+    if (m_process.state() == QProcess::NotRunning) { m_quitting = true; m_restart.stop(); emit quitReady(); return; }
     m_quitting = true; m_poll.stop();
     if (request(QStringLiteral("quit_application")).isEmpty()) { m_quitting = false; m_poll.start(); }
 }
@@ -227,11 +274,12 @@ void Backend::consumeOutput(const QByteArray& bytes) {
         const auto result = response.value(QStringLiteral("result")).toVariant();
         const auto error = response.value(QStringLiteral("error")).toObject().toVariantMap();
         if (!error.isEmpty()) {
-            setError(error.value(QStringLiteral("message")).toString());
+            reportError(method, error);
             if (method == QStringLiteral("quit_application")) { m_quitting = false; m_poll.start(); }
         } else if (method == QStringLiteral("bootstrap")) {
             m_data = result.toMap(); emit dataChanged();
             if (!m_ready) { m_ready = true; emit readyChanged(); }
+            if (m_restarting) { m_restarting = false; clearError(); }
         } else if (method == QStringLiteral("snapshot") || method == QStringLiteral("connect") || method == QStringLiteral("disconnect")) {
             m_data.insert(QStringLiteral("snapshot"), result); emit dataChanged();
         }

@@ -1,6 +1,6 @@
 > Приложение, ядра, служба и личные данные хранятся в выбранной папке NetPulse. [Расположение файлов и перенос профиля](docs/ru/INSTALLATION.md)
 
-# NetPulse 1.0.8
+# NetPulse 1.0.9
 
 [<kbd>English</kbd>](README.md)
 
@@ -8,9 +8,9 @@
 Сетевой контроллер на Rust работает в отдельном процессе `netpulsed.exe`.
 За режим TUN отвечает служба `NetPulseService.exe`.
 
-[Скачать установщик](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.8/NetPulse-Setup.exe)
-· [Скачать portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.8/NetPulse-Portable.zip)
-· [Изменения в 1.0.8](docs/ru/releases/v1.0.8.md)
+[Скачать установщик](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.9/NetPulse-Setup.exe)
+· [Скачать portable ZIP](https://github.com/HACKYASHER/NetPulse/releases/download/v1.0.9/NetPulse-Portable.zip)
+· [Изменения в 1.0.9](docs/ru/releases/v1.0.9.md)
 · [Документация](docs/ru/README.md)
 
 ## Запуск

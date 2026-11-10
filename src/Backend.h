@@ -62,7 +62,13 @@ private:
     bool confirmServerChange(const QString& method, const QVariantMap& params);
     void openDirectory(const QString& directory);
     void setError(const QString& message);
+    void reportError(const QString& method, const QVariantMap& error);
+    void handleProcessFinished();
     QProcess m_process;
+    QTimer m_restart;
+    int m_restartAttempts = 0;
+    bool m_restarting = false;
+    qint64 m_lastStartMs = 0;
     QTimer m_poll;
     QByteArray m_buffer;
     QVariantMap m_data;

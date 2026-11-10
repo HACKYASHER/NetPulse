@@ -56,6 +56,10 @@ ApplicationWindow {
     TestCase {
         name: "ClientInteractions"
         when: windowShown
+        function init() {
+            win.requestActivate()
+            tryCompare(win,"active",true)
+        }
         function test_01_engine_picker_mouse() {
             var arrow=findChild(choice,"choiceIndicator")
             verify(arrow.width>0&&arrow.height>0)
@@ -142,7 +146,8 @@ ApplicationWindow {
             compare(copied.signalArguments[copied.count-1][0],row+"\nappended while selecting")
             text.deselect()
             var copiesBefore=copied.count
-            text.forceActiveFocus();text.select(0,11);keyClick(Qt.Key_C,Qt.ControlModifier)
+            text.forceActiveFocus();tryCompare(text,"activeFocus",true)
+            text.select(0,11);keyClick(Qt.Key_C,Qt.ControlModifier)
             compare(copied.count,copiesBefore+1)
             compare(copied.signalArguments[copied.count-1][0],"select text")
             text.deselect()

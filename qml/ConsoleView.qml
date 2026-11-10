@@ -7,6 +7,7 @@ Rectangle {
     property var rows: []
     property string sourceKey: ""
     property bool follow: true
+    property bool hasOlder: false
     property string emptyText: ""
     property int fontSize: 12
     readonly property bool lightTheme: !!appWindow && appWindow.light
@@ -21,13 +22,18 @@ Rectangle {
     property bool selectionDragging: selectionPointer.active
     property int dragAnchor: 0
     property bool documentPending: false
+    property int recentStart: -1
     signal copyRequested(string text)
     signal readingStarted()
+    signal historyRequested()
     radius: 10
     color: lightTheme ? "#f9faff" : "#0b0e16"
     border.color: appWindow ? appWindow.borderColor : "#2a2e3e"
 
-    function beginReading() { interactionGeneration++; readingStarted() }
+    function beginReading() { interactionGeneration++; readingStarted(); Qt.callLater(checkHistory) }
+    function checkHistory() {
+        if (hasOlder && !selectionDragging && (viewport.contentHeight <= viewport.height+2 || (!follow && viewport.contentY<80))) historyRequested()
+    }
     function html(value) {
         return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
                 .replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;").replace(/ /g, "&nbsp;").replace(/\n/g, "<br>")
@@ -73,9 +79,13 @@ Rectangle {
         documentPending=false
         var next = rows.slice(), old = renderedRows, sameSource = renderedSource === sourceKey
         var prefix = sameSource && !force && old.length > 0 && old.length <= next.length
-        var i, cutRows = 0, overlap = 0
+        var i, cutRows = 0, overlap = 0, prepended = 0
         if (prefix) for (i = 0; i < old.length; ++i) if (rowKey(old[i]) !== rowKey(next[i])) { prefix = false; break }
         if (prefix && old.length === next.length) return
+        if (!prefix && sameSource && !force && old.length && next.length>old.length) {
+            prepended=next.length-old.length
+            for (i=0;i<old.length;++i) if (rowKey(old[i])!==rowKey(next[prepended+i])) {prepended=0;break}
+        }
 
         // Log readers may return a moving tail. Keep the shared suffix instead of replacing the document.
         if (!prefix && sameSource && !force && old.length && next.length) {
@@ -90,7 +100,8 @@ Rectangle {
 
         var oldX = sameSource ? viewport.contentX : 0, oldY = viewport.contentY
         var oldCursor = consoleText.cursorPosition, start = consoleText.selectionStart, end = consoleText.selectionEnd
-        var previousHeight = consoleText.contentHeight, removedCharacters = 0
+        var previousHeight = consoleText.contentHeight, removedCharacters = 0, addedCharacters = 0
+        var previousLength=consoleText.length
         var incremental = prefix || overlap > 0
         var generation = ++renderGeneration
         var interaction = interactionGeneration
@@ -106,13 +117,23 @@ Rectangle {
         } else {
             consoleText.text = next.map(rowHtml).join("")
         }
+        if (prepended) {
+            for (i=0;i<prepended;++i) addedCharacters+=String(next[i].text).replace(/\t/g,"    ").length+1
+            oldY+=Math.max(0,consoleText.contentHeight-previousHeight)
+            if (recentStart>=0) recentStart+=addedCharacters
+        } else if (incremental) {
+            if (next.length>(prefix ? old.length : overlap)) recentStart=Math.max(0,previousLength-removedCharacters+(previousLength>removedCharacters ? 1 : 0))
+            else if (recentStart>=0) recentStart=Math.max(0,recentStart-removedCharacters)
+        } else if (!force || !sameSource) {
+            recentStart=next.length ? consoleText.length-String(next[next.length-1].text).replace(/\t/g,"    ").length : -1
+        }
         renderedRows = next
         renderedSource = sourceKey
 
         // Updating a document must not move its selection or viewport as a side effect.
         if (incremental || sameSource) {
-            if (end > start) consoleText.select(Math.max(0, start - removedCharacters), Math.max(0, end - removedCharacters))
-            else consoleText.cursorPosition = Math.max(0, Math.min(consoleText.length, oldCursor - removedCharacters))
+            if (end > start) consoleText.select(Math.max(0, start - removedCharacters+addedCharacters), Math.max(0, end - removedCharacters+addedCharacters))
+            else consoleText.cursorPosition = Math.max(0, Math.min(consoleText.length, oldCursor - removedCharacters+addedCharacters))
         }
         if (!sameSource) { consoleText.deselect(); consoleText.cursorPosition=0; viewport.contentX=0 }
         if (follow) scrollToBottom()
@@ -127,6 +148,7 @@ Rectangle {
                 viewport.contentX = Math.max(0, Math.min(oldX, Math.max(0, viewport.contentWidth - viewport.width)))
                 viewport.contentY = sameSource ? Math.max(0, Math.min(oldY, Math.max(0, viewport.contentHeight - viewport.height))) : 0
             }
+            control.checkHistory()
         })
     }
     onRowsChanged: syncDocument(false)
@@ -147,6 +169,20 @@ Rectangle {
         interactive: false // Dragging belongs to text selection; wheel and scrollbars handle scrolling.
         contentWidth: consoleText.width
         contentHeight: consoleText.height
+        onContentYChanged: Qt.callLater(control.checkHistory)
+
+        // Highlight the latest batch separately from the text document, so
+        // selection, copying and severity colours remain intact.
+        Rectangle {
+            objectName: "recentLogHighlight"
+            visible: control.recentStart>=0 && control.rows.length>0
+            x: 0
+            y: consoleText.positionToRectangle(Math.max(0,Math.min(control.recentStart,consoleText.length))).y
+            width: viewport.contentWidth
+            height: Math.max(0,consoleText.positionToRectangle(consoleText.length).y+consoleText.font.pixelSize*1.5-y)
+            color: control.lightTheme ? "#eae5ff" : "#25203e"
+            Rectangle { width: 3; height: parent.height; color: "#8775ff" }
+        }
 
         TextArea {
             id: consoleText

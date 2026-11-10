@@ -140,10 +140,11 @@ fn run() -> Result<()> {
             Ok(v)=>v,
             Err(_)=> { let _=host::send(&serde_json::json!({"id":null,"error":{"code":"InvalidRequest","stage":"ipc","message":"Invalid request"}}));continue; }
         };
-        if request.method=="quit_application" {
-            let result=runtime.block_on(dispatch(&state,&request.method,request.params));
+        let Request{id,method,params}=request;
+        if method=="quit_application" {
+            let result=runtime.block_on(guarded_dispatch(state.clone(),method,params));
             let ready=result.is_ok();
-            respond(request.id,result);
+            respond(id,result);
             if ready { break; } else { continue; }
         }
         let permit=runtime.block_on(semaphore.clone().acquire_owned())
@@ -151,17 +152,29 @@ fn run() -> Result<()> {
         let state=state.clone();
         runtime.spawn(async move {
             let _permit=permit;
-            let result=dispatch(&state,&request.method,request.params).await;
-            respond(request.id,result);
+            let result=guarded_dispatch(state,method,params).await;
+            respond(id,result);
         });
     } Ok(())})();
-    if let Ok(mut c)=state.core.lock() {
-        state.closing.store(true,std::sync::atomic::Ordering::Release);
-        state.diagnostics.cancel_all();
-        c.disconnect()?;
-    }
+    // Always stop accepting work and disconnect, even if the core mutex was poisoned
+    // or the input loop failed; a failed disconnect must not skip runtime shutdown.
+    state.closing.store(true,std::sync::atomic::Ordering::Release);
+    state.diagnostics.cancel_all();
+    let disconnect=match state.core.lock() {
+        Ok(mut c)=>c.disconnect().map(|_|()),
+        Err(poisoned)=>poisoned.into_inner().disconnect().map(|_|()),
+    };
     runtime.shutdown_timeout(std::time::Duration::from_secs(10));
-    input_result
+    input_result.and(disconnect)
+}
+/// Runs a command in its own task so that a panic is converted into an error
+/// response. Without this, a panicking command never answers and the UI keeps
+/// the request pending forever (which also stops snapshot polling).
+async fn guarded_dispatch(state:Arc<AppState>,method:String,params:serde_json::Value)->Result<serde_json::Value> {
+    match tokio::spawn(async move { dispatch(&state,&method,params).await }).await {
+        Ok(result)=>result,
+        Err(_)=>Err(Error::new("CommandFailed","ipc","Команда завершилась с внутренней ошибкой; подробности в журнале")),
+    }
 }
 fn respond(id:u64,result:Result<serde_json::Value>) {
     let value=match result {

@@ -8,10 +8,30 @@
 #include <QMessageBox>
 #include <QTimer>
 #include <QApplication>
+#include <QDateTime>
 
 class BackendProtocolTests final : public QObject {
     Q_OBJECT
 private slots:
+    void failedRestartsCannotReuseThePreviousHealthyRun() {
+        Backend backend(QStringLiteral("unused-test-profile"), true);
+        backend.m_lastStartMs = QDateTime::currentMSecsSinceEpoch() - 121000;
+        backend.m_buffer = "partial old reply";
+        for (int attempt = 1; attempt <= 3; ++attempt) {
+            backend.handleProcessFinished();
+            QCOMPARE(backend.m_restartAttempts, attempt);
+            QCOMPARE(backend.m_lastStartMs, qint64(0));
+            QVERIFY(backend.m_restart.isActive());
+            QVERIFY(backend.m_buffer.isEmpty());
+            backend.m_restart.stop();
+        }
+        backend.handleProcessFinished();
+        QCOMPARE(backend.m_restartAttempts, 3);
+        QVERIFY(!backend.m_restart.isActive());
+        backend.m_quitting = true;
+        backend.handleProcessFinished();
+        QVERIFY(!backend.m_restart.isActive());
+    }
     void fileDialogBelongsToTheClientWindowAndCancelsWithoutARequest() {
         Backend backend(QStringLiteral("unused-test-profile"),true);
         QWindow window;backend.setMainWindow(&window);
@@ -72,6 +92,18 @@ private slots:
         QCOMPARE(events.count(), 1);
         QCOMPARE(events.first().at(1).toInt(), 7);
         QVERIFY(!backend.errorMessage().isEmpty());
+    }
+    void backgroundPollingErrorsDoNotRaiseTheBanner() {
+        Backend backend(QStringLiteral("unused-test-profile"), true);
+        backend.m_pending.insert(5, QStringLiteral("snapshot"));
+        backend.m_pending.insert(6, QStringLiteral("save_preferences"));
+        backend.consumeOutput("{\"id\":5,\"error\":{\"code\":\"CoreUnavailable\",\"message\":\"poll failed\"}}\n"
+                              "{\"id\":6,\"error\":{\"code\":\"RuntimePreparing\",\"message\":\"busy\"}}\n");
+        QVERIFY(backend.errorMessage().isEmpty());
+        QVERIFY(backend.m_pending.isEmpty());
+        backend.m_pending.insert(7, QStringLiteral("import_text"));
+        backend.consumeOutput("{\"id\":7,\"error\":{\"code\":\"InvalidLink\",\"message\":\"bad link\"}}\n");
+        QCOMPARE(backend.errorMessage(), QStringLiteral("bad link"));
     }
     void deletionQueuesRefreshBehindAnOlderBootstrap() {
         Backend backend(QStringLiteral("unused-test-profile"), true);

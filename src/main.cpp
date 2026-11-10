@@ -3,6 +3,7 @@
 #include <QQuickImageProvider>
 #include <QFileInfo>
 #include <QCache>
+#include <QPainter>
 #include "Backend.h"
 #include <QApplication>
 #include <QCommandLineParser>
@@ -42,23 +43,31 @@ public:
   if(size)*size=target;
   // Imported process paths must not make the icon provider contact SMB shares
   // or traverse directory junctions before the user takes any action.
-  if(path.size()<4 || !((path[0]>=QChar(u'A')&&path[0]<=QChar(u'Z'))||(path[0]>=QChar(u'a')&&path[0]<=QChar(u'z'))) || path[1]!=QChar(u':') || (path[2]!=QChar(u'\\')&&path[2]!=QChar(u'/')) || path.mid(2).contains(QChar(u':')))return {};
+  if(path.size()<4 || !((path[0]>=QChar(u'A')&&path[0]<=QChar(u'Z'))||(path[0]>=QChar(u'a')&&path[0]<=QChar(u'z'))) || path[1]!=QChar(u':') || (path[2]!=QChar(u'\\')&&path[2]!=QChar(u'/')) || path.mid(2).contains(QChar(u':')))return fallback(target);
 #ifdef Q_OS_WIN
   const auto parts=QDir::fromNativeSeparators(path).split(QChar(u'/'),Qt::SkipEmptyParts);
   QString checked=parts.first()+QStringLiteral("/");
-  for(qsizetype index=1;index<parts.size();++index){checked+=parts[index];const DWORD attributes=GetFileAttributesW(reinterpret_cast<const wchar_t*>(checked.utf16()));if(attributes==INVALID_FILE_ATTRIBUTES || (attributes&FILE_ATTRIBUTE_REPARSE_POINT))return {};checked+=QChar(u'/');}
+  for(qsizetype index=1;index<parts.size();++index){checked+=parts[index];const DWORD attributes=GetFileAttributesW(reinterpret_cast<const wchar_t*>(checked.utf16()));if(attributes==INVALID_FILE_ATTRIBUTES || (attributes&FILE_ATTRIBUTE_REPARSE_POINT))return fallback(target);checked+=QChar(u'/');}
 #endif
   if(auto* cached=cache.object(path))return cached->scaled(target,Qt::KeepAspectRatio,Qt::SmoothTransformation);
-  QFileInfo file(path); if(!file.isAbsolute() || file.suffix().compare(QStringLiteral("exe"),Qt::CaseInsensitive)!=0)return {};
-  QPixmap pixmap=provider.icon(file).pixmap(32,32); if(pixmap.isNull())pixmap=provider.icon(QFileIconProvider::File).pixmap(32,32); cache.insert(path,new QPixmap(pixmap)); return pixmap;
+  QFileInfo file(path); if(!file.isAbsolute() || file.suffix().compare(QStringLiteral("exe"),Qt::CaseInsensitive)!=0)return fallback(target);
+  QPixmap pixmap=provider.icon(file).pixmap(32,32); if(pixmap.isNull())pixmap=fallback(QSize(32,32)); cache.insert(path,new QPixmap(pixmap)); return pixmap.scaled(target,Qt::KeepAspectRatio,Qt::SmoothTransformation);
  }
-private: QFileIconProvider provider; QCache<QString,QPixmap> cache{1000};
+private:
+ static QPixmap fallback(const QSize& target) {
+  // Processes can disappear between inventory and rendering (e.g. installers).
+  // Return a local placeholder without probing rejected paths or raising a QML error.
+  QPixmap pixmap(32,32);pixmap.fill(Qt::transparent);
+  {QPainter painter(&pixmap);painter.setRenderHint(QPainter::Antialiasing);painter.setPen(Qt::NoPen);painter.setBrush(QColor("#424b65"));painter.drawRoundedRect(0,0,32,32,6,6);painter.setPen(QColor("#edf0fa"));painter.drawRect(9,7,14,18);painter.drawLine(12,12,20,12);painter.drawLine(12,16,20,16);painter.drawLine(12,20,17,20);}
+  return pixmap.scaled(target,Qt::KeepAspectRatio,Qt::SmoothTransformation);
+ }
+ QFileIconProvider provider; QCache<QString,QPixmap> cache{1000};
 };
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("NetPulse"));
     QCoreApplication::setOrganizationName(QStringLiteral("NetPulse"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.8"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.9"));
     QApplication::setFont(QFont(QStringLiteral("Segoe UI"), 10));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QCommandLineParser parser;
