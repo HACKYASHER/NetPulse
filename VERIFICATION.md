@@ -4,11 +4,14 @@
 
 November 15, 2026. [Machine-readable report](VERIFICATION.json) · [Release notes](RELEASE_NOTES.md)
 
+This revision was rebuilt with the official Xray 26.11.9 Windows binary. The archive and executable hashes are recorded in the report.
+
 | Area | Checks |
 |---|---|
 | Network diagnostics | Clock offset fixtures cover a four-second drift, unreachable and conflicting peers, a clock adjustment during sampling, and invalid NTP replies. Configuration tests distinguish differences from missing runtime evidence. |
 | File repair | A packaged isolated profile reported a missing sing-box executable by name. The bundled repair restored the verified file, and repeating the audit cleared the issue. Empty files are covered by a unit test. |
-| Interface | 11 native and 50 QML results passed. All eight pages and modal flows were checked in both languages and themes, with animations disabled for English/light. Shared controls were also checked across an on/off switch. |
+| Interface | 11 native and 53 QML results passed. All eight pages and modal flows were checked in both languages and themes, with animations disabled for English/light. Activity tests cover mixed text directions, a failed date read, and a replaced log file. |
+| Xray upgrade | An isolated profile upgraded a working copy of 26.10.31 to 26.11.9 while retaining the previous binary, saved settings and server. Xray accepted generated REALITY, XHTTP and gRPC configurations. Local gRPC bulk transfer and TLS passthrough passed. |
 | Installation | Installation, update/repair, uninstall, and reinstall preserved isolated profile data. The harness exercised eight simulated service errors. |
 | Controller and data | Audit storage, controller and service unit checks passed, along with packaged IPC, startup, single-instance handling and controller recovery. |
 

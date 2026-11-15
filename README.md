@@ -162,6 +162,6 @@ the supplied sources. See [third-party components](THIRD-PARTY.md) and `licenses
 Developed by **HACKYASHER**, with assistance from OpenAI Codex.
 
 
-Bundled engines: official Xray **26.10.31**, official sing-box **1.14.4**, unchanged from the upstream Windows release. For source builds, run `scripts/fetch-cores.py` and `scripts/fetch-engine-sources.py` before building and packaging.
+Bundled engines: official Xray **26.11.9**, official sing-box **1.14.4**, unchanged from the upstream Windows release. For source builds, run `scripts/fetch-cores.py` and `scripts/fetch-engine-sources.py` before building and packaging.
 
 [Historical engineering records](docs/README.md#historical-records)

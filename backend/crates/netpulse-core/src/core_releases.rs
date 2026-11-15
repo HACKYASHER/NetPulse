@@ -332,7 +332,7 @@ pub fn version(directory: &Path, engine: &str) -> String {
     if let Ok(Some(record))=approval(directory,engine) {return record.release.tag.trim_start_matches('v').into();}
     let path=directory.join(if engine=="xray" {"xray.exe"} else {"sing-box.exe"});
     let Ok(digest)=hash(&path) else {return "—".into();};
-    let known=if engine=="xray" {vec![(crate::runtime::XRAY_SHA256,crate::runtime::XRAY_VERSION),("c77a00eb84fb93ae044c2d771a1cabcc033b81e487253fbc35b12df6879c1e15","26.10.21"),("a743b8c2ce49cb33d6c1cf764c780bf1a475d746ad7485e7c3fcfe6458511c92","26.10.17"),("15c2d007954ac53ba69b80ec91242786b3c0b71d52649165b4ca1d5cc96ef8f1","26.3.27")]} else {vec![(crate::engine::ENGINE_SHA256,crate::engine::ENGINE_VERSION),("8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9","1.14.4"),("5c19bb3f8c12d4e85b3d47fe63123a7624b314b58dd7a8e32f51004f1c4d2faf","1.14.3")]};
+    let known=if engine=="xray" {vec![(crate::runtime::XRAY_SHA256,crate::runtime::XRAY_VERSION),(crate::runtime::PREVIOUS_BUNDLED_XRAY_SHA256,"26.10.31"),("c77a00eb84fb93ae044c2d771a1cabcc033b81e487253fbc35b12df6879c1e15","26.10.21"),("a743b8c2ce49cb33d6c1cf764c780bf1a475d746ad7485e7c3fcfe6458511c92","26.10.17"),("15c2d007954ac53ba69b80ec91242786b3c0b71d52649165b4ca1d5cc96ef8f1","26.3.27")]} else {vec![(crate::engine::ENGINE_SHA256,crate::engine::ENGINE_VERSION),("8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9","1.14.4"),("5c19bb3f8c12d4e85b3d47fe63123a7624b314b58dd7a8e32f51004f1c4d2faf","1.14.3")]};
     known.iter().find(|(sha,_)|*sha==digest).map(|(_,v)|v.to_string()).unwrap_or_else(||"—".into())
 }
 pub fn authenticated_approvals(directory: &Path) -> Result<Vec<Approval>> {

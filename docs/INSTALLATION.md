@@ -14,7 +14,7 @@ New parent directories created by the installer are protected as well.
 | Relative path | Contents |
 |---|---|
 | NetPulse.exe, netpulsed.exe and Qt libraries | Client and controller |
-| cores | Official Xray 26.10.31 and unchanged official sing-box 1.14.4 bundle |
+| cores | Official Xray 26.11.9 and unchanged official sing-box 1.14.4 bundle |
 | service | Protected service and engine copies |
 | data\<Windows SID> | Private settings, encrypted profiles, active engines, logs and backups |
 | licenses | Original redistribution notices |

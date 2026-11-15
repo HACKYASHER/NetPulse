@@ -9,9 +9,9 @@
     },
     {
       "name": "xray",
-      "tag": "v26.10.31",
-      "file": "xray-v26.10.31-source.tar.gz",
-      "sha256": "be44f95d497ad4ba6e9d1dcfbbd71e8e51f812aff077d4c15c9947eff5e3046a",
+      "tag": "v26.11.9",
+      "file": "xray-v26.11.9-source.tar.gz",
+      "sha256": "d5a47bed1b85e1cdfe3cb2f88a02e2db7144f0f8bee541d20b84fafa8fdf6c8d",
       "repository": "https://github.com/XTLS/Xray-core"
     }
   ],
@@ -57,13 +57,6 @@
       "h1": "h1:eLKJA0d02Lf0mVpIDgYnqXcUn0GqVmEFny3VuID1U3M=",
       "archive": "612cff47f17a175df161037fd253ace53eeb6bb1fd8e4989ca96da0a545f59c4.zip",
       "sha256": "61bc9b753662e2101c63bfc9562f660e9ceca9866010948f1aaccb05cf9e263a"
-    },
-    {
-      "module": "github.com/andybalholm/brotli",
-      "version": "v1.2.3",
-      "h1": "h1:8H1qwOkl2LPfjf3YezB90JnCliZb6SInJ/OJkEbA5NQ=",
-      "archive": "c39d4ba59a95379087f56e848ec2950a351808d26bf9309bce17c18e6bb6c3d7.zip",
-      "sha256": "3017c784cffc7f0019a6573efcb6d861be4bd08e2072532a88ff39280f3ec15c"
     },
     {
       "module": "github.com/anmitsu/go-shlex",
@@ -375,10 +368,10 @@
     },
     {
       "module": "github.com/klauspost/compress",
-      "version": "v1.20.0",
-      "h1": "h1:a3C1ke2ohxFymNlb2HWAHjDeKCI90scRskErZkR0ezA=",
-      "archive": "ce0bd03b174b9adc0571a39c0bd21c6b09db83b5fd2e277442b35697432e28b9.zip",
-      "sha256": "a04654d049a3caf33bcb60ee45efd8ccecabb93eb8be88045ed0003b0ecb5773"
+      "version": "v1.20.1",
+      "h1": "h1:T7kKElXUMXrUJ2E9QhQhxFtcK5rPyLdsGZvdbLMPdiQ=",
+      "archive": "ade314d492ec944f493f88ad849a536013e5dcff432cd30d50c169935c257b9f.zip",
+      "sha256": "eedb58d7e4a65669f9a290536646cbfe4188112368424b56a8c75cfdadb27dea"
     },
     {
       "module": "github.com/klauspost/cpuid/v2",
@@ -389,10 +382,10 @@
     },
     {
       "module": "github.com/klauspost/cpuid/v2",
-      "version": "v2.4.1",
-      "h1": "h1:I9KxadAkvo+QjtcEE2f2tyfEvmIla/T0m+14PrZNl0U=",
-      "archive": "ce20fcbc10c33cc865ef5506e8ee60b69bc0b0ef5be361d942ac9d6fb716f47b.zip",
-      "sha256": "e882fb8121e3daec9ecb51908b8c62642b458546df13195dbc41baf0df50eb64"
+      "version": "v2.4.2",
+      "h1": "h1:xRw7IZEsAgVCp6trS/DgWbTAqpixhmywgVgBjYGg1bQ=",
+      "archive": "f8d855d3e33eb8b3f685ca2cc8f5e1014b41bded6be0e4fd7c73813825308028.zip",
+      "sha256": "4cd77a9cc99022734e2efdaaab8c1b6459c55490d75b954dc4d2560f50b178a3"
     },
     {
       "module": "github.com/koron/go-ssdp",
@@ -500,6 +493,13 @@
       "sha256": "f2f0400b1d5e136419daed275c27a930b0f5447ac12bb8acd3ddbe39547b2834"
     },
     {
+      "module": "github.com/molecule-man/go-brrr",
+      "version": "v1.2.0",
+      "h1": "h1:dOJU45BC3Gc2WXoxAW0rgCAgVuu2gruAOGncfieA0Jw=",
+      "archive": "fce73c3573bede5b5318f4fdb2680b87482a4040b80988c0c13621c729b4d9a4.zip",
+      "sha256": "8616b7b25491246ffe45ebc785510dc5b1b6d66b8390de3af3c26eeb7bb36a80"
+    },
+    {
       "module": "github.com/openai/openai-go/v3",
       "version": "v3.26.0",
       "h1": "h1:bRt6H/ozMNt/dDkN4gobnLqaEGrRGBzmbVs0xxJEnQE=",
@@ -592,10 +592,10 @@
     },
     {
       "module": "github.com/refraction-networking/utls",
-      "version": "v1.8.3-0.20260301010127-aa6edf4b11af",
-      "h1": "h1:er2acxbi3N1nvEq6HXHUAR1nTWEJmQfqiGR8EVT9rfs=",
-      "archive": "ad5d538e57d1e2616514a1f4d7b2d0295a7dd795e4ee537fb6f907374b053679.zip",
-      "sha256": "e63da2f09ca0cd280e8b6a5cfe06cb790076df757efbc58f047d28847f50901e"
+      "version": "v1.8.3-0.20261108164504-a13c59ffe98b",
+      "h1": "h1:Mi/DuaTxHeNIQ9g1ylZicAqa6Cb9wkHRiNtQH9uZ7Ts=",
+      "archive": "1bb16af35036c8e6511b0d2fd76c4eca424829169fa3855043789ad582f4f43a.zip",
+      "sha256": "d0c332eec14903d8f9b13a4371a61e35e93ea121fa5a48878483eedc00be9c51"
     },
     {
       "module": "github.com/robfig/cron/v3",
@@ -900,10 +900,10 @@
     },
     {
       "module": "github.com/xtls/reality",
-      "version": "v0.0.0-20261014101318-83f621788ca8",
-      "h1": "h1:RjLnVvlzK4q6zWaSBPNRGsrgx2fbJDeUWffjw574uzs=",
-      "archive": "d60751bca270a990657c8d9a5c116b457ecbe03b752b8988c8037f0018ef5f49.zip",
-      "sha256": "f38aa2ac9cd2f9b57bc4838aec2870505583f00bbcf1a7ce825c1ad809ce1a18"
+      "version": "v0.0.0-20261108101329-4bb46b2afd8b",
+      "h1": "h1:fAn11r21QiUY2oAGwENWb5ummjhWwMcs2WzkbjDMh+k=",
+      "archive": "de7051017c555439b33280141fb9b555b9f48554b2de487b8e19dd48f35debea.zip",
+      "sha256": "3430f4d39e2419dc94a383903f243762f0afda533517a6d308438c7fe00b96bd"
     },
     {
       "module": "github.com/youmark/pkcs8",
@@ -1012,10 +1012,10 @@
     },
     {
       "module": "golang.org/x/net",
-      "version": "v0.61.0",
-      "h1": "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=",
-      "archive": "0c902f72afbf52366fcc062b4583603d932bda29d0796273af7ba325785636aa.zip",
-      "sha256": "f6843a98d608298e48a6ca287292c9a6fae066284050ce174d5ffb781c9b3dcf"
+      "version": "v0.62.0",
+      "h1": "h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY=",
+      "archive": "90f4b461a2365224fd7704cf100f76d562e23f33902cc0eeea18fedac57cee0b.zip",
+      "sha256": "50e869800f4921e910eb6550369f937c7187d130a7f7f78a26ef9b589a7071a6"
     },
     {
       "module": "golang.org/x/oauth2",
@@ -1124,10 +1124,10 @@
     },
     {
       "module": "google.golang.org/genproto/googleapis/rpc",
-      "version": "v0.0.0-20260706201446-f0a921348800",
-      "h1": "h1:qEHAMpSaUhtD0p3NbEEI83HwNGFxEwaSJ1G9PLnCBZE=",
-      "archive": "ee65a5190aa3039784bc775107ec94e657b830a3f1643475a4318066fe6558c0.zip",
-      "sha256": "42a0902eda416f038ae29a247e12a8932a566d8b18682ca8cd2d333a40c0f407"
+      "version": "v0.0.0-20260817212433-ac3dfec99bb1",
+      "h1": "h1:utmqiUzZAEINbLmRyAt1QjVkMyLQ+lvIwCpLaB1rZfw=",
+      "archive": "c015d082468a32e3e6b6376e48168c867555221fbf6d9850f1a28405ac74aef4.zip",
+      "sha256": "ea86b19385ad8a93819621cd90ed75db1e8ec364b6b3ada2061a601d785b7c11"
     },
     {
       "module": "google.golang.org/grpc",
@@ -1138,10 +1138,10 @@
     },
     {
       "module": "google.golang.org/grpc",
-      "version": "v1.84.0",
-      "h1": "h1:soMyaPJ8pAak5PIQ0DGBUir0XRo2fRoMqhNWMLlLxO0=",
-      "archive": "c71063733de93b486d1df51bf4071d97e2db78dc8fdbd380a749a9b815137b63.zip",
-      "sha256": "a14bebefbac1ec115d9e1f8042006c185d65adf43a91644f3e58df0688831b95"
+      "version": "v1.85.0",
+      "h1": "h1:BPBCfuVRQ1qvBhKDOq9uvQllMvO59rKsYhXpp7Dd8vw=",
+      "archive": "564ef8233822f9ef23e46d642a880125297cb8b0855901bc6363cd390c9cb697.zip",
+      "sha256": "bd1ce651075f55e5bad492f9e1ee7cc013f1b96770981556d2a9cb5ee2c31e1e"
     },
     {
       "module": "google.golang.org/protobuf",

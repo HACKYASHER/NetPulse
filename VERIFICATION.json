@@ -9,92 +9,34 @@
       "sha256": "8f30682ee198855440d2a7fe070d5d3653793b2d01bb8c85eea88f93bbe7c8b9"
     },
     "xray": {
-      "version": "26.10.31",
-      "sha256": "d5b558191cccb1e92a5772b68b8cab67717b26f634b0f15153215f65ae982a7e"
+      "version": "26.11.9",
+      "sha256": "1ca7a2cf61ba2c5d20b21a80d405b57933939751081cb289f07bd8ddf7cc3185",
+      "upstream_archive_sha256": "1262522266337b824f07beb8e1375786b437683b3890105469088f8e17e0a69d"
     },
     "libcronet": {
       "sha256": "3217c6260fbca5f16072e0b79735742f40109a63bb0ff88fd6b96dd6b54a2928"
     }
   },
-  "unit_tests": {
-    "audit": 8,
-    "health": 5,
-    "host": 7,
-    "service": 10,
-    "native": 11,
-    "qml": 50
-  },
-  "motion_preference": {
-    "animations_stop_when_disabled": true,
-    "loading_remains_visible": true,
-    "menus_and_dialogs_remain_usable": true
-  },
-  "file_repair": {
-    "missing_engine_detected": true,
-    "explicit_repair_restored_matching_file": true,
-    "post_repair_check_passed": true,
-    "isolated_probes_not_sent": true
-  },
-  "scope": "Isolated Windows checks and fixture-based connection health tests. No live TUN repairs or external VPN-provider connection tests.",
-  "ipc": {
+  "revision": "Xray 26.11.9, localized themes, animation switch and Activity journal fixes",
+  "scope": "Packaged UI, isolated installer and migration checks, and local transport fixtures. No live TUN changes or VPN provider traffic.",
+  "xray_migration": {
     "result": "passed",
-    "checks": [
-      "offline engines verified; no connection on startup",
-      "unknown and malformed requests rejected; channel remains usable",
-      "isolated sessions reject service maintenance and client installation before argument handling",
-      "profile import, selection, encrypted persistence, settings validation",
-      "DNS persists, EXE rules migrate and deduplicate, routing has its own JSON file",
-      "62 settings form variants persist; invalid saves are atomic; isolated tests preserve Windows autorun",
-      "pin and unpin actions persist",
-      "Playground exposes owned TCP connections by PID and EXE group, with network-focused process data",
-      "engine choices persist; invalid choice rolls back; independent modes and Sniffing validate without starting VPN",
-      "connection cannot start with both modes disabled",
-      "10 concurrent responses correctly correlated",
-      "real diagnostic job completes over owned loopback target",
-      "audit reads work and path traversal is rejected",
-      "Qt-selected absolute paths round-trip settings and routing; log paging rejects invalid filters",
-      "last per-server ping survives controller restart",
-      "settings and profile persist after controller restart"
-    ],
-    "system_network_changed": false
-  },
-  "startup": {
-    "result": "passed",
-    "version": "1.0.10",
-    "checks": [
-      "default profile with existing database starts from multiple working directories",
-      "migration list contains only absolute noncurrent profiles",
-      "stale lock from a missing process is recovered",
-      "directory creation error is not reported as another instance",
-      "lock file access error is not reported as another instance",
-      "real GUI reaches its isolated controller using default profile resolution",
-      "second instance preserves the active primary lock",
-      "restart after abrupt isolated client exit recovers its lock",
-      "existing profile is preserved"
-    ],
-    "production_profile_changed": false,
-    "system_network_changed": false,
-    "registry_modified": false
-  },
-  "controller_recovery": {
-    "result": "passed",
-    "gui_survived_controller_crash": true,
-    "controller_restarted_automatically": true,
-    "isolated_session": true,
-    "system_network_changed": false,
-    "production_profile_changed": false
-  },
-  "layout": {
-    "result": "passed",
-    "packaged_profile_migration": true,
-    "encrypted_profile_preserved": true,
+    "bundled_upgrade": {
+      "from": "26.10.31",
+      "to": "26.11.9"
+    },
+    "previous_copy_preserved": true,
     "preferences_preserved": true,
-    "legacy_known_files_cleaned": true,
-    "unknown_files_preserved": true,
-    "missing_engine_not_silently_recreated": true,
-    "explicit_offline_repair": true,
-    "all_data_under_application": true,
-    "system_network_changed": false
+    "profile_preserved": true,
+    "global_network_changed": false
+  },
+  "revision_tests": {
+    "runtime": 3,
+    "xray-config": 2,
+    "grpc-loopback": 1,
+    "tls-loopback": 1,
+    "native": 11,
+    "qml": 53
   },
   "ui": {
     "result": "passed",
@@ -203,9 +145,11 @@
     "global_network_changed": false
   },
   "files": {
-    "NetPulse-Setup.exe": "e6cd738459b37a68562001577654a9a2de7737be1cc398d1a16b8ec8ce8259d0",
-    "NetPulse/NetPulse.exe": "bfe29651c882587454b40d75af76f844f2c408c0d10b96d714bf1a6209cd0ddc",
-    "NetPulse/netpulsed.exe": "59bb46edc5f09adb56d6b0db30c1054a05754df79eb4060448ad2c785a37791d",
-    "NetPulse/NetPulseService.exe": "48a771730f4f9eb58586bcf4d68f5b07bf19a3046eb061087ddc78eae803ff27"
-  }
+    "NetPulse-Setup.exe": "b2c205060c7d7e576e81aaa1de3e57a72df3ab45b8b5f45364fb72820d2872f4",
+    "NetPulse/NetPulse.exe": "260e48f79a5a3c456fdb49d12ad24897156e66478b9ad442d183dfdd1fde8b33",
+    "NetPulse/netpulsed.exe": "7167085a455507ece5ac831d9daf8697020ec6115c5a06d747f1e1b0e158d421",
+    "NetPulse/NetPulseService.exe": "ec14d40f67184b1eff1ad1cc7e5cddfa52d52a43a5d8785cc78ad8f6931898b6",
+    "NetPulse/cores/xray.exe": "1ca7a2cf61ba2c5d20b21a80d405b57933939751081cb289f07bd8ddf7cc3185"
+  },
+  "initial_release_verification": "https://github.com/HACKYASHER/NetPulse/blob/42d36b0bd5663388ecdaa35410411ec0fb1d5c69/VERIFICATION.md"
 }

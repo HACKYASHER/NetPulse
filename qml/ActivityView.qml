@@ -44,17 +44,17 @@ ColumnLayout {
         loading=false
         readRequestId=""
         loaded(source,rows.length)
-        Qt.callLater(function(){logView.checkHistory()})
+        Qt.callLater(function(){if (logView) logView.checkHistory()})
     }
     function readPage(generation, day, category, cursor, done) {
         readRequestMethod="log_page"
         readRequestId=appWindow.call("log_page", {day:day, category:category, cursor:cursor || null, level:levelFilter}, function(page) {
-            if (generation !== view.requestGeneration) return
+            if (!view || generation !== view.requestGeneration) return
             done(view.parseRows(page.text),page.next || "")
         })
         checkRequestStarted()
     }
-    function load() {
+    function load(resetHistory) {
         var generation = ++requestGeneration
         loadError="";loading=true;readRequestId=""
         var category = categories[logCategory.currentIndex], day = logDay.currentText
@@ -62,14 +62,14 @@ ColumnLayout {
         if (category === "events") {
             readRequestMethod="logs"
             readRequestId=appWindow.call("logs", {}, function(value) {
-                if (generation !== view.requestGeneration) return
+                if (!view || generation !== view.requestGeneration) return
                 view.finishLoad(source,(value || []).filter(function(e){return view.levelFilter==="ALL"||e.level===view.levelFilter}).slice().reverse(),"")
             })
             checkRequestStarted()
             return
         }
         if (!day) { finishLoad(source,[],""); return }
-        var previous=displayedSource===source ? events : []
+        var previous=!resetHistory && displayedSource===source ? events : []
         var anchor=previous.length ? eventKey(previous[previous.length-1]) : ""
         var accumulated=[], visited=({})
         // Catch up across as many transport chunks as needed; a burst must not
@@ -106,25 +106,40 @@ ColumnLayout {
         if (!readRequestId) {loading=false;loadError=tr("Не удалось начать чтение журнала. Повторите обновление.","Could not start reading the log. Refresh to retry.")}
     }
     function discover() {
-        var generation=requestGeneration
-        appWindow.call("log_days", {}, function(value) {
-            if (generation!==view.requestGeneration) return
+        var generation=++requestGeneration
+        loading=true
+        loadError=""
+        readRequestMethod="log_days"
+        readRequestId=appWindow.call("log_days", {}, function(value) {
+            if (!view || generation!==view.requestGeneration) return
             var old = logDay.currentText, next = value || []
             // Reassigning an unchanged ComboBox model resets its current item and viewport.
             if (JSON.stringify(next) !== JSON.stringify(view.days)) view.days = next
             Qt.callLater(function(){
+                if (!view || generation!==view.requestGeneration) return
                 logDay.currentIndex = view.follow ? 0 : Math.max(0, view.days.indexOf(old))
                 view.load()
             })
         })
+        checkRequestStarted()
     }
     Connections {
         target: view.bridge
         ignoreUnknownSignals: true
         function onCompleted(id,method,result,error) {
             if (id===view.readRequestId&&method===view.readRequestMethod&&error&&error.code) {
-                view.loading=false;view.loadError=error.message||view.tr("Не удалось прочитать журнал","Could not read log")
+                view.readRequestId=""
+                if (method === "log_page" && error.code === "LogChanged") {
+                    view.olderCursor=""
+                    view.load(true)
+                    return
+                }
+                view.loading=false
+                view.loadError=error.message||view.tr("Не удалось прочитать журнал","Could not read log")
             }
+        }
+        function onReadyChanged() {
+            if (view.bridge.ready && !view.loading && (view.loadError.length || !view.days.length)) view.discover()
         }
     }
     Component.onCompleted: discover()
@@ -184,7 +199,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Item { Layout.fillWidth: true }
         Label { text: view.events.length + (view.olderCursor ? "+" : "") + view.tr(" строк", " lines"); color: view.appWindow.mutedColor; font.pixelSize: 11 }
-        ActionButton { objectName: "logLatest"; appWindow: view.appWindow; text: view.tr("К последним ↓", "Latest ↓"); onClicked: {view.follow=true;logView.scrollToBottom();view.discover()} }
+        ActionButton { objectName: "logLatest"; appWindow: view.appWindow; text: view.tr("К последним ↓", "Latest ↓"); onClicked: {view.follow=true;logView.scrollToBeginningOfLine();logView.scrollToBottom();view.discover()} }
         ActionButton { appWindow: view.appWindow;
             objectName: "logCopy"
             text: view.tr("Копировать журнал", "Copy log")

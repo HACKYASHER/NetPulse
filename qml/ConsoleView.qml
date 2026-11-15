@@ -46,12 +46,13 @@ Rectangle {
         return lightTheme ? "#156143" : "#83dabb"
     }
     function rowHtml(row) {
-        return '<p style="margin:0;white-space:pre;color:' + severityColor(row.level) + '">' + html(row.text) + '</p>'
+        return '<p align="left" dir="ltr" style="margin:0;white-space:pre;color:' + severityColor(row.level) + '">' + html(row.text) + '</p>'
     }
     function rowKey(row) { return String(row.key || "") + "\u0001" + row.level + "\u0001" + row.text }
     function scrollToBottom() {
         viewport.contentY = Math.max(0, viewport.contentHeight - viewport.height)
     }
+    function scrollToBeginningOfLine() { viewport.contentX = 0 }
     function selectAll() { consoleText.forceActiveFocus(); consoleText.selectAll() }
     function copySelection() {
         // QTextDocument uses paragraph separators and NBSP for coloured, unwrapped lines.
@@ -142,7 +143,7 @@ Rectangle {
             viewport.contentY = sameSource ? Math.max(0, Math.min(oldY, Math.max(0, viewport.contentHeight - viewport.height))) : 0
         }
         Qt.callLater(function() {
-            if (generation !== control.renderGeneration || interaction !== control.interactionGeneration || control.selectionDragging) return
+            if (!control || generation !== control.renderGeneration || interaction !== control.interactionGeneration || control.selectionDragging) return
             if (control.follow) control.scrollToBottom()
             else {
                 viewport.contentX = Math.max(0, Math.min(oldX, Math.max(0, viewport.contentWidth - viewport.width)))
@@ -193,6 +194,7 @@ Rectangle {
             selectByMouse: true
             persistentSelection: true
             textFormat: TextEdit.RichText
+            horizontalAlignment: TextEdit.AlignLeft
             wrapMode: TextEdit.NoWrap
             font.family: "Consolas"
             font.pixelSize: control.fontSize

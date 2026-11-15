@@ -195,5 +195,44 @@ Item {
             compare(activity.days[0],"2026-11-04")
             compare(activity.requestGeneration,generation)
         }
+        function test_dayReadFailureIsDisplayedAndCanRetry() {
+            activity.discover()
+            var id=harness.latest("log_days")
+            fakeBridge.completed(id,"log_days",null,{code:"HostStopped",message:"Controller stopped"})
+            compare(activity.loading,false)
+            compare(activity.loadError,"Controller stopped")
+            activity.discover()
+            harness.requests[harness.latest("log_days")].callback(["2026-11-04"])
+            tryVerify(function(){return harness.latest("log_page")!==""})
+            harness.requests[harness.latest("log_page")].callback({text:lines(1,2),next:null})
+            compare(activity.events.length,2)
+            compare(activity.loadError,"")
+        }
+        function test_historyRestartsAtNewestAfterFileReplacement() {
+            activity.selectCategory(0)
+            activity.follow=true
+            harness.requests[harness.latest("log_page")].callback({text:lines(20,100),next:"old-file"})
+            activity.loadOlder()
+            var id=harness.latest("log_page")
+            compare(harness.requests[id].params.cursor,"old-file")
+            fakeBridge.completed(id,"log_page",null,{code:"LogChanged"})
+            id=harness.latest("log_page")
+            verify(harness.requests[id].params.cursor===null)
+            harness.requests[id].callback({text:lines(101,102),next:"new-file"})
+            compare(activity.events.length,2)
+            compare(activity.events[0].id,"101")
+            compare(activity.olderCursor,"new-file")
+        }
+        function test_mixedDirectionKeepsLogPrefixOnLeft() {
+            var rtl={id:"1",level:"INFO",message:"שלום"}
+            var shortEntry={id:"3",level:"INFO",message:"13:21:11 [INFO] Short entry"}
+            var longEntry={id:"2",level:"INFO",message:"13:21:10 [INFO] "+"abcdefghij".repeat(60)}
+            activity.selectCategory(0)
+            harness.requests[harness.latest("log_page")].callback({text:[rtl,longEntry,shortEntry].map(JSON.stringify).join("\n"),next:null})
+            var text=findChild(activity,"logConsole")
+            wait(35)
+            var start=rtl.message.length+longEntry.message.length+2
+            verify(text.positionToRectangle(start).x <= text.leftPadding+2)
+        }
     }
 }

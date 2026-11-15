@@ -377,7 +377,7 @@ SectionEnd
     if not source_archive.is_file():raise RuntimeError('Run scripts/fetch-engine-sources.py before packaging')
     with zipfile.ZipFile(source_archive) as source_zip:
         source_manifest=json.loads(source_zip.read('manifest.json'))
-        if {(r['name'],r['tag']) for r in source_manifest['roots']}!={('sing-box','v1.14.4'),('xray','v26.10.31')}:raise RuntimeError('Engine sources do not match the bundled versions')
+        if {(r['name'],r['tag']) for r in source_manifest['roots']}!={('sing-box','v1.14.4'),('xray','v26.11.9')}:raise RuntimeError('Engine sources do not match the bundled versions')
     marker={'schema':1,'application':'NetPulse','runtime':'qt','platform':'windows-x64','version':'1.0.10','installer':'NetPulse-Setup.exe','sha256':hashlib.sha256((RELEASE/'NetPulse-Setup.exe').read_bytes()).hexdigest()}
     (RELEASE/'netpulse-qt-update-v1.json').write_text(json.dumps(marker,indent=2)+'\n',encoding='utf-8')
     outputs=[RELEASE/'netpulse-qt-update-v1.json',RELEASE/'NetPulse-Setup.exe',RELEASE/'NetPulse-Portable.zip',RELEASE/'NetPulse-Source.zip',PAYLOAD/'NetPulse.exe',PAYLOAD/'netpulsed.exe',PAYLOAD/'NetPulseService.exe']

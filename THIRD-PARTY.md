@@ -6,7 +6,7 @@
 |---|---|---|---|
 | Qt / Qt Quick | 6.8.3 | Dynamically linked desktop UI | https://code.qt.io/cgit/qt/qtbase.git/ and https://code.qt.io/cgit/qt/qtdeclarative.git/, tag `v6.8.3` |
 | sing-box | 1.14.4 | Primary network engine | https://github.com/SagerNet/sing-box/tree/v1.14.4 |
-| Xray | 26.10.31 | Additional transports | https://github.com/XTLS/Xray-core/tree/v26.10.31 |
+| Xray | 26.11.9 | Additional transports | https://github.com/XTLS/Xray-core/tree/v26.11.9 |
 | Rust dependencies | Cargo.lock | Controller, storage and diagnostics | `backend/Cargo.lock`; notices in `licenses/retained-backend` |
 | Microsoft C++ Runtime | 14.x | Compiled C++/Qt support | Microsoft Visual C++ Redistributable |
 
@@ -29,4 +29,4 @@ Country flags: [flag-icons 7.5.0](https://github.com/lipis/flag-icons/tree/v7.5.
 
 English and Russian territory names come from [Unicode CLDR 48.0.0](https://github.com/unicode-org/cldr-json/tree/48.0.0). The Unicode License v3 is in `licenses/unicode-cldr.txt`.
 
-The bundled sing-box executable is the unchanged official v1.14.4 Windows release. Xray is the unchanged official v26.10.31 Windows release.
+The bundled sing-box executable is the unchanged official v1.14.4 Windows release. Xray is the unchanged official v26.11.9 Windows release.

@@ -1160,17 +1160,26 @@ ApplicationWindow {
                     Label { textFormat: Text.PlainText; text: tr("Внешний вид", "Appearance"); color: textColor; font.pixelSize: 16; font.weight: Font.DemiBold }
                     RowLayout { Layout.fillWidth: true
                         Label { textFormat: Text.PlainText; text: tr("Тема", "Theme"); color: mutedColor; Layout.fillWidth: true }
-                        Choice { appWindow: win; model: ["dark", "light", "system"]; currentIndex: Math.max(0, model.indexOf(prefs.theme)); onActivated: save({theme: currentText}) }
+                        Choice {
+                            appWindow: win
+                            objectName: "interfaceTheme"
+                            values: ["dark", "light", "system"]
+                            model: [tr("Тёмная", "Dark"), tr("Светлая", "Light"), tr("Как в системе", "System")]
+                            currentIndex: Math.max(0, values.indexOf(prefs.theme))
+                            onActivated: save({theme: selectedValue})
+                        }
                     }
                     RowLayout { Layout.fillWidth: true
                         Label { textFormat: Text.PlainText; text: tr("Язык", "Language"); color: mutedColor; Layout.fillWidth: true }
                         Choice { appWindow: win; model: ["Русский", "English"]; currentIndex: prefs.language === "en" ? 1 : 0; onActivated: save({language: currentIndex ? "en" : "ru"}) }
                     }
-                    CheckBox {
+                    SettingRow {
+                        Layout.fillWidth: true
                         objectName: "interfaceAnimations"
-                        text: tr("Анимации интерфейса", "Interface animations")
+                        title: tr("Анимации интерфейса", "Interface animations")
+                        description: tr("Плавные переходы и анимированный индикатор загрузки.", "Transitions and an animated loading indicator.")
                         checked: win.motionEnabled
-                        onToggled: save({motion: checked})
+                        onToggled: function(value) { save({motion: value}) }
                     }
                     SettingRow { Layout.fillWidth: true; title: tr("Запускать с Windows", "Start with Windows"); description: tr("Открывает NetPulse в трее после входа в Windows. Сам по себе не включает VPN — за подключение отвечает автовосстановление.", "Starts NetPulse in the tray after Windows sign-in. It does not enable VPN by itself; auto reconnect controls that."); checked: !!prefs.autostart; onToggled: function(v) { save({autostart: v}) } }
                     SettingRow { Layout.fillWidth: true; title: tr("Закрывать в трей", "Close to tray"); description: tr("Кнопка закрытия скрывает окно; выход доступен в меню значка", "Closing hides the window; Quit is available in the tray menu"); checked: !!prefs.close_to_tray; onToggled: function(v) { save({close_to_tray: v}) } }
@@ -1230,7 +1239,7 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: coreForm.implicitHeight+40
                 ColumnLayout { id: coreForm; anchors.fill: parent; anchors.margins: 20; spacing: 14
                     Label { textFormat: Text.PlainText; text: tr("Ядра и обновления","Engines and updates"); color: textColor; font.pixelSize: 17; font.bold: true }
-                    HelpText { text: tr("Встроены официальные стабильные ядра: sing-box 1.14.4 и Xray 26.10.31. Восстановление возвращает эти версии из проверенного комплекта установщика.","Bundled official stable engines: sing-box 1.14.4 and Xray 26.10.31. Restore returns these versions from the verified installer bundle.") }
+                    HelpText { text: tr("Встроены официальные стабильные ядра: sing-box 1.14.4 и Xray 26.11.9. Восстановление возвращает эти версии из проверенного комплекта установщика.","Bundled official stable engines: sing-box 1.14.4 and Xray 26.11.9. Restore returns these versions from the verified installer bundle.") }
                     Rectangle {Layout.fillWidth:true;implicitHeight:antivirusWarning.implicitHeight+24;radius:8;color:light?"#fff4cd":"#3a321c";border.color:light?"#e3bd56":"#8b7434"
                         Label {id:antivirusWarning;anchors.fill:parent;anchors.margins:12;wrapMode:Text.WordWrap;color:light?"#745200":"#ffe18b";text:tr("⚠ При обновлении или замене ядер антивирус может удалить их файлы. В этом случае VPN перестанет работать. Проверьте отчёт антивируса перед повторной установкой.","⚠ Antivirus software may remove engine files during updates or replacement. VPN will stop working if this happens. Check the antivirus report before reinstalling.")}
                     }
