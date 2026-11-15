@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import "Motion.js" as Motion
 
 MenuItem {
     id: control
@@ -25,6 +26,7 @@ MenuItem {
         verticalAlignment: Text.AlignVCenter
     }
     background: Rectangle {
+        Behavior on color { enabled: Motion.enabled(control.appWindow); ColorAnimation { duration: 125 } }
         radius: 6
         color: control.down ? (control.lightTheme ? "#d5c8f8" : "#4a3b6c")
              : control.highlighted || control.hovered ? (control.lightTheme ? "#e8e0fc" : "#392f53") : "transparent"

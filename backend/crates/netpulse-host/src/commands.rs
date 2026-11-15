@@ -1484,3 +1484,25 @@ async fn install_client_update(state:host::State<'_,AppState>, release:netpulse_
         let mut c=core.lock().map_err(|_|Error::new("CoreUnavailable","client-update","Network core unavailable"))?;c.disconnect().map(|_|())
     }).await.map_err(|_|Error::new("UpdateTaskFailed","client-update","Installation task failed"))?
 }
+
+async fn network_health(state: host::State<'_, AppState>, external: bool, monitor: bool) -> Result<Option<netpulse_core::health::Report>> {
+    static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if RUNNING.swap(true,std::sync::atomic::Ordering::AcqRel) {return Err(Error::new("HealthBusy","health","Проверка уже выполняется"));}
+    struct Guard;
+    impl Drop for Guard {fn drop(&mut self){RUNNING.store(false,std::sync::atomic::Ordering::Release);}}
+    let guard=Guard;
+    let (prefs, snapshot, route, engine_path) = with_core(&state, "network_health", |c| {
+        let snapshot = c.snapshot();
+        let route = c.diagnostic_route_for(snapshot.engine_pid);
+        Ok((c.store.preferences()?, snapshot, route, c.engine_path.clone()))
+    }).await?;
+    let root=host::AppHandle.resource_dir().map_err(|e|Error::io("health-directory",e))?;
+    let external=external && !state.startup_smoke;
+    host::async_runtime::spawn_blocking(move || {
+        let _guard = guard;
+        let vpn = if external {netpulse_core::health::probe_vpn(&route)} else {None};
+        if monitor && vpn != Some(false) {return None;}
+        Some(netpulse_core::health::run(prefs,snapshot,&root,&engine_path,external,vpn))
+    })
+        .await.map_err(|_|Error::new("HealthFailed","health","Проверка завершилась с ошибкой"))
+}

@@ -609,5 +609,27 @@
         "type": "String"
       }
     ]
+  },
+  {
+    "method": "network_health",
+    "parameters": [
+      {
+        "name": "external",
+        "type": "bool"
+      },
+      {
+        "name": "monitor",
+        "type": "Option<bool>"
+      }
+    ]
+  },
+  {
+    "method": "network_health",
+    "parameters": [
+      {
+        "name": "external",
+        "type": "bool"
+      }
+    ]
   }
 ]

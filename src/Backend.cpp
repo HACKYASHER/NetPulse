@@ -82,7 +82,7 @@ void Backend::reportError(const QString& method, const QVariantMap& error) {
     // retried automatically and their failures are already written to the log.
     static const QSet<QString> quiet{QStringLiteral("snapshot"), QStringLiteral("diagnostic_status"), QStringLiteral("current_diagnostic"),
         QStringLiteral("connection_analysis"), QStringLiteral("playground_processes"), QStringLiteral("application_icon"),
-        QStringLiteral("check_client_update"), QStringLiteral("log_days"), QStringLiteral("log_page")};
+        QStringLiteral("check_client_update"), QStringLiteral("log_days"), QStringLiteral("log_page"), QStringLiteral("network_health")};
     const auto code = error.value(QStringLiteral("code")).toString();
     if (quiet.contains(method)) return;
     // Preference saves blocked by a transient runtime operation are retried by the UI.

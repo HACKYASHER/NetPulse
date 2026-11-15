@@ -1,11 +1,16 @@
 import QtQuick
 import QtQuick.Controls
+import "Motion.js" as Motion
 
 Button {
     id: control
     property bool primary: false
     property bool danger: false
     property var appWindow: ApplicationWindow.window
+    readonly property bool animate: Motion.enabled(appWindow)
+    scale: down && animate ? 0.97 : 1
+    Behavior on scale { enabled: control.animate; NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+    Behavior on opacity { enabled: control.animate; NumberAnimation { duration: 140 } }
     implicitHeight: 40
     implicitWidth: Math.max(86, contentItem.implicitWidth + 28)
     leftPadding: 14; rightPadding: 14
@@ -21,6 +26,8 @@ Button {
         elide: Text.ElideRight
     }
     background: Rectangle {
+        Behavior on color { enabled: control.animate; ColorAnimation { duration: 140 } }
+        Behavior on border.color { enabled: control.animate; ColorAnimation { duration: 140 } }
         radius: 10
         color: control.primary ? (control.down ? "#4f37b3" : control.hovered ? "#755bd5" : control.appWindow && control.appWindow.light ? "#6047ce" : "#7058d5")
              : control.down ? (control.appWindow && control.appWindow.light ? "#d7cef5" : "#39334e")

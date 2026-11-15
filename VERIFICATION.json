@@ -1,6 +1,6 @@
 {
-  "version": "1.0.9",
-  "date": "2026-11-10",
+  "version": "1.0.10",
+  "date": "2026-11-15",
   "distribution": "GitHub stable release",
   "result": "passed",
   "bundled_engines": {
@@ -17,22 +17,25 @@
     }
   },
   "unit_tests": {
-    "native_protocol": 11,
-    "qml": 50,
-    "audit_storage": 8,
-    "controller": 7,
-    "service_maintenance": 10
+    "audit": 8,
+    "health": 5,
+    "host": 7,
+    "service": 10,
+    "native": 11,
+    "qml": 50
   },
-  "scope": "Continuous Activity journal, controller recovery, settings retry and shutdown fixes. No live TUN, system proxy or external provider connectivity test.",
-  "changes": [
-    "Continuous Activity journal with automatic older-history loading, dates and level filters retained",
-    "No size-based audit rotation; daily files continue past 8 MiB and are retained for five days",
-    "Latest-entry highlighting, return-to-latest button, and preserved selection/scroll when older entries are loaded",
-    "Responsive Activity controls at narrow widths",
-    "Supplied background-error, settings-retry, panic-reply and shutdown fixes built and validated",
-    "Corrected bounded controller retry budget and validated recovery after an owned controller crash",
-    "Safe local icon fallback for missing or unsupported temporary process paths"
-  ],
+  "motion_preference": {
+    "animations_stop_when_disabled": true,
+    "loading_remains_visible": true,
+    "menus_and_dialogs_remain_usable": true
+  },
+  "file_repair": {
+    "missing_engine_detected": true,
+    "explicit_repair_restored_matching_file": true,
+    "post_repair_check_passed": true,
+    "isolated_probes_not_sent": true
+  },
+  "scope": "Isolated Windows checks and fixture-based connection health tests. No live TUN repairs or external VPN-provider connection tests.",
   "ipc": {
     "result": "passed",
     "checks": [
@@ -57,7 +60,7 @@
   },
   "startup": {
     "result": "passed",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "checks": [
       "default profile with existing database starts from multiple working directories",
       "migration list contains only absolute noncurrent profiles",
@@ -73,6 +76,14 @@
     "system_network_changed": false,
     "registry_modified": false
   },
+  "controller_recovery": {
+    "result": "passed",
+    "gui_survived_controller_crash": true,
+    "controller_restarted_automatically": true,
+    "isolated_session": true,
+    "system_network_changed": false,
+    "production_profile_changed": false
+  },
   "layout": {
     "result": "passed",
     "packaged_profile_migration": true,
@@ -85,19 +96,26 @@
     "all_data_under_application": true,
     "system_network_changed": false
   },
-  "controller_recovery": {
+  "ui": {
     "result": "passed",
-    "gui_survived_controller_crash": true,
-    "controller_restarted_automatically": true,
-    "isolated_session": true,
-    "system_network_changed": false,
-    "production_profile_changed": false
-  },
-  "packaged_ui": {
-    "result": "passed",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "ui": [
       {
+        "language": "en",
+        "theme": "light",
+        "activity_viewports_fit": true,
+        "core_log_rows": 2,
+        "frames": 22,
+        "network_changed": false,
+        "pages": 8,
+        "qml_issues": 0,
+        "qml_messages": [],
+        "qt": "6.8.3",
+        "result": "passed",
+        "version": "1.0.10",
+        "webview_used": false
+      },
+      {
         "language": "ru",
         "theme": "dark",
         "activity_viewports_fit": true,
@@ -109,7 +127,7 @@
         "qml_messages": [],
         "qt": "6.8.3",
         "result": "passed",
-        "version": "1.0.9",
+        "version": "1.0.10",
         "webview_used": false
       },
       {
@@ -124,22 +142,7 @@
         "qml_messages": [],
         "qt": "6.8.3",
         "result": "passed",
-        "version": "1.0.9",
-        "webview_used": false
-      },
-      {
-        "language": "en",
-        "theme": "light",
-        "activity_viewports_fit": true,
-        "core_log_rows": 2,
-        "frames": 22,
-        "network_changed": false,
-        "pages": 8,
-        "qml_issues": 0,
-        "qml_messages": [],
-        "qt": "6.8.3",
-        "result": "passed",
-        "version": "1.0.9",
+        "version": "1.0.10",
         "webview_used": false
       },
       {
@@ -154,7 +157,7 @@
         "qml_messages": [],
         "qt": "6.8.3",
         "result": "passed",
-        "version": "1.0.9",
+        "version": "1.0.10",
         "webview_used": false
       }
     ],
@@ -182,7 +185,7 @@
       "qml_messages": [],
       "qt": "6.8.3",
       "result": "passed",
-      "version": "1.0.9",
+      "version": "1.0.10",
       "webview_used": false
     },
     "simulated_service_failure_codes": [
@@ -200,10 +203,9 @@
     "global_network_changed": false
   },
   "files": {
-    "NetPulse-Setup.exe": "aade6361103d25915c2dcdb1754b0cadf328877504d41ccca275971c87a14478",
-    "NetPulse/NetPulse.exe": "56100789134be7a00f9b36249aba3c0fafc36706359d07f76676a46e7dd1d374",
-    "NetPulse/netpulsed.exe": "2f0a77baa0761a9f6ae4e3f6d13b2ca701bd533ff19020e7ea75fe5a62b30c8d",
-    "NetPulse/NetPulseService.exe": "1c0f4b0c2b860bef35bbaca08a895be00a4695d50d707fde98682a5f99ddd014"
-  },
-  "installation_tests_note": "Installer lifecycle tested in a separate namespace with elevation, TUN service and layout helper hooks stubbed. File migration also tested separately; no production network or profile changes."
+    "NetPulse-Setup.exe": "e6cd738459b37a68562001577654a9a2de7737be1cc398d1a16b8ec8ce8259d0",
+    "NetPulse/NetPulse.exe": "bfe29651c882587454b40d75af76f844f2c408c0d10b96d714bf1a6209cd0ddc",
+    "NetPulse/netpulsed.exe": "59bb46edc5f09adb56d6b0db30c1054a05754df79eb4060448ad2c785a37791d",
+    "NetPulse/NetPulseService.exe": "48a771730f4f9eb58586bcf4d68f5b07bf19a3046eb061087ddc78eae803ff27"
+  }
 }

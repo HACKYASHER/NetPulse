@@ -228,12 +228,15 @@ impl NetworkCore {
         self.observer = Some(Box::new(callback));
     }
     pub fn diagnostic_route(&mut self) -> crate::diagnostics::DiagnosticRoute {
-        let s = self.snapshot();
+        let pid = self.snapshot().engine_pid;
+        self.diagnostic_route_for(pid)
+    }
+    pub fn diagnostic_route_for(&self, engine_pid: Option<u32>) -> crate::diagnostics::DiagnosticRoute {
         crate::diagnostics::DiagnosticRoute {
-            direct_port: s.engine_pid.map(|_| self.direct_probe_port),
-            vpn_port: s.engine_pid.map(|_| self.probe_port),
+            direct_port: engine_pid.map(|_| self.direct_probe_port),
+            vpn_port: engine_pid.map(|_| self.probe_port),
             password: Zeroizing::new(self.proxy_secret.to_string()),
-            engine_pid: s.engine_pid,
+            engine_pid,
         }
     }
     fn transition(&mut self, state: ConnectionState) {

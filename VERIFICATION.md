@@ -1,21 +1,17 @@
-# NetPulse 1.0.9 verification
+# NetPulse 1.0.10 verification
 
 [<kbd>Русский</kbd>](docs/ru/VERIFICATION.md)
 
-November 10, 2026. [Machine-readable report](VERIFICATION.json) · [Release notes](RELEASE_NOTES.md)
+November 15, 2026. [Machine-readable report](VERIFICATION.json) · [Release notes](RELEASE_NOTES.md)
 
-| Area | Result |
+| Area | Checks |
 |---|---|
-| Native and QML regressions | 11 native and 50 QML test results passed. Coverage includes bounded controller recovery, background errors, continuous log loading, stale replies, preserved selection, new-entry highlighting and narrow-window controls. |
-| Audit storage | 8 tests passed, including keeping daily logs beyond 8 MiB, five-day cleanup and reading older rotated files. |
-| Controller and service | 7 controller tests and 10 service maintenance tests passed. |
-| Packaged startup and data | IPC/settings persistence, startup and single-instance checks, data relocation and explicit offline engine repair passed. |
-| Controller recovery | The isolated packaged GUI survived termination of its own controller, started a fresh controller and completed initialization again. |
-| Packaged interface | All 8 sections rendered in Russian/English and dark/light themes: 22 frames per combination, no QML issues, Activity viewport bounds checked. |
-| Installer lifecycle | Install, update/repair, uninstall and reinstall preserved test data. Eight simulated service failure codes and successful retry were checked. |
+| Network diagnostics | Clock offset fixtures cover a four-second drift, unreachable and conflicting peers, a clock adjustment during sampling, and invalid NTP replies. Configuration tests distinguish differences from missing runtime evidence. |
+| File repair | A packaged isolated profile reported a missing sing-box executable by name. The bundled repair restored the verified file, and repeating the audit cleared the issue. Empty files are covered by a unit test. |
+| Interface | 11 native and 50 QML results passed. All eight pages and modal flows were checked in both languages and themes, with animations disabled for English/light. Shared controls were also checked across an on/off switch. |
+| Installation | Installation, update/repair, uninstall, and reinstall preserved isolated profile data. The harness exercised eight simulated service errors. |
+| Controller and data | Audit storage, controller and service unit checks passed, along with packaged IPC, startup, single-instance handling and controller recovery. |
 
-The installer lifecycle uses a separate namespace and stubs elevation, live service management and layout-helper hooks. File migration is also tested separately. The tests do not modify the production profile, TUN or system proxy.
+These tests exercise client behavior and use a separate Windows namespace for installer and repair scenarios. Live TUN installation and VPN-provider connectivity remain outside the test scope. The configuration comparison records whether saved values match the active session. Proving DNS, TLS or per-app routing behavior requires targeted traffic tests.
 
-This is a targeted validation of the journal and controller changes. Real provider connectivity and live TUN installation were not tested. Transport integration tests were not rerun; this release does not claim fixes for the IPv6 and Playground listener failures documented in the [1.0.8 report](https://github.com/HACKYASHER/NetPulse/blob/be9b3747657a439e1a68dcc305f159de26860404/VERIFICATION.md).
-
-The bundled official sing-box 1.14.4 and Xray 26.10.31 binaries are unchanged and match their pinned SHA-256 hashes. [Engine source manifest](resources/cores/source-manifest.json)
+[How the diagnostics work](docs/HEALTH-CHECK.md)

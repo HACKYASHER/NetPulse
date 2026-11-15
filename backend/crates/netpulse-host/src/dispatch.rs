@@ -26,6 +26,7 @@ async fn dispatch(state: &AppState, method: &str, params: serde_json::Value) -> 
         "save_profile_json" => encode(save_profile_json(host::State(state), argument::<String>(&params, "id")?, argument::<String>(&params, "json")?).await?),
         "playground_processes" => encode(playground_processes(host::State(state)).await?),
         "connection_analysis" => encode(connection_analysis(host::State(state), argument::<Option<u32>>(&params, "pid")?, argument::<String>(&params, "path")?).await?),
+        "network_health" => encode(network_health(host::State(state), argument::<bool>(&params,"external")?, argument::<Option<bool>>(&params,"monitor")?.unwrap_or(false)).await?),
         "snapshot" => encode(snapshot(host::State(state)).await?),
         "import_text" => encode(import_text(host::State(state), argument::<String>(&params, "text")?).await?),
         "import_clipboard" => encode(import_clipboard(host::State(state)).await?),

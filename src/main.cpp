@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("NetPulse"));
     QCoreApplication::setOrganizationName(QStringLiteral("NetPulse"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.9"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.10"));
     QApplication::setFont(QFont(QStringLiteral("Segoe UI"), 10));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QCommandLineParser parser;
@@ -165,6 +165,7 @@ int main(int argc, char** argv) {
     app.setQuitOnLastWindowClosed(false);
     QSystemTrayIcon tray(QIcon(QStringLiteral(":/qt/qml/NetPulse/resources/pulse.svg")));
     tray.setToolTip(QStringLiteral("NetPulse"));
+    QString trayAppearance;
     QMenu menu;
     const auto showWindow=[window]{window->show();window->raise();window->requestActivate();};
     const auto invoke=[window,showWindow](const char* method){showWindow();QMetaObject::invokeMethod(window,method);};
@@ -181,7 +182,6 @@ int main(int argc, char** argv) {
     auto* networkAction=menu.addAction(QStringLiteral("Сеть…"),window,[invoke]{invoke("showNetwork");});
     auto* settingsAction=menu.addAction(QStringLiteral("Настройки…"),window,[invoke]{invoke("showSettings");});
     menu.addSeparator();auto* quitAction=menu.addAction(QStringLiteral("Выход"),&backend,&Backend::quit);
-    QString trayAppearance;
     const auto updateTray=[&] {
         const auto data=backend.data();const auto prefs=data.value(QStringLiteral("preferences")).toMap();const auto snapshot=data.value(QStringLiteral("snapshot")).toMap();
         const bool en=prefs.value(QStringLiteral("language")).toString()==QStringLiteral("en");
@@ -207,13 +207,15 @@ int main(int argc, char** argv) {
         tunAction->setChecked(prefs.value(QStringLiteral("tun")).toBool());proxyAction->setChecked(prefs.value(QStringLiteral("system_proxy")).toBool());
         tray.setToolTip(QStringLiteral("NetPulse · ")+(connected?(en?QStringLiteral("Connected"):QStringLiteral("Подключено")):(en?QStringLiteral("Disconnected"):QStringLiteral("Отключено"))));
     };
-    QObject::connect(&backend,&Backend::dataChanged,&app,updateTray);
-    QObject::connect(&backend,&Backend::pendingChanged,&app,updateTray);
-    QObject::connect(app.styleHints(),&QStyleHints::colorSchemeChanged,&app,[&](Qt::ColorScheme){updateTray();});
+    // The controller can emit while its process is being drained during shutdown.
+    // Tie these callbacks to the menu, which is destroyed before the controller.
+    QObject::connect(&backend,&Backend::dataChanged,&menu,updateTray);
+    QObject::connect(&backend,&Backend::pendingChanged,&menu,updateTray);
+    QObject::connect(app.styleHints(),&QStyleHints::colorSchemeChanged,&menu,[updateTray](Qt::ColorScheme){updateTray();});
     updateTray();
     // Keep the themed widget menu separate from the Windows native tray menu.
     // Re-polishing a native menu with submenus can introduce a platform menu cycle in Qt 6.8.
-    QObject::connect(&tray, &QSystemTrayIcon::activated, window, [window, &menu](QSystemTrayIcon::ActivationReason reason) {
+    QObject::connect(&tray, &QSystemTrayIcon::activated, &menu, [window, &menu](QSystemTrayIcon::ActivationReason reason) {
         if (reason == QSystemTrayIcon::Context) { menu.popup(QCursor::pos()); return; }
         if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick) { window->show(); window->raise(); window->requestActivate(); }
     });

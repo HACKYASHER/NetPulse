@@ -58,8 +58,9 @@ Button {
         border.color: control.hovered||control.activeFocus ? "#927fff" : (control.light?"#c9c2e1":"#51456d")
     }
     onClicked: { search.clear();picker.open();search.forceActiveFocus() }
-    Dialog {
+    MotionDialog {
         id: picker
+        appWindow: control.appWindow
         objectName: "quickServerDialog"
         parent: Overlay.overlay
         anchors.centerIn: parent

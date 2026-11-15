@@ -12,6 +12,7 @@ ApplicationWindow {
     property var modelData: ({})
     property var persistedPreferences: ({})
     property var prefs: Object.assign({},persistedPreferences,sentPreferences,preferenceQueue)
+    readonly property bool motionEnabled: prefs.motion !== false
     property var sentPreferences: ({})
     property var snapshot: backend.data.snapshot || ({state: "disconnected"})
     property var profiles: modelData.profiles || []
@@ -41,6 +42,53 @@ ApplicationWindow {
     property var applications: []
     property var processes: []
     property var analysis: null
+    property var healthReport: null
+    readonly property var healthRepairs: healthReport ? healthReport.checks.map(function(check) { return check.repair }) : []
+    property string healthError: ""
+    property string healthPreviousState: ""
+    property bool healthAttention: false
+    function checkHealth(external, monitor) {
+        if (!backend.ready || modelData.runtime_preparing || busy("network_health")) return
+        healthError=""
+        var pid = snapshot.engine_pid
+        call("network_health",{external:external,monitor:!!monitor},function(report) {
+            if (monitor && snapshot.engine_pid !== pid) return
+            if (report) healthReport=report
+            if (external) healthAttention=!!report && report.checks.some(function(check) { return check.status === "warning" })
+        })
+    }
+    function checkAfterFailure() {
+        if (smokeMode || healthCooldown.running || busy("network_health")) return
+        healthCooldown.start()
+        checkHealth(true, false)
+    }
+    onSnapshotChanged: {
+        var next=snapshot.state||"disconnected"
+        if (next==="error" && healthPreviousState!=="error") checkAfterFailure()
+        healthPreviousState=next
+    }
+    Timer { id: healthCooldown; interval: 90000 }
+    Timer {
+        interval: 90000; repeat: true
+        running: !smokeMode && backend.ready && snapshot.state === "connected"
+        onTriggered: if (!diagnosticRunning && !savingPreferences && !healthCooldown.running) checkHealth(true, true)
+    }
+    MotionDialog {
+        appWindow: win
+        id: healthReconnect
+        property string target: ""
+        implicitWidth: 460
+        width: Math.min(implicitWidth, parent.width - 48)
+        anchors.centerIn: parent; modal: true
+        title: tr("Переподключить VPN?","Reconnect VPN?")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        contentItem: Label { text: tr("Текущие соединения приложений будут прерваны.","Current application connections will close."); color: textColor; wrapMode: Text.WordWrap }
+        onAccepted: {
+            var id=target
+            if (!id || snapshot.state!=="connected" || !snapshot.active || snapshot.active.id!==id) return
+            call("connect",{id:id},function(){checkHealth(false)})
+        }
+    }
     property var coreReleases: []
     property var ipResult: ({})
     property var activeProbe: ({id:"",ms:null})
@@ -255,6 +303,8 @@ ApplicationWindow {
         target: backend
         function onReadyChanged(){if(backend.ready)preferenceRetry.restart()}
         function onCompleted(id, method, result, error) {
+            if(method==="network_health" && error.code) healthError=error.message
+            if(method==="connect" && error.code && !["RuntimePreparing","VerificationOnly","ConnectionModeRequired"].includes(error.code)) checkAfterFailure()
             if(method==="diagnostic_status"&&error.code==="DiagnosticNotFound"){jobTimer.stop();diagnosticId="";job=null}
             if(method==="delete_local_data"&&!error.code){jobTimer.stop();diagnosticId="";job=null;activeProbe={id:"",ms:null};applications=[];backend.refresh()}
             if(method==="bootstrap"&&!error.code&&result) {
@@ -347,24 +397,30 @@ ApplicationWindow {
                             }
                             Label { textFormat: Text.PlainText; text: modelData; color: page === index ? textColor : mutedColor; font.pixelSize: 13; font.weight: page === index ? Font.DemiBold : Font.Normal; Layout.fillWidth: true }
                         }
-                        background: Rectangle { color: page === index ? (light ? "#e0dcfb" : "#2a2544") : hovered ? (light ? "#e5e8f1" : "#1c2030") : "transparent"; radius: 10 }
+                        background: Rectangle {
+                            color: page === index ? (light ? "#e0dcfb" : "#2a2544") : hovered ? (light ? "#e5e8f1" : "#1c2030") : "transparent"
+                            radius: 10
+                            Behavior on color { enabled: win.motionEnabled; ColorAnimation { duration: 150 } }
+                        }
                         onClicked: selectPage(index)
                     }
                 }
                 Item { Layout.fillHeight: true }
                 Rectangle {
                     Layout.fillWidth: true; implicitHeight: 34; radius: 10; color: snapshot.state === "connected" ? (light ? "#def4eb" : "#17392f") : panelColor; border.color: borderColor
+                    Behavior on color { enabled: win.motionEnabled; ColorAnimation { duration: 190 } }
                     RowLayout { anchors.centerIn: parent; spacing: 7
                         Rectangle { width: 6; height: 6; radius: 3; color: snapshot.state === "connected" ? (light?"#17694f":"#70dbb1") : mutedColor }
                         Label { text: stateLabel(); color: snapshot.state === "connected" ? (light?"#17694f":"#70dbb1") : mutedColor; font.pixelSize: 11 }
                     }
                 }
                 ActionButton { appWindow: win; Layout.fillWidth: true; visible: !!clientUpdate; text: tr("Обновить клиент","Update client"); primary: true; onClicked: updateDialog.open() }
+                ActionButton { appWindow: win; Layout.fillWidth: true; visible: healthAttention && page!==4; text: tr("Проверить проблемы","Review network issues"); onClicked: selectPage(4) }
                 Card {
                     Layout.fillWidth: true; implicitHeight: 64
                     RowLayout { anchors.fill: parent; anchors.margins: 12; spacing: 9
                         Rectangle { width: 7; height: 7; radius: 4; color: modelData.engine_ready ? "#6bd9b0" : "#e0b86d" }
-                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.9"; font.pixelSize: 10; color: mutedColor } }
+                        Column { spacing: 3; Label { textFormat: Text.PlainText; text: modelData.engine_ready ? tr("Ядра готовы", "Engines ready") : modelData.runtime_preparing ? tr("Подготовка ядер…", "Preparing engines…") : tr("Проверьте ядра", "Check engines"); font.pixelSize: 11; color: textColor } Label { textFormat: Text.PlainText; text: "NetPulse 1.0.10"; font.pixelSize: 10; color: mutedColor } }
                     }
                 }
             }
@@ -399,6 +455,12 @@ ApplicationWindow {
                     width: bodyScroll.availableWidth
                     height: page === 6 ? bodyScroll.availableHeight : implicitHeight
                     sourceComponent: pages[page]
+                    onLoaded: { if(win.motionEnabled) pageAppearance.restart(); else opacity=1 }
+                    NumberAnimation { id: pageAppearance; target: pageLoader; property: "opacity"; from: 0.65; to: 1; duration: 160; easing.type: Easing.OutCubic }
+                    Connections {
+                        target: win
+                        function onMotionEnabledChanged() { if (!win.motionEnabled) { pageAppearance.stop(); pageLoader.opacity=1 } }
+                    }
                 }
             }
         }
@@ -435,12 +497,23 @@ ApplicationWindow {
                         }
                         Button {
                             id: powerButton; objectName: "overviewPower"; Layout.preferredWidth: 166; Layout.preferredHeight: 94
+                            readonly property bool changingConnection: busy("connect") || busy("disconnect") || busy("quick_network")
+                            scale: down && win.motionEnabled ? 0.97 : 1
+                            Behavior on scale { enabled: win.motionEnabled; NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                             enabled: backend.ready&&!busy("select_profile")&&!busy("connect")&&!busy("disconnect")&&!busy("quick_network")&&!savingPreferences&&!(job&&job.running&&job.kind==="mtu_tuning")
                             contentItem: Column { spacing: 5; anchors.centerIn: parent
-                                Label { anchors.horizontalCenter: parent.horizontalCenter; text: "⏻"; font.pixelSize: 34; color: powerButton.enabled ? "#111122" : mutedColor }
-                                Label { anchors.horizontalCenter: parent.horizontalCenter; text: snapshot.engine_pid?tr("Отключиться","Disconnect"):tr("Подключиться","Connect"); font.pixelSize: 13; font.bold: true; color: powerButton.enabled ? "#111122" : mutedColor }
+                                Item {
+                                    anchors.horizontalCenter: parent.horizontalCenter; width: 64; height: 40
+                                    Label { anchors.centerIn: parent; visible: !powerButton.changingConnection; text: "⏻"; font.pixelSize: 34; color: powerButton.enabled ? "#111122" : mutedColor }
+                                    PulseLoader { appWindow: win; anchors.centerIn: parent; width: implicitWidth; height: implicitHeight; visible: powerButton.changingConnection }
+                                }
+                                Label { anchors.horizontalCenter: parent.horizontalCenter; text: powerButton.changingConnection?stateLabel():snapshot.engine_pid?tr("Отключиться","Disconnect"):tr("Подключиться","Connect"); font.pixelSize: 13; font.bold: true; color: powerButton.enabled ? "#111122" : mutedColor }
                             }
-                            background: Rectangle { radius: 15; color: !powerButton.enabled ? (light?"#ddd9ed":"#343043") : powerButton.down ? "#7762e7" : powerButton.hovered ? "#a798ff" : "#927fff" }
+                            background: Rectangle {
+                                radius: 15
+                                color: !powerButton.enabled ? (light?"#ddd9ed":"#343043") : powerButton.down ? "#7762e7" : powerButton.hovered ? "#a798ff" : "#927fff"
+                                Behavior on color { enabled: win.motionEnabled; ColorAnimation { duration: 170 } }
+                            }
                             onClicked: connectSelected()
                         }
                     }
@@ -702,6 +775,67 @@ ApplicationWindow {
         ColumnLayout {
             spacing: 18
             Card {
+                Layout.fillWidth: true; implicitHeight: healthColumn.implicitHeight+40
+                ColumnLayout {
+                    id: healthColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
+                    Component.onCompleted: if (!healthReport) checkHealth(false)
+                    Label { text: tr("Проверка компьютера и настроек", "Computer and settings check"); color: textColor; font.bold: true; font.pixelSize: 16 }
+                    HelpText { text: tr("Каждые 90 секунд активный VPN проверяется HTTPS-запросом Google. При проблеме или ручной проверке клиент читает состояние Windows и оценивает часы двумя NTP-запросами Cloudflare.","Every 90 seconds a Google HTTPS request checks the active VPN. After a failure or a manual check, NetPulse reads Windows state and estimates clock offset using two Cloudflare NTP requests.") }
+                    Flow {
+                        Layout.fillWidth: true; spacing: 8
+                        ActionButton { appWindow: win; text: busy("network_health") ? tr("Проверка…","Checking…") : tr("Проверить компьютер","Check computer"); enabled: !busy("network_health"); onClicked: checkHealth(true) }
+                        ActionButton { appWindow: win; text: tr("Дата и время Windows","Windows Date & Time"); onClicked: Qt.openUrlExternally("ms-settings:dateandtime") }
+                        ActionButton { appWindow: win; text: tr("Прокси Windows","Windows proxy"); onClicked: Qt.openUrlExternally("ms-settings:network-proxy") }
+                        ActionButton { appWindow: win; text: tr("Служба и ядра","Service and engines"); onClicked: page=7 }
+                        ActionButton { appWindow: win; text: tr("Переподключить…","Reconnect…"); enabled: snapshot.state==="connected" && !savingPreferences; onClicked: {healthReconnect.target=snapshot.active?snapshot.active.id:"";healthReconnect.open()} }
+                        ActionButton { appWindow: win; text: tr("Копировать отчёт","Copy report"); enabled: !!healthReport; onClicked: backend.copyText(JSON.stringify(healthReport,null,2)) }
+                    }
+                    PulseLoader { appWindow: win; visible: busy("network_health") || busy("activate_core_bundle") || busy("manage_service") }
+                    Flow {
+                        Layout.fillWidth: true; spacing: 8
+                        visible: !backend.ready || win.healthRepairs.some(function(repair) { return !!repair })
+                        ActionButton {
+                            appWindow: win; visible: win.healthRepairs.includes("engines") && !win.healthRepairs.includes("installer")
+                            text: tr("Восстановить встроенные ядра","Restore bundled engines")
+                            enabled: !snapshot.engine_pid && !busy("activate_core_bundle") && !busy("manage_service")
+                            onClicked: call("activate_core_bundle",{rollback:false},function(){checkHealth(false)})
+                        }
+                        ActionButton {
+                            appWindow: win; visible: win.healthRepairs.includes("service") && !win.healthRepairs.includes("installer") && !win.healthRepairs.includes("engines")
+                            text: tr("Восстановить файлы TUN","Repair TUN files")
+                            enabled: !snapshot.engine_pid && !busy("activate_core_bundle") && !busy("manage_service")
+                            onClicked: call("manage_service",{install:true,upgrade:true,repair:true},function(){checkHealth(false)})
+                        }
+                        ActionButton {
+                            appWindow: win; visible: !backend.ready || win.healthRepairs.includes("installer")
+                            text: tr("Скачать установщик для восстановления","Download repair installer")
+                            onClicked: Qt.openUrlExternally("https://github.com/HACKYASHER/NetPulse/releases/latest/download/NetPulse-Setup.exe")
+                        }
+                    }
+                    HelpText {
+                        visible: win.healthRepairs.includes("installer") || !backend.ready
+                        text: tr("Для восстановления файлов клиента закройте NetPulse, запустите официальный установщик и выберите «Восстановить». Настройки и подписки сохранятся.","To repair client files, close NetPulse, run the official installer and choose Repair. Settings and subscriptions are kept.")
+                    }
+                    HelpText {
+                        visible: !!snapshot.engine_pid && (win.healthRepairs.includes("engines") || win.healthRepairs.includes("service"))
+                        text: tr("Отключите VPN перед восстановлением файлов.","Disconnect the VPN before repairing files.")
+                    }
+                    HelpText { text: tr("Для исправления времени: в параметрах Windows включите автоматическое время и нажмите «Синхронизировать сейчас», затем повторите проверку. Если не помогает, проверьте службу времени и ограничения сети. Проверка сертификатов TLS остаётся включённой.","To correct the clock, enable automatic time in Windows and select Sync now, then repeat the check. If it fails, check the time service and network restrictions. TLS certificate verification stays enabled.") }
+                    HelpText { visible: !!healthReport; text: healthReport ? tr("Результаты на ","Checked at ")+new Date(healthReport.captured_at*1000).toLocaleString(Qt.locale(),Locale.ShortFormat) : "" }
+                    HelpText { visible: healthError.length>0; text: healthError }
+                    CheckBox { id: allHealthChecks; visible: !!healthReport; text: tr("Показать все проверки и настройки","Show all checks and settings") }
+                    Repeater {
+                        model: healthReport ? (allHealthChecks.checked ? healthReport.checks : healthReport.checks.filter(function(check) { return check.status==="warning" || check.name==="Clock / Время" || check.name==="VPN HTTPS" })) : []
+                        delegate: ColumnLayout {
+                            required property var modelData
+                            Layout.fillWidth: true; spacing: 3
+                            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; textFormat: Text.PlainText; text: modelData.name+" — "+(modelData.status==="warning"?tr("Требует внимания","Needs attention"):modelData.status==="unknown"?tr("Не проверено","Unverified"):modelData.status==="configured"?tr("Настройка совпадает","Configuration matches"):tr("Проверено наблюдением","Observed")); color: modelData.status==="warning"?"#d29a27":textColor; font.bold: true }
+                            HelpText { text: modelData.detail }
+                        }
+                    }
+                }
+            }
+            Card {
                 Layout.fillWidth: true
                 implicitHeight: latencyForm.implicitHeight + 40
                 ColumnLayout {
@@ -850,7 +984,7 @@ ApplicationWindow {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        BusyIndicator { visible: jobTimer.running; running: visible; implicitHeight: 28; implicitWidth: 28 }
+                        PulseLoader { appWindow: win; visible: jobTimer.running; running: visible; implicitHeight: 28; implicitWidth: 64 }
                         Label { text: !job ? tr("Запустите проверку", "Start a test") : (job.running ? tr("Выполняется", "Running") : job.cancelled ? tr("Отменено", "Cancelled") : tr("Завершено", "Completed")) + " · " + job.completed + " / " + job.total; color: mutedColor; Layout.fillWidth: true }
                     }
                     ColumnLayout {
@@ -1008,7 +1142,7 @@ ApplicationWindow {
             Card { Layout.fillWidth: true; implicitHeight: aboutColumn.implicitHeight+40
                 ColumnLayout { id: aboutColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
                     Label { textFormat: Text.PlainText; text: tr("О клиенте","About NetPulse"); color: textColor; font.pixelSize: 17; font.bold: true }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.9 · Windows x64"; color: textColor }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.10 · Windows x64"; color: textColor }
                     Label { textFormat: Text.PlainText; text: "Qt Quick · Rust · sing-box "+(modelData.engine_version||"—")+" · Xray "+(modelData.xray_version||"—"); color: mutedColor; font.pixelSize: 12 }
                     ActionButton { appWindow: win; text: "GitHub · NetPulse ↗"; onClicked: Qt.openUrlExternally("https://github.com/HACKYASHER/NetPulse") }
                 }
@@ -1032,6 +1166,12 @@ ApplicationWindow {
                         Label { textFormat: Text.PlainText; text: tr("Язык", "Language"); color: mutedColor; Layout.fillWidth: true }
                         Choice { appWindow: win; model: ["Русский", "English"]; currentIndex: prefs.language === "en" ? 1 : 0; onActivated: save({language: currentIndex ? "en" : "ru"}) }
                     }
+                    CheckBox {
+                        objectName: "interfaceAnimations"
+                        text: tr("Анимации интерфейса", "Interface animations")
+                        checked: win.motionEnabled
+                        onToggled: save({motion: checked})
+                    }
                     SettingRow { Layout.fillWidth: true; title: tr("Запускать с Windows", "Start with Windows"); description: tr("Открывает NetPulse в трее после входа в Windows. Сам по себе не включает VPN — за подключение отвечает автовосстановление.", "Starts NetPulse in the tray after Windows sign-in. It does not enable VPN by itself; auto reconnect controls that."); checked: !!prefs.autostart; onToggled: function(v) { save({autostart: v}) } }
                     SettingRow { Layout.fillWidth: true; title: tr("Закрывать в трей", "Close to tray"); description: tr("Кнопка закрытия скрывает окно; выход доступен в меню значка", "Closing hides the window; Quit is available in the tray menu"); checked: !!prefs.close_to_tray; onToggled: function(v) { save({close_to_tray: v}) } }
                     SettingRow { Layout.fillWidth: true; title: tr("Автовосстановление", "Auto reconnect"); description: tr("При запуске пытается восстановить выбранное соединение, если сохранён режим подключения. При проблемах с сервером запуск интерфейса остаётся доступным.", "Attempts to restore the selected connection on startup when a connection mode is saved. The interface remains available if the server cannot be reached."); checked: !!prefs.auto_reconnect; onToggled: function(v) { save({auto_reconnect: v}) } }
@@ -1052,7 +1192,7 @@ ApplicationWindow {
                     }
                     HelpText { text: tr("Временные архивы ядер очищаются после установки и при следующем запуске. Незавершённые загрузки и установщики уже установленной версии тоже удаляются; предыдущий комплект ядер остаётся для отката.","Temporary engine archives are cleared after installation and on startup. Interrupted downloads and installers for the installed version are also removed; the previous engine bundle remains for rollback.") }
                     ActionButton { appWindow: win; text: tr("Редактор всех параметров…", "Edit all preferences…"); onClicked: editJson(tr("Параметры NetPulse", "NetPulse preferences"), JSON.stringify(prefs, null, 2), "save_preferences") }
-                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.9  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
+                    Label { textFormat: Text.PlainText; text: "NetPulse 1.0.10  ·  C++ / Qt Quick  ·  Rust NetworkCore"; color: mutedColor; font.pixelSize: 11 }
                 }
             }
 
@@ -1106,7 +1246,7 @@ ApplicationWindow {
                     }
                     Label { textFormat: Text.PlainText; text: tr("Показаны стабильные и предварительные выпуски. Перед заменой проверяются официальный SHA-256 и конфигурация; предыдущий комплект сохраняется.","Stable and prerelease versions are included. Official SHA-256 and configuration are checked before replacing an engine; the previous bundle is retained."); Layout.fillWidth: true; wrapMode: Text.WordWrap; color: mutedColor; font.pixelSize: 12 }
                     RowLayout {
-                        BusyIndicator { visible: busy("list_core_releases")||busy("update_core"); running: visible; implicitHeight: 28 }
+                        PulseLoader { appWindow: win; visible: busy("list_core_releases")||busy("update_core"); running: visible; implicitHeight: 28 }
                         Label { visible: busy("list_core_releases")||busy("update_core"); text: busy("update_core")?tr("Загрузка и проверка ядра…","Downloading and validating engine…"):tr("Проверка GitHub, до 12 секунд…","Checking GitHub, up to 12 seconds…"); color: mutedColor; font.pixelSize: 12 }
                     }
                     Choice { appWindow: win; id: releasePicker; visible: engineView.releases.length>0; Layout.fillWidth: true; model: engineView.releases.map(function(r){return r.tag+(r.prerelease?" · pre-release":" · stable")}) }
@@ -1131,7 +1271,8 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
+    MotionDialog {
+        appWindow: win
         id: modeDialog; objectName: "connectionModeDialog"; anchors.centerIn: parent; width: 700; modal: true
         title: tr("Выберите режим подключения","Choose connection mode")
         function start(tun,proxy) {
@@ -1156,10 +1297,11 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+    MotionDialog {
+        appWindow: win
         id: ipDialog; anchors.centerIn: parent; width: 620; modal: true; title: tr("Публичные IP-адреса","Public IP addresses")
         ColumnLayout { anchors.fill: parent; spacing: 16
-            BusyIndicator { visible: busy("public_ips"); running: visible; implicitHeight: 30 }
+            PulseLoader { appWindow: win; visible: busy("public_ips"); running: visible; implicitHeight: 30 }
             Repeater { model: [{name:tr("Через VPN","Through VPN"),key:"vpn"},{name:tr("Напрямую / без NetPulse VPN","Direct / without NetPulse VPN"),key:"direct"}]
                 delegate: Card { required property var modelData; Layout.fillWidth: true; implicitHeight: ipColumn.implicitHeight+30
                     ColumnLayout { id: ipColumn; anchors.fill: parent; anchors.margins: 15; spacing: 8
@@ -1179,7 +1321,8 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+    MotionDialog {
+        appWindow: win
         id: historyDialog; anchors.centerIn: parent; width: Math.min(850,win.width-100); height: win.height-140; modal: true; title: tr("История измерений","Measurement history")
         property var records: []
         function load(){var kind=["latency","speed","mtu","mtu_tuning"][historyKind.currentIndex];call("diagnostic_history",{kind:kind},function(items){records=items||[]})}
@@ -1202,12 +1345,13 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+    MotionDialog {
+        appWindow: win
         id: updateDialog; anchors.centerIn: parent; width: 600; modal: true; title: tr("Обновление NetPulse","NetPulse update")
         ColumnLayout { anchors.fill: parent; spacing: 16
             Label { textFormat: Text.PlainText; text: clientUpdate?tr("Доступна версия ","Available version ")+clientUpdate.tag:updateStatus; color: textColor; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             Label { textFormat: Text.PlainText; text: tr("Установщик проверяется по SHA-256 официального выпуска. После подтверждения Windows защищённый помощник повторно загрузит и проверит его. Установка отключит VPN и завершит клиент.","The installer is checked against the official release SHA-256. After Windows confirmation, the protected helper downloads and verifies it again. Installation disconnects VPN and closes the client."); color: mutedColor; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 12 }
-            BusyIndicator { visible: busy("download_client_update")||busy("install_client_update"); running: visible; implicitHeight: 30 }
+            PulseLoader { appWindow: win; visible: busy("download_client_update")||busy("install_client_update"); running: visible; implicitHeight: 30 }
             RowLayout { Layout.fillWidth: true
                 ActionButton { appWindow: win; text: tr("Страница выпуска ↗","Release page ↗"); enabled: !!clientUpdate; onClicked: if(clientUpdate)Qt.openUrlExternally(clientUpdate.page) }
                 Item { Layout.fillWidth: true }
@@ -1216,7 +1360,8 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+    MotionDialog {
+        appWindow: win
         id: importDialog; objectName: "addConnectionDialog"; anchors.centerIn: parent; width: 650; modal: true
         title: tr("Добавить подключение", "Add connection"); standardButtons: Dialog.NoButton
         ColumnLayout { anchors.fill: parent; spacing: 14
@@ -1236,7 +1381,8 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+    MotionDialog {
+        appWindow: win
         id: jsonDialog; anchors.centerIn: parent; width: Math.min(win.width - 100, 840); height: win.height - 120; modal: true
         property string saveMethod: ""
         property var parameters: ({})
@@ -1260,7 +1406,8 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+    MotionDialog {
+        appWindow: win
         id: subEdit; anchors.centerIn: parent; width: 480; modal: true
         title: tr("Параметры подписки", "Subscription settings"); property var sub: ({})
         property bool protectUrl: false

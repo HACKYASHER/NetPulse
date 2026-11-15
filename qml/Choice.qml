@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
+import "Motion.js" as Motion
 ComboBox {
  id: c
  property var appWindow: ApplicationWindow.window
@@ -15,6 +16,8 @@ ComboBox {
   objectName: "choiceIndicator"
   implicitWidth: 12; implicitHeight: 9; width: implicitWidth; height: implicitHeight
   x: c.width-width-14; y: Math.round((c.height-height)/2)
+  rotation: c.popup.visible ? 180 : 0
+  Behavior on rotation { enabled: Motion.enabled(c.appWindow); NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
   readonly property int status: arrowImage.status
   Image { id: arrowImage; anchors.fill: parent
    source: 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 12"><path d="M2 3 L8 9 L14 3" fill="none" stroke="'+(c.appWindow?c.appWindow.textColor:c.palette.text)+'" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>')
@@ -33,6 +36,8 @@ ComboBox {
   highlighted: c.highlightedIndex===index
  }
  popup: Popup {
+  enter: Transition { enabled: Motion.enabled(c.appWindow); NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 145 } }
+  exit: Transition { enabled: Motion.enabled(c.appWindow); NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 95 } }
   y: c.height+4; width: c.width; padding: 5
   implicitHeight: Math.min(contentItem.implicitHeight+10,300)
   contentItem: ListView { clip: true; implicitHeight: contentHeight; model: c.popup.visible ? c.delegateModel : null; currentIndex: c.highlightedIndex; ScrollIndicator.vertical: ScrollIndicator {} }
